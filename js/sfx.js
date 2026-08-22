@@ -113,6 +113,15 @@ export const sfx = {
     } else if (kind === 'sudden_death') {
       [440, 330, 220].forEach((f, i) =>
         blip({ freq: f, to: f * 0.7, dur: 0.28, type: 'sawtooth', gain: 0.15, delay: i * 0.13 }));
+    } else if (kind === 'jackpot') {
+      // Slot-machine reel spin-up, an ascending fanfare, then a shimmer tail.
+      for (let i = 0; i < 10; i++) {
+        blip({ freq: 300 + Math.random() * 500, dur: 0.03, type: 'square', gain: 0.08, delay: i * 0.035 });
+      }
+      [523, 659, 784, 1047, 1319, 1568].forEach((f, i) =>
+        blip({ freq: f, dur: 0.22, type: 'triangle', gain: 0.17, delay: 0.4 + i * 0.07 }));
+      [1568, 1976, 2637].forEach((f, i) =>
+        blip({ freq: f, to: f * 1.15, dur: 0.5, type: 'sine', gain: 0.1, delay: 0.82 + i * 0.04 }));
     }
   },
 

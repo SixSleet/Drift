@@ -280,6 +280,23 @@ body {
   60% { transform: scale(1.12); opacity: 1; }
   100% { transform: scale(1); }
 }
+.pill-event.is-rare {
+  color: #1a1406; border-color: transparent; font-weight: 800;
+  background: linear-gradient(120deg, #ffd166, #fff3c4, #ff9f4b, #ffd166);
+  background-size: 240% 100%;
+  box-shadow: 0 0 18px rgba(255, 209, 102, .55);
+  animation: event-jackpot-spin .7s cubic-bezier(.2, 1.4, .4, 1) both,
+             jackpot-shimmer 1.4s linear infinite .7s;
+}
+@keyframes event-jackpot-spin {
+  0% { transform: scale(.35) rotate(-30deg); opacity: 0; }
+  55% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes jackpot-shimmer {
+  0% { background-position: 0% 0; }
+  100% { background-position: 240% 0; }
+}
 
 .btn-icon {
   appearance: none; border: 1px solid var(--line); background: var(--panel-2);
@@ -317,6 +334,55 @@ body {
   0% { opacity: 0; }
   15% { opacity: .55; }
   100% { opacity: 0; }
+}
+.event-flash.is-active[data-fx="siren"] { animation: event-flash-strobe 1.4s steps(1, end) 3; }
+@keyframes event-flash-strobe {
+  0%, 100% { opacity: 0; }
+  25% { opacity: .5; }
+  50% { opacity: 0; }
+  75% { opacity: .5; }
+}
+.event-flash.is-active[data-fx="dread"] {
+  background: radial-gradient(140% 140% at 50% 50%, transparent 40%, var(--tint, transparent) 100%);
+  animation: event-flash-dread 1.8s ease-in-out;
+}
+@keyframes event-flash-dread {
+  0% { opacity: 0; }
+  40% { opacity: .55; }
+  100% { opacity: 0; }
+}
+.event-flash.is-active[data-fx="jackpot"] {
+  background: conic-gradient(from 0deg, #ffd166, #ff6161, #7be495, #4bd0ff, #ff4d9d, #ffd166);
+  animation: event-flash-jackpot 1.8s ease-out;
+}
+@keyframes event-flash-jackpot {
+  0% { opacity: 0; filter: saturate(1.5) brightness(1); }
+  20% { opacity: .6; filter: saturate(1.5) brightness(1.3); }
+  100% { opacity: 0; filter: saturate(1.5) brightness(1.3); }
+}
+
+/* ── Screen shake (blitz / jackpot) ──────────────────────────────────── */
+
+.screen-shake { animation: screen-shake .5s cubic-bezier(.36, .07, .19, .97) both; }
+@keyframes screen-shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+/* ── Confetti (double points / jackpot) ──────────────────────────────── */
+
+.confetti-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
+.confetti-piece {
+  position: absolute; top: -10px; left: var(--x, 50%); width: 8px; height: 14px;
+  background: var(--c, var(--amber)); opacity: .95; border-radius: 2px;
+  transform: rotate(var(--rot, 0deg));
+  animation: confetti-fall var(--dur, 1.4s) linear var(--delay, 0s) forwards;
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(-10px) rotate(var(--rot, 0deg)); opacity: 1; }
+  100% { transform: translateY(420px) rotate(calc(var(--rot, 0deg) + 360deg)); opacity: 0; }
 }
 
 /* ── Tile grid ───────────────────────────────────────────────────────── */

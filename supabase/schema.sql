@@ -20,12 +20,13 @@
 --     (rejects a late guess) and wf_check_settle (time running out is
 --     itself a completion condition, in every mode) — not just a
 --     client-side display.
---   * wf_next_round also rolls a random party-game `event` for the round
---     (40% none, 15% each of double_points, extra_guess, blitz — which
---     shortens time_limit_ms to 90s — and sudden_death, which drops
---     max_guesses by one), baked into that round's guess budget and time
---     limit at mint time so every client just reads the consequences off
---     the round row rather than re-deriving them.
+--   * wf_next_round also rolls a random party-game `event` for the round —
+--     35% none, 15% each of double_points, extra_guess, blitz (shortens
+--     time_limit_ms to 90s) and sudden_death (drops max_guesses by one),
+--     plus a rare 5% jackpot (extra_guess + double_points at once) — baked
+--     into that round's guess budget and time limit at mint time so every
+--     client just reads the consequences off the round row rather than
+--     re-deriving them.
 --
 -- Three modes share this schema:
 --
@@ -148,7 +149,7 @@ create table public.wf_rounds (
   team_solved        boolean,                                  -- coop only
   pool_used          int  not null default 0,                  -- coop only
   event              text not null default 'none'
-                       check (event in ('none', 'double_points', 'extra_guess', 'blitz', 'sudden_death')),
+                       check (event in ('none', 'double_points', 'extra_guess', 'blitz', 'sudden_death', 'jackpot')),
   time_limit_ms      int  not null default 300000 check (time_limit_ms > 0), -- blitz shortens this
   created_at         timestamptz not null default now(),
   unique (room_id, round_no)
@@ -595,6 +596,7 @@ declare
   v_secret text;
   v_max_guesses int;
   v_event text;
+  v_roll  double precision;
   v_time_limit_ms int;
 begin
   if v_room.current_round >= 1 then
@@ -650,14 +652,19 @@ begin
   v_max_guesses := v_len + case when v_room.mode = 'coop' then 3 else 2 end;
   v_time_limit_ms := 300000;
 
-  -- A party-game random event, same odds every round: 40% nothing, 15%
-  -- each of the four spice-it-up events.
+  -- A party-game random event, one shared roll compared against cumulative
+  -- thresholds (NOT one random() per WHEN -- that silently skews the odds,
+  -- since each branch would draw its own independent number): 35% nothing,
+  -- 15% each of four spice-it-up events, and a rare 5% Jackpot (extra guess
+  -- + double points at once, with a much bigger presentation on the client).
+  v_roll := random();
   v_event := case
-    when random() < 0.40 then 'none'
-    when random() < 0.55 then 'double_points'
-    when random() < 0.70 then 'extra_guess'
-    when random() < 0.85 then 'blitz'
-    else 'sudden_death'
+    when v_roll < 0.35 then 'none'
+    when v_roll < 0.50 then 'double_points'
+    when v_roll < 0.65 then 'extra_guess'
+    when v_roll < 0.80 then 'blitz'
+    when v_roll < 0.95 then 'sudden_death'
+    else 'jackpot'
   end;
 
   if v_event = 'extra_guess' then
@@ -666,6 +673,8 @@ begin
     v_max_guesses := greatest(v_len, v_max_guesses - 1);
   elsif v_event = 'blitz' then
     v_time_limit_ms := 90000;
+  elsif v_event = 'jackpot' then
+    v_max_guesses := v_max_guesses + 1;
   end if;
 
   insert into public.wf_rounds
@@ -793,7 +802,7 @@ begin
 
   v_all_hit := array_fill('hit'::text, array[v_round.word_length]);
   v_time_up := now() >= v_round.starts_at + make_interval(secs => v_round.time_limit_ms / 1000.0);
-  v_mult := case when v_round.event = 'double_points' then 2 else 1 end;
+  v_mult := case when v_round.event in ('double_points', 'jackpot') then 2 else 1 end;
 
   if v_mode = 'coop' then
     v_done := v_time_up

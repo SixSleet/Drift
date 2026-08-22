@@ -14,6 +14,8 @@ import {
   setPhase, setStatusLine, selectChip, buildLetterKeyboard, paintKeyboard,
 } from './ui.js';
 
+const CONFETTI_COLORS = ['#ffd166', '#ff6161', '#7be495', '#4bd0ff', '#ff4d9d'];
+
 export class Game {
   constructor() {
     this.roomId = null;
@@ -184,8 +186,16 @@ export class Game {
   #applyEvent(event) {
     const el = $('#hud-event');
     const info = EVENTS[event];
-    if (!info) { el.hidden = true; return; }
+    const flash = $('#event-flash');
+    const screen = $('#screen-game');
+
+    screen.classList.remove('screen-shake');
+    flash.classList.remove('is-active');
+
+    if (!info) { el.hidden = true; el.classList.remove('is-rare'); return; }
+
     el.hidden = false;
+    el.classList.toggle('is-rare', !!info.rare);
     el.style.setProperty('--tint', info.tint);
     el.textContent = `${info.emoji} ${info.label}`;
     // Re-trigger the CSS pop-in even if the previous round had the same event.
@@ -193,13 +203,37 @@ export class Game {
     void el.offsetWidth;
     el.style.animation = '';
 
-    const flash = $('#event-flash');
     flash.style.setProperty('--tint', info.tint);
-    flash.classList.remove('is-active');
+    flash.dataset.fx = info.fx ?? '';
     void flash.offsetWidth;
     flash.classList.add('is-active');
 
+    if (info.fx === 'siren' || info.fx === 'jackpot') {
+      void screen.offsetWidth;
+      screen.classList.add('screen-shake');
+      setTimeout(() => screen.classList.remove('screen-shake'), 500);
+    }
+    if (info.fx === 'coins' || info.fx === 'jackpot') {
+      this.#spawnConfetti(info.fx === 'jackpot' ? 60 : 26);
+    }
+
     sfx.event(event);
+  }
+
+  /** A one-shot burst of falling confetti pieces, self-removing after they land. */
+  #spawnConfetti(count) {
+    const layer = $('#confetti-layer');
+    for (let i = 0; i < count; i++) {
+      const piece = document.createElement('i');
+      piece.className = 'confetti-piece';
+      piece.style.setProperty('--x', `${Math.random() * 100}%`);
+      piece.style.setProperty('--c', CONFETTI_COLORS[i % CONFETTI_COLORS.length]);
+      piece.style.setProperty('--rot', `${Math.random() * 360}deg`);
+      piece.style.setProperty('--dur', `${1.1 + Math.random() * 0.9}s`);
+      piece.style.setProperty('--delay', `${Math.random() * 0.4}s`);
+      piece.addEventListener('animationend', () => piece.remove());
+      layer.appendChild(piece);
+    }
   }
 
   // ── Input ────────────────────────────────────────────────────────────

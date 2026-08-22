@@ -74,20 +74,28 @@ one memorised opening guess all match. If no word of the right length starts
 with that letter, the constraint quietly drops for that round (`chain_broken`)
 rather than the round ever failing to start.
 
-**Random events.** Every round has a 60% chance of rolling one of four
-party-game events, decided server-side the instant the round is minted
-(`wf_next_round`) and baked straight into that round's `max_guesses` /
-`time_limit_ms`, so there's nothing for the client to derive — just render.
-Announced with a full-screen colour flash, a HUD pill for the rest of the
-round, and a distinct WebAudio stinger:
+**Random events.** Every round has a 65% chance of rolling an event, decided
+server-side the instant the round is minted (`wf_next_round`, one shared
+`random()` roll compared against cumulative odds — not one draw per
+outcome, which would silently skew them) and baked straight into that
+round's `max_guesses` / `time_limit_ms`, so there's nothing for the client
+to derive — just render. Each gets its own full-screen flash, HUD pill, and
+WebAudio stinger; four also carry a distinct physical effect —
+screen-shake, falling confetti, a strobing flash, a creeping red vignette:
 
-| Event | Odds | Effect |
-| --- | --- | --- |
-| 💰 Double Points | 15% | This round's score is doubled. |
-| 🎁 Extra Guess | 15% | One more guess than usual. |
-| ⚡ Blitz | 15% | Clock cut to 90 seconds. |
-| 💀 Sudden Death | 15% | One fewer guess than usual (never below the word length). |
-| *(none)* | 40% | A normal round. |
+| Event | Odds | Effect | Presentation |
+| --- | --- | --- | --- |
+| 💰 Double Points | 15% | Score doubled. | Gold confetti burst |
+| 🎁 Extra Guess | 15% | One more guess than usual. | Pill pops open |
+| ⚡ Blitz | 15% | Clock cut to 90 seconds. | Strobing flash + screen shake |
+| 💀 Sudden Death | 15% | One fewer guess (never below the word length). | Slow red vignette |
+| 🎰 **Jackpot** | 5% | Extra guess **and** double points, at once. | Confetti + screen shake + a gold spinning pill + a slot-machine fanfare |
+| *(none)* | 35% | A normal round. | — |
+
+Jackpot is the rare one worth stopping for: everything else fires at once
+— a rainbow flash sweeps the screen, sixty pieces of confetti fall, the
+screen shakes, the HUD pill spins in gold and shimmers for the rest of the
+round, and the sound is a slot-machine reel spin-up into a rising fanfare.
 
 ## Keeping the secret secret
 
