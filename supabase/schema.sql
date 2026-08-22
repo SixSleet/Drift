@@ -7,17 +7,25 @@
 --
 -- The game
 -- --------
--- Same shape as that word-guessing game everyone knows, with two twists that
+-- Same shape as that word-guessing game everyone knows, with twists that
 -- keep it from just being a five-letter clone:
 --
---   * Word length varies round to round (4-7 letters) instead of always five.
+--   * Word length varies round to round (4 or 5 letters — longer proved too
+--     hard to be fun) instead of always five.
 --   * Most rounds must start with the last letter of the previous round's
 --     word (see `chain_letter` / `chain_broken` below) — you can't lean on
 --     one memorised opening guess for the whole match.
---   * Every round has a hard 5-minute clock from `starts_at`, enforced
---     server-side in both wf_submit_guess (rejects a late guess) and
---     wf_check_settle (time running out is itself a completion condition,
---     in every mode) — not just a client-side display.
+--   * Every round has a hard clock from `starts_at` (`time_limit_ms`,
+--     5 minutes normally), enforced server-side in both wf_submit_guess
+--     (rejects a late guess) and wf_check_settle (time running out is
+--     itself a completion condition, in every mode) — not just a
+--     client-side display.
+--   * wf_next_round also rolls a random party-game `event` for the round
+--     (40% none, 15% each of double_points, extra_guess, blitz — which
+--     shortens time_limit_ms to 90s — and sudden_death, which drops
+--     max_guesses by one), baked into that round's guess budget and time
+--     limit at mint time so every client just reads the consequences off
+--     the round row rather than re-deriving them.
 --
 -- Three modes share this schema:
 --
@@ -128,7 +136,7 @@ create table public.wf_rounds (
   id                 uuid primary key default gen_random_uuid(),
   room_id            uuid not null references public.wf_rooms(id) on delete cascade,
   round_no           int  not null check (round_no >= 1),
-  word_length        int  not null check (word_length between 4 and 7),
+  word_length        int  not null check (word_length between 4 and 5),
   max_guesses        int  not null check (max_guesses between 4 and 12),
   chain_letter       char(1),
   chain_broken       boolean not null default false,
@@ -139,6 +147,9 @@ create table public.wf_rounds (
   winner_player_id   uuid references public.wf_players(id),   -- pvp only
   team_solved        boolean,                                  -- coop only
   pool_used          int  not null default 0,                  -- coop only
+  event              text not null default 'none'
+                       check (event in ('none', 'double_points', 'extra_guess', 'blitz', 'sudden_death')),
+  time_limit_ms      int  not null default 300000 check (time_limit_ms > 0), -- blitz shortens this
   created_at         timestamptz not null default now(),
   unique (room_id, round_no)
 );
@@ -562,9 +573,10 @@ $$;
 
 -- ── Rounds ───────────────────────────────────────────────────────────────
 -- Host-only, unlike settlement (see header). Picks a random word length
--- (4-7), tries to honour the chain-letter constraint against the answer
--- pool, and falls back to an unconstrained pick — recording chain_broken —
--- rather than ever failing a round outright.
+-- (4-5 — longer proved too hard to be fun), tries to honour the
+-- chain-letter constraint against the answer pool, and falls back to an
+-- unconstrained pick — recording chain_broken — rather than ever failing a
+-- round outright. Also rolls this round's random event (see header).
 
 create or replace function public.wf_next_round(p_token text, p_room uuid)
 returns public.wf_rounds
@@ -582,6 +594,8 @@ declare
   v_chain_broken boolean := false;
   v_secret text;
   v_max_guesses int;
+  v_event text;
+  v_time_limit_ms int;
 begin
   if v_room.current_round >= 1 then
     select * into v_round from public.wf_rounds
@@ -596,7 +610,7 @@ begin
     raise exception 'wordforge: game is over' using errcode = 'P0006';
   end if;
 
-  v_len := 4 + floor(random() * 4)::int;
+  v_len := 4 + floor(random() * 2)::int; -- 4 or 5 only
 
   if v_no > 1 then
     select revealed_secret into v_prev_secret
@@ -634,14 +648,35 @@ begin
   -- solo both get the same individual budget, so a solo run is exactly as
   -- hard as your half of a duel.
   v_max_guesses := v_len + case when v_room.mode = 'coop' then 3 else 2 end;
+  v_time_limit_ms := 300000;
+
+  -- A party-game random event, same odds every round: 40% nothing, 15%
+  -- each of the four spice-it-up events.
+  v_event := case
+    when random() < 0.40 then 'none'
+    when random() < 0.55 then 'double_points'
+    when random() < 0.70 then 'extra_guess'
+    when random() < 0.85 then 'blitz'
+    else 'sudden_death'
+  end;
+
+  if v_event = 'extra_guess' then
+    v_max_guesses := v_max_guesses + 1;
+  elsif v_event = 'sudden_death' then
+    v_max_guesses := greatest(v_len, v_max_guesses - 1);
+  elsif v_event = 'blitz' then
+    v_time_limit_ms := 90000;
+  end if;
 
   insert into public.wf_rounds
-    (room_id, round_no, word_length, max_guesses, chain_letter, chain_broken, starts_at)
+    (room_id, round_no, word_length, max_guesses, chain_letter, chain_broken, starts_at,
+     event, time_limit_ms)
   values (
     p_room, v_no, v_len, v_max_guesses,
     case when v_chain_broken then null else v_chain_letter end,
     v_chain_broken,
-    now() + interval '3 seconds'
+    now() + interval '3 seconds',
+    v_event, v_time_limit_ms
   )
   returning * into v_round;
 
@@ -678,7 +713,7 @@ begin
   if now() < v_round.starts_at then
     raise exception 'wordforge: round has not started yet' using errcode = 'P0016';
   end if;
-  if now() >= v_round.starts_at + interval '5 minutes' then
+  if now() >= v_round.starts_at + make_interval(secs => v_round.time_limit_ms / 1000.0) then
     raise exception 'wordforge: time is up for this round' using errcode = 'P0021';
   end if;
   if length(v_word) <> v_round.word_length or v_word !~ '^[a-z]+$' then
@@ -746,6 +781,7 @@ declare
   v_bonus int;
   v_winner uuid;
   v_best_time timestamptz := null;
+  v_mult int;
   rec record;
 begin
   select * into v_round from public.wf_rounds where id = p_round for update;
@@ -756,7 +792,8 @@ begin
   end if;
 
   v_all_hit := array_fill('hit'::text, array[v_round.word_length]);
-  v_time_up := now() >= v_round.starts_at + interval '5 minutes';
+  v_time_up := now() >= v_round.starts_at + make_interval(secs => v_round.time_limit_ms / 1000.0);
+  v_mult := case when v_round.event = 'double_points' then 2 else 1 end;
 
   if v_mode = 'coop' then
     v_done := v_time_up
@@ -792,7 +829,7 @@ begin
   if v_mode = 'coop' then
     select exists (select 1 from public.wf_guesses where round_id = p_round and feedback = v_all_hit) into v_solved;
     select count(*) into v_used from public.wf_guesses where round_id = p_round;
-    v_pts := case when v_solved then greatest(0, v_round.max_guesses - v_used + 1) * 10 else 0 end;
+    v_pts := case when v_solved then greatest(0, v_round.max_guesses - v_used + 1) * 10 * v_mult else 0 end;
     update public.wf_rounds set team_solved = v_solved where id = p_round;
     insert into public.wf_results (round_id, player_id, solved, guesses_used, points)
       select p_round, p.id, v_solved, v_used, v_pts from public.wf_players p where p.room_id = v_round.room_id;
@@ -813,7 +850,7 @@ begin
         v_bonus := case when v_elapsed_ms <= v_round.word_length * 4000 then 20
                         when v_elapsed_ms <= v_round.word_length * 7000 then 10
                         else 0 end;
-        v_pts := v_base + v_bonus;
+        v_pts := (v_base + v_bonus) * v_mult;
       else
         v_elapsed_ms := null;
         v_pts := 0;

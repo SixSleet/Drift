@@ -1,10 +1,11 @@
 # Wordforge
 
 A 1–10 player browser word game. Same idea as that word game you already know
-— guess the secret word, get colour-coded feedback — with two twists that
+— guess the secret word, get colour-coded feedback — with a few twists that
 keep it from being a five-letter clone: the word length shifts every round
-(4–7 letters), and most rounds have to start with the last letter of the
-previous round's word.
+(4 or 5 letters — longer proved too hard to be fun), most rounds have to
+start with the last letter of the previous round's word, and any round can
+roll a random party-game event that changes the stakes.
 
 Three modes:
 
@@ -34,8 +35,8 @@ and realtime signalling. GitHub Pages for hosting. The one dependency
 
 | Phase | What happens |
 | --- | --- |
-| Countdown | 3s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained. |
-| Live | A 5-minute clock, ticking down in the HUD (red and pulsing under 30s). Type guesses on the on-screen keyboard or your own — tiles flip in as each guess is scored (hit / present / miss), and any letter you've used that isn't in the word greys out on the keyboard so you don't waste a guess retyping it. |
+| Countdown | 3s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained, and this round's event (if any) flashes across the screen with a matching stinger sound. |
+| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. Type guesses on the on-screen keyboard or your own — tiles flip in as each guess is scored (hit / present / miss), and any letter you've used that isn't in the word greys out on the keyboard so you don't waste a guess retyping it. |
 | Settling | Brief. Any client — not just the host — can ask the server "is this round actually over," and the server independently re-checks before agreeing. |
 | Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed, plus who won the round. |
 | Board | ~5.5s. Running standings, then the next round. |
@@ -43,20 +44,24 @@ and realtime signalling. GitHub Pages for hosting. The one dependency
 Matches run 4, 6, 8 or 12 rounds. Points build across the whole match — most
 points (or, in Co-op, most rounds solved) wins after the last one.
 
-**The 5-minute clock.** Every round has one, from `starts_at`, enforced
-server-side — `wf_submit_guess` rejects a guess submitted after it expires,
-and `wf_check_settle` treats time running out as a completion condition in
-every mode. Run out with the word unsolved and the round ends there, secret
-revealed, same as running out of guesses.
+**The clock.** Every round has one, from `starts_at`, enforced server-side —
+`wf_submit_guess` rejects a guess submitted after it expires, and
+`wf_check_settle` treats time running out as a completion condition in every
+mode. Run out with the word unsolved and the round ends there, secret
+revealed, same as running out of guesses. It's normally 5 minutes, but a
+round's actual duration lives in `wf_rounds.time_limit_ms` — a Blitz event
+shortens it to 90s.
 
 **Scoring.** `points = max(0, max_guesses − guesses_used + 1) × 10`, plus a
 speed bonus in Solo and PvP (+20 for a near-instant solve, +10 for a
-reasonably fast one). Co-op scores the same base formula off the shared
-attempt count, split identically across the whole team, with no speed bonus.
+reasonably fast one), doubled if the round rolled Double Points. Co-op scores
+the same base formula off the shared attempt count, split identically across
+the whole team, with no speed bonus (still doubled by Double Points).
 
 **Guess budgets.** `word length + 2` in Solo and PvP — a solo run is exactly
 as hard as your half of a duel. `word length + 3` in Co-op, since that pool
-is shared across the whole team rather than per player.
+is shared across the whole team rather than per player. Extra Guess and
+Sudden Death events adjust this by ±1 for the round.
 
 **Winning a PvP round.** First to solve it wins — not fewest guesses. The
 round ends the instant either player gets it, so there's no reason to wait
@@ -68,6 +73,21 @@ with the last letter of the previous round's secret — so you can't lean on
 one memorised opening guess all match. If no word of the right length starts
 with that letter, the constraint quietly drops for that round (`chain_broken`)
 rather than the round ever failing to start.
+
+**Random events.** Every round has a 60% chance of rolling one of four
+party-game events, decided server-side the instant the round is minted
+(`wf_next_round`) and baked straight into that round's `max_guesses` /
+`time_limit_ms`, so there's nothing for the client to derive — just render.
+Announced with a full-screen colour flash, a HUD pill for the rest of the
+round, and a distinct WebAudio stinger:
+
+| Event | Odds | Effect |
+| --- | --- | --- |
+| 💰 Double Points | 15% | This round's score is doubled. |
+| 🎁 Extra Guess | 15% | One more guess than usual. |
+| ⚡ Blitz | 15% | Clock cut to 90 seconds. |
+| 💀 Sudden Death | 15% | One fewer guess than usual (never below the word length). |
+| *(none)* | 40% | A normal round. |
 
 ## Keeping the secret secret
 
@@ -122,7 +142,7 @@ Seven tables, all with row-level security. See
 | `wf_rooms` | code, mode, status, round count |
 | `wf_players` | seat, generated name and colour, token hash, per room |
 | `wf_words` | the curated answer pool — **RLS-locked, no policies** |
-| `wf_rounds` | word length, guess budget, chain letter, timing, `revealed_secret` |
+| `wf_rounds` | word length, guess budget, chain letter, event, timing, `revealed_secret` |
 | `wf_round_secrets` | the live secret for a round — **RLS-locked, no policies** |
 | `wf_guesses` | word, per-letter feedback, attempt number; visibility is mode-aware |
 | `wf_results` | settled points, per player per round, which is what the leaderboard sums |

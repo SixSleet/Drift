@@ -98,4 +98,27 @@ export const sfx = {
     [523, 659, 784, 1047].forEach((f, i) =>
       blip({ freq: f, dur: 0.3, type: 'triangle', gain: 0.16, delay: i * 0.11 }));
   },
+
+  /** A round's random event, announced at round start. One stinger per kind. */
+  event(kind) {
+    if (kind === 'double_points') {
+      [660, 880, 1100, 1320].forEach((f, i) =>
+        blip({ freq: f, dur: 0.14, type: 'triangle', gain: 0.14, delay: i * 0.06 }));
+    } else if (kind === 'extra_guess') {
+      [523, 784].forEach((f, i) =>
+        blip({ freq: f, to: f * 1.3, dur: 0.16, type: 'square', gain: 0.14, delay: i * 0.1 }));
+    } else if (kind === 'blitz') {
+      [900, 700, 900, 700, 900].forEach((f, i) =>
+        blip({ freq: f, dur: 0.06, type: 'square', gain: 0.15, delay: i * 0.07 }));
+    } else if (kind === 'sudden_death') {
+      [440, 330, 220].forEach((f, i) =>
+        blip({ freq: f, to: f * 0.7, dur: 0.28, type: 'sawtooth', gain: 0.15, delay: i * 0.13 }));
+    }
+  },
+
+  /** The last few seconds of a round's clock. Pitch climbs as it nears zero. */
+  tick(secondsLeft) {
+    const freq = 500 + (10 - Math.min(10, Math.max(0, secondsLeft))) * 40;
+    blip({ freq, dur: 0.05, type: 'square', gain: secondsLeft <= 3 ? 0.16 : 0.1 });
+  },
 };

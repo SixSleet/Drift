@@ -45,7 +45,7 @@ body {
 
 .screen { display: none; flex: 1; padding: clamp(16px, 4vw, 40px); }
 .screen[data-active] { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.screen-wide[data-active] { justify-content: flex-start; gap: 14px; }
+.screen-wide[data-active] { justify-content: flex-start; gap: 14px; position: relative; }
 
 .stack {
   width: 100%;
@@ -268,7 +268,18 @@ body {
   color: var(--red); border-color: rgba(255, 97, 97, .45);
   animation: timer-pulse 1s ease-in-out infinite;
 }
+.pill-timer.is-critical { animation-duration: .5s; }
 @keyframes timer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+
+.pill-event {
+  color: var(--tint, var(--ink)); border-color: color-mix(in srgb, var(--tint, var(--line)) 45%, transparent);
+  animation: event-pop .4s cubic-bezier(.2, 1.4, .4, 1) both;
+}
+@keyframes event-pop {
+  0% { transform: scale(.5); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
 
 .btn-icon {
   appearance: none; border: 1px solid var(--line); background: var(--panel-2);
@@ -293,6 +304,20 @@ body {
 }
 .ghost-bar i[data-tier="hit"] { background: var(--lime); border-color: var(--lime); }
 .ghost-bar i[data-tier="present"] { background: var(--amber); border-color: var(--amber); }
+
+/* ── Random event flash ──────────────────────────────────────────────── */
+
+.event-flash {
+  position: absolute; inset: 0; pointer-events: none; z-index: 5;
+  opacity: 0;
+  background: radial-gradient(900px 500px at 50% 8%, var(--tint, transparent) 0%, transparent 65%);
+}
+.event-flash.is-active { animation: event-flash 1.1s ease-out; }
+@keyframes event-flash {
+  0% { opacity: 0; }
+  15% { opacity: .55; }
+  100% { opacity: 0; }
+}
 
 /* ── Tile grid ───────────────────────────────────────────────────────── */
 

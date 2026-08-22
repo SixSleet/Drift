@@ -4,7 +4,7 @@
 
 import {
   MODES, ROUND_LEAD_MS, ROUND_TIME_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
-  POLL_MS, DEFAULT_ROUNDS, TIER_RANK,
+  POLL_MS, DEFAULT_ROUNDS, TIER_RANK, EVENTS, TICK_START_MS,
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
@@ -35,7 +35,7 @@ export class Game {
   }
 
   #freshLocal() {
-    return { active: '', shake: false, revealAt: 0, boardAt: 0, lastSettleTry: 0 };
+    return { active: '', shake: false, revealAt: 0, boardAt: 0, lastSettleTry: 0, lastTickSecond: null };
   }
 
   get isHost() { return !!this.me?.is_host; }
@@ -177,6 +177,29 @@ export class Game {
     $('#ghost-bar').hidden = this.mode !== 'pvp';
     loadDictionary(row.word_length);
     paintKeyboard(new Map());
+    this.#applyEvent(row.event);
+  }
+
+  /** A round's random event — announced once, at the moment it starts. */
+  #applyEvent(event) {
+    const el = $('#hud-event');
+    const info = EVENTS[event];
+    if (!info) { el.hidden = true; return; }
+    el.hidden = false;
+    el.style.setProperty('--tint', info.tint);
+    el.textContent = `${info.emoji} ${info.label}`;
+    // Re-trigger the CSS pop-in even if the previous round had the same event.
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+
+    const flash = $('#event-flash');
+    flash.style.setProperty('--tint', info.tint);
+    flash.classList.remove('is-active');
+    void flash.offsetWidth;
+    flash.classList.add('is-active');
+
+    sfx.event(event);
   }
 
   // ── Input ────────────────────────────────────────────────────────────
@@ -248,7 +271,8 @@ export class Game {
 
   #roundSeemsFinished() {
     if (!this.round) return false;
-    if (serverNow() - Date.parse(this.round.starts_at) >= ROUND_TIME_MS) return true; // 5-minute cap, any mode
+    const timeLimitMs = this.round.time_limit_ms ?? ROUND_TIME_MS;
+    if (serverNow() - Date.parse(this.round.starts_at) >= timeLimitMs) return true; // round's own clock (blitz shortens it)
 
     const gs = this.guessesByRound.get(this.round.id) ?? [];
     if (this.mode === 'coop') {
@@ -403,11 +427,24 @@ export class Game {
   #renderTimer(phase) {
     const el = $('#hud-timer');
     if (phase !== 'live') { el.hidden = true; return; }
-    const remaining = Math.max(0, ROUND_TIME_MS - (serverNow() - Date.parse(this.round.starts_at)));
+    const timeLimitMs = this.round.time_limit_ms ?? ROUND_TIME_MS;
+    const remaining = Math.max(0, timeLimitMs - (serverNow() - Date.parse(this.round.starts_at)));
     const secs = Math.ceil(remaining / 1000);
     el.hidden = false;
     el.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
     el.classList.toggle('is-low', remaining <= 30000);
+    el.classList.toggle('is-critical', remaining <= 10000);
+
+    // An audible tick for the last stretch, once per second, pitch rising
+    // as it nears zero — the "ticking timer" party-game clock feel.
+    if (remaining <= TICK_START_MS && remaining > 0) {
+      if (secs !== this.local.lastTickSecond) {
+        this.local.lastTickSecond = secs;
+        sfx.tick(secs);
+      }
+    } else {
+      this.local.lastTickSecond = null;
+    }
   }
 
   #renderFrame(phase) {
@@ -417,7 +454,9 @@ export class Game {
 
     if (phase === 'countdown') {
       const secs = Math.ceil(-(serverNow() - Date.parse(this.round.starts_at)) / 1000);
-      setStatusLine(`<div class="big">${secs > 0 ? secs : 'GO'}</div>`);
+      const info = EVENTS[this.round.event];
+      const sub = info ? `<div class="small">${info.emoji} ${info.label} — ${info.blurb}</div>` : '';
+      setStatusLine(`<div class="big">${secs > 0 ? secs : 'GO'}</div>${sub}`);
       renderGrid({
         wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
         guesses: [], active: '', canType: false,
