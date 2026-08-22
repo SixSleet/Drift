@@ -3,7 +3,7 @@
 
 import {
   SUPABASE_URL, SUPABASE_KEY,
-  BROADCAST_INTERVAL_MS, NUDGE_REBROADCASTS,
+  BROADCAST_INTERVAL_MS, NUDGE_REBROADCASTS, CLOCK_RESYNC_MS,
 } from './config.js';
 
 const { createClient } = window.supabase;
@@ -74,6 +74,15 @@ export async function syncClock(samples = 5) {
 
 export const serverNow = () => Date.now() + clockOffset;
 
+// A device clock can wander over a long session — a laptop coming back from
+// sleep is the common case — so the offset gets a periodic top-up rather than
+// being trusted for the life of the tab.
+let resyncTimer = null;
+export function startClockResync() {
+  clearInterval(resyncTimer);
+  resyncTimer = setInterval(() => { syncClock(2).catch(() => {}); }, CLOCK_RESYNC_MS);
+}
+
 // ── RPCs ───────────────────────────────────────────────────────────────────
 // Every one of these is a SECURITY DEFINER function that re-checks membership,
 // host rights and timing server-side. The token is an argument rather than
@@ -96,10 +105,12 @@ export const api = {
   nudges: (roundId) => rpc('drift_nudges_for', { p_round: roundId }),
   lockWager: (roundId, wager) => rpc('drift_lock_wager', { p_round: roundId, p_wager: wager }),
   publishTruth: (roundId, truth) => rpc('drift_publish_truth', { p_round: roundId, p_truth: truth }),
-  submitNudge: (roundId, ball, tick, dx, dy, strength) =>
+  // Carries the point that was clicked, not a precomputed direction — the
+  // server, and every client, resolves the actual push direction at the tick
+  // the nudge lands on rather than the tick it was clicked on.
+  submitNudge: (roundId, ball, tick, x, y) =>
     rpc('drift_submit_nudge', {
-      p_round: roundId, p_ball: ball, p_tick: tick,
-      p_dx: dx, p_dy: dy, p_strength: strength,
+      p_round: roundId, p_ball: ball, p_tick: tick, p_x: x, p_y: y,
     }),
   submitGuess: (roundId, ball, gx, gy) =>
     rpc('drift_submit_guess', { p_round: roundId, p_ball: ball, p_gx: gx, p_gy: gy }),

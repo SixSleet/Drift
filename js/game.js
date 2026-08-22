@@ -3,12 +3,14 @@
 // follows along over realtime and reproduces the round locally from its seed.
 
 import {
-  ARENA, DT_MS, NUDGE_LEAD_TICKS, NUDGE_RANGE,
+  ARENA, DT_MS, NUDGE_LEAD_TICKS,
   GUESS_WINDOW_MS, REVEAL_MS, LEADERBOARD_MS, DEFAULT_ROUNDS, POLL_MS,
+  MODIFIERS, CLOSE_PX, BULLSEYE_PX,
 } from './config.js';
 import { Sim } from './sim.js';
 import { Renderer, BALL_COLORS, BALL_NAMES } from './render.js';
-import { api, syncClock, serverNow, openRoomChannel } from './net.js';
+import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
+import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard,
   setPhase, setOverlay, selectChip,
@@ -55,6 +57,7 @@ export class Game {
 
   async boot() {
     await syncClock();
+    startClockResync();
     requestAnimationFrame(this.frame);
   }
 
@@ -183,9 +186,8 @@ export class Game {
   #onRemoteNudge(payload) {
     if (!this.sim || !this.round || payload?.round_id !== this.round.id) return;
     if (this.sim.addNudge(payload)) {
-      const p = this.sim.positions()[payload.ball_index];
       const who = this.players.find((x) => x.id === payload.player_id);
-      if (p) this.renderer.ping(p.x - payload.dx * 40, p.y - payload.dy * 40, who?.color ?? '#ffffff');
+      this.renderer.ping(payload.click_x, payload.click_y, who?.color ?? '#ffffff');
     }
   }
 
@@ -206,6 +208,7 @@ export class Game {
     this.host.advancing = false;
     showScreen('screen-game');
     $('#hud-round').textContent = `Round ${row.round_no}/${this.room.total_rounds}`;
+    this.#renderModifierBadge(row.modifier);
     selectChip($('#wager-chips'), 'wager', 1);
     [...$('#wager-chips').querySelectorAll('.chip')].forEach((c) => { c.disabled = false; });
     this.#renderBallChips(row.ball_count);
@@ -213,6 +216,21 @@ export class Game {
     // The wager defaults to 1, so persist it up front: a player who never taps
     // still has a wager on record rather than being scored as an absentee.
     api.lockWager(row.id, 1).catch(() => {});
+  }
+
+  #renderModifierBadge(modifier) {
+    const badge = $('#hud-mod');
+    if (!badge) return;
+    const info = MODIFIERS[modifier] ?? MODIFIERS.none;
+    if (!modifier || modifier === 'none') {
+      badge.hidden = true;
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = info.label;
+    badge.style.color = info.tint;
+    badge.style.borderColor = `${info.tint}66`;
+    badge.title = info.blurb;
   }
 
   #renderBallChips(count) {
@@ -243,6 +261,7 @@ export class Game {
 
   setWager(w) {
     this.local.wager = w;
+    sfx.lock();
     if (this.round) api.lockWager(this.round.id, w).catch((e) => toast(e.message));
   }
 
@@ -252,17 +271,24 @@ export class Game {
     if (!this.round || !this.sim) return;
     const p = this.renderer.toArena(event);
     if (p.x < 0 || p.y < 0 || p.x > ARENA.w || p.y > ARENA.h) return;
+    // Nudging closes with the live phase — that leaves the whole blackout for
+    // the click to reach the database, so every client has the complete set of
+    // nudges before it freezes the frame everyone guesses against.
     if (this.phase === 'guess') this.#placeGuess(p);
-    else if (this.phase === 'live' || this.phase === 'blackout') this.#nudge(p);
+    else if (this.phase === 'live') this.#nudge(p);
   }
 
   /**
-   * One click per player per round: it shoves the nearest ball directly away
-   * from the point clicked, harder the closer you clicked to it.
+   * One click per player per round. The point clicked is what gets sent, not a
+   * precomputed direction — the actual push is resolved at the tick it lands
+   * on, always directly away from that point, however far the ball has moved
+   * since. That is what makes it feel accurate instead of a beat behind.
    */
   #nudge(point) {
     if (this.local.nudged || !this.me) return;
 
+    // Which ball owns this nudge is decided now, from where the ball is at the
+    // moment of the click; the direction of the push is resolved later.
     const positions = this.sim.positions();
     let best = 0;
     let bestD = Infinity;
@@ -271,12 +297,6 @@ export class Game {
       if (d < bestD) { bestD = d; best = i; }
     }
 
-    const target = positions[best];
-    let dx = target.x - point.x;
-    let dy = target.y - point.y;
-    const d = Math.hypot(dx, dy) || 1;
-    dx /= d; dy /= d;
-
     const payload = {
       round_id: this.round.id,
       player_id: this.me.id,
@@ -284,17 +304,18 @@ export class Game {
       // Scheduled slightly ahead of the local render tick so most clients apply
       // it without ever rewinding. Clamped so a last-instant click still lands.
       apply_tick: Math.min(this.sim.tick + NUDGE_LEAD_TICKS, this.sim.freezeTick - 1),
-      dx, dy,
-      strength: clamp(1 - bestD / NUDGE_RANGE, 0.18, 1),
+      click_x: point.x,
+      click_y: point.y,
     };
 
     this.local.nudged = true;
     this.sim.addNudge(payload);
     this.renderer.ping(point.x, point.y, this.me.color);
+    sfx.nudge();
     this.#setNudgeState('Spent', true);
 
     this.channel?.sendNudge(payload);
-    api.submitNudge(this.round.id, best, payload.apply_tick, dx, dy, payload.strength)
+    api.submitNudge(this.round.id, best, payload.apply_tick, point.x, point.y)
       .catch(() => toast('Your nudge did not reach the server.'));
   }
 
@@ -302,6 +323,7 @@ export class Game {
     if (this.local.guessed) return;
     this.local.guessed = true;
     this.local.guessPoint = { x: point.x, y: point.y, ball: this.local.ball };
+    sfx.lock();
     api.submitGuess(this.round.id, this.local.ball, point.x, point.y)
       .catch((e) => toast(e.message || 'Guess rejected.'));
   }
@@ -454,6 +476,35 @@ export class Game {
     return { truth: this.round.truth, guesses };
   }
 
+  /**
+   * [html, color] for the reveal overlay, tiered the same way the sound is.
+   * Whether *this* client guessed is read from local state rather than from
+   * `g` — the scored row can lag a beat behind the freeze while it is still
+   * being fetched, and that lag must never read as "you didn't guess".
+   */
+  #revealCallout(g) {
+    if (!this.local.guessed) return ['<div style="font-size:.6em;opacity:.7">no guess</div>', '#8d95bd'];
+    if (!g || g.points == null) return ['<div style="font-size:.5em;opacity:.6">scoring…</div>', '#8d95bd'];
+    if (g.distance != null && g.distance <= BULLSEYE_PX) {
+      return [`<div>🎯 BULLSEYE<div style="font-size:.4em;margin-top:6px">+${g.points}</div></div>`, '#ffd166'];
+    }
+    if (g.distance != null && g.distance <= CLOSE_PX) {
+      return [`<div style="font-size:.75em">CLOSE<div style="font-size:.55em;margin-top:5px">+${g.points}</div></div>`, '#7be495'];
+    }
+    return [`<div>+${g.points}</div>`, '#7be495'];
+  }
+
+  /** Pitches the reveal sound to how well the local player actually did. */
+  #playRevealSfx() {
+    const mine = this.round && this.me
+      ? this.allGuesses.get(`${this.round.id}:${this.me.id}`) : null;
+    if (!mine || mine.distance == null) { sfx.score('miss'); return; }
+    const tier = mine.distance <= BULLSEYE_PX ? 'bullseye'
+               : mine.distance <= CLOSE_PX ? 'close' : 'miss';
+    sfx.score(tier);
+    if ((mine.streak ?? 0) >= 3) sfx.streak(mine.streak);
+  }
+
   #showFinal() {
     this.#refreshResults().then(() => {
       const rows = this.#standings();
@@ -480,17 +531,41 @@ export class Game {
 
     const r = this.round;
     const t = serverNow() - Date.parse(r.starts_at);
-    const targetTick = Math.max(0, Math.floor(t / DT_MS));
+    // The physics only ever advances in whole ticks; `alpha` is how far past
+    // the last tick the render clock actually is, so the ball can be drawn
+    // smoothly between two simulated positions instead of snapping tick to
+    // tick — that snapping is what read as "out of sync" before.
+    const rawTick = Math.max(0, t / DT_MS);
+    const targetTick = Math.floor(rawTick);
     this.sim.advanceTo(targetTick);
+    const alpha = Math.max(0, Math.min(1, rawTick - targetTick));
+
+    const ballsHidden = phase !== 'countdown' && phase !== 'live';
+
+    // Bumper and wall hits: a flash only while the balls are actually visible.
+    // During the blackout the sound alone carries the excitement — a flash at
+    // the impact point would otherwise give the position away for free.
+    for (const b of this.sim.drainBounces()) {
+      if (!ballsHidden) this.renderer.impact(b.x, b.y, b.speed, b.bumper);
+      sfx.bounce(b.speed, b.bumper);
+    }
+
+    const modInfo = MODIFIERS[this.sim.modifier] ?? MODIFIERS.none;
 
     const view = {
       sim: this.sim,
       layout: this.sim.layout,
       showTrails: true,
-      ballsHidden: phase !== 'countdown' && phase !== 'live',
+      ballsHidden,
+      positions: ballsHidden ? null : this.sim.interpolated(alpha),
       // Once the balls are hidden, all anyone gets is where they were last seen.
       trails: phase === 'countdown' || phase === 'live' ? this.sim.trails : (this.sim.lastSeen ?? []),
       calledBall: this.local.ball,
+      modifier: this.sim.modifier,
+      tint: this.sim.modifier === 'none' ? null : modInfo.tint,
+      obstacles: this.sim.obstacles(),
+      wallInset: this.sim.wallInset(),
+      ghosted: !ballsHidden && !this.sim.ghostVisible(),
       marker: null,
       reveal: null,
       dim: 0,
@@ -498,10 +573,12 @@ export class Game {
     };
 
     if (phase === 'countdown') {
-      view.ballsHidden = false;
       view.showTrails = false;
       const secs = Math.ceil(-t / 1000);
-      setOverlay(`<div>${secs > 0 ? secs : 'GO'}</div>`, '#4bd0ff');
+      const modLine = this.sim.modifier !== 'none'
+        ? `<div style="font-size:.26em;letter-spacing:.1em;margin-top:8px;opacity:.85">${modInfo.label.toUpperCase()}</div>`
+        : '';
+      setOverlay(`<div>${secs > 0 ? secs : 'GO'}</div>${modLine}`, secs > 0 ? '#4bd0ff' : (modInfo.tint ?? '#4bd0ff'));
     } else if (phase === 'live') {
       setOverlay(this.local.nudged ? '' : '<div style="font-size:.5em;opacity:.5">click to nudge</div>');
     } else if (phase === 'blackout') {
@@ -528,11 +605,10 @@ export class Game {
       view.showTrails = false;
       view.dim = 0.42;
       view.reveal = this.#revealView();
-      const mine = view.reveal?.guesses.find((g) => g.mine);
-      setOverlay(mine
-        ? `<div>+${mine.points}</div>`
-        : '<div style="font-size:.6em;opacity:.7">no guess</div>',
-        mine?.points ? '#7be495' : '#8d95bd');
+      const mineRaw = this.round && this.me
+        ? this.allGuesses.get(`${this.round.id}:${this.me.id}`) : null;
+      const [html, color] = this.#revealCallout(mineRaw);
+      setOverlay(html, color);
     }
 
     this.renderer.draw(view);
@@ -543,19 +619,22 @@ export class Game {
     if (phase === 'countdown' || phase === 'live') {
       setPhase(phase === 'countdown' ? 'Get ready' : 'Live', null);
       showScreen('screen-game');
+      if (phase === 'live') sfx.go();
     } else if (phase === 'blackout') {
       setPhase('Balls hidden', 'hot');
+      sfx.blackout();
       // Wagers close with the live phase; the tap stops mattering here.
       [...$('#wager-chips').querySelectorAll('.chip')].forEach((c) => { c.disabled = true; });
     } else if (phase === 'guess') {
       setPhase('Guess!', 'warn');
+      sfx.freeze();
     } else if (phase === 'settling') {
       setPhase('Settling', null);
     } else if (phase === 'reveal') {
       setPhase('Reveal', null);
       if (!this.local.revealFetched) {
         this.local.revealFetched = true;
-        this.#refreshResults();
+        this.#refreshResults().then(() => this.#playRevealSfx());
       }
     } else if (phase === 'board') {
       $('#board-title').textContent = `After round ${this.round?.round_no ?? ''}`;
@@ -567,6 +646,7 @@ export class Game {
       setPhase('Waiting', null);
     } else if (phase === 'final') {
       this.#showFinal();
+      sfx.fanfare();
     }
   }
 }

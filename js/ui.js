@@ -4,7 +4,18 @@
 export const $ = (sel) => document.querySelector(sel);
 export const $$ = (sel) => [...document.querySelectorAll(sel)];
 
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // matches drift_create_room
+// Matches drift_create_room: no I/O (read as 1/0) and no 0/1 themselves.
+export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+// The same 32 characters, laid out the way a physical keyboard is, so tapping
+// feels like typing rather than hunting through an arbitrary grid. A real
+// keypress does the same key, wired up separately in main.js.
+const KEYPAD_ROWS = [
+  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'P'],
+  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+  ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
+  ['2', '3', '4', '5', '6', '7', '8', '9'],
+];
 
 export function showScreen(id) {
   $$('.screen').forEach((s) => s.removeAttribute('data-active'));
@@ -20,18 +31,32 @@ export function toast(message, ms = 2600) {
   toastTimer = setTimeout(() => el.removeAttribute('data-show'), ms);
 }
 
-/** Renders the 32-key tap-only code pad. */
+/** Renders the 32-key code pad in QWERTY row order. Tap or type both work. */
 export function buildKeypad(onKey) {
   const pad = $('#keypad');
   pad.innerHTML = '';
-  for (const ch of CODE_ALPHABET) {
-    const b = document.createElement('button');
-    b.className = 'chip';
-    b.type = 'button';
-    b.textContent = ch;
-    b.addEventListener('click', () => onKey(ch));
-    pad.appendChild(b);
+  for (const row of KEYPAD_ROWS) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'key-row';
+    for (const ch of row) {
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.type = 'button';
+      b.textContent = ch;
+      b.dataset.key = ch;
+      b.addEventListener('click', () => onKey(ch));
+      rowEl.appendChild(b);
+    }
+    pad.appendChild(rowEl);
   }
+}
+
+/** Briefly highlights a key so a physical keypress gets the same feedback a tap gets. */
+export function flashKey(ch) {
+  const btn = $(`#keypad .chip[data-key="${ch}"]`);
+  if (!btn) return;
+  btn.classList.add('is-pressed');
+  setTimeout(() => btn.classList.remove('is-pressed'), 120);
 }
 
 export function setCodeDisplay(code) {
@@ -120,4 +145,12 @@ export function showError(title, body) {
   $('#error-title').textContent = title;
   $('#error-body').innerHTML = body;
   showScreen('screen-error');
+}
+
+export function setMuteButton(muted) {
+  const btn = $('#btn-mute');
+  if (!btn) return;
+  btn.textContent = muted ? '🔇' : '🔊';
+  btn.setAttribute('aria-pressed', String(muted));
+  btn.setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound');
 }

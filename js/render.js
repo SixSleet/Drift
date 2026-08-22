@@ -11,6 +11,8 @@ export class Renderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.effects = [];
+    this.flashes = [];
+    this.shake = 0;
     this.scale = 1;
     this.resize();
     if (window.ResizeObserver) {
@@ -34,51 +36,66 @@ export class Renderer {
     const rect = this.canvas.getBoundingClientRect();
     const px = (event.clientX ?? 0) - rect.left;
     const py = (event.clientY ?? 0) - rect.top;
-    return {
-      x: (px / rect.width) * ARENA.w,
-      y: (py / rect.height) * ARENA.h,
-    };
+    return { x: (px / rect.width) * ARENA.w, y: (py / rect.height) * ARENA.h };
   }
 
   ping(x, y, color = '#ffffff') {
     this.effects.push({ x, y, color, born: performance.now(), life: 620 });
   }
 
+  /** A bumper or wall hit: a bright ring plus a kick to the whole arena. */
+  impact(x, y, speed, isBumper) {
+    this.flashes.push({ x, y, born: performance.now(), life: isBumper ? 340 : 220, isBumper });
+    this.shake = Math.min(9, this.shake + (isBumper ? 2.4 : 1.1) * Math.min(1, speed / 12));
+  }
+
   draw(view) {
     const ctx = this.ctx;
     const now = performance.now();
-    ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
-    ctx.clearRect(0, 0, ARENA.w, ARENA.h);
 
+    // Decay the shake, then offset the whole arena by a deterministic-ish
+    // wobble. Purely cosmetic, so a cheap pseudo-random is fine here.
+    this.shake *= 0.86;
+    if (this.shake < 0.05) this.shake = 0;
+    const sx = this.shake ? (Math.random() * 2 - 1) * this.shake : 0;
+    const sy = this.shake ? (Math.random() * 2 - 1) * this.shake : 0;
+
+    ctx.setTransform(this.scale, 0, 0, this.scale, sx * this.scale, sy * this.scale);
+    ctx.clearRect(-20, -20, ARENA.w + 40, ARENA.h + 40);
+
+    const inset = view.wallInset ?? 0;
     this.#floor(ctx, view);
-    if (view.layout) this.#bumpers(ctx, view.layout.bumpers, now);
-    this.#walls(ctx, view);
+    if (view.obstacles) this.#bumpers(ctx, view.obstacles, now);
+    this.#walls(ctx, view, inset);
 
     if (view.sim) {
-      const positions = view.sim.positions();
       if (view.showTrails) this.#trails(ctx, view.trails ?? view.sim.trails, view.ballsHidden);
-      if (!view.ballsHidden) this.#balls(ctx, positions, view.sim.velocities(), now, view.calledBall);
-      else this.#hiddenHint(ctx, now);
+      if (!view.ballsHidden && view.positions) {
+        this.#balls(ctx, view.positions, view.sim.velocities(), now, view.calledBall, view.ghosted);
+      } else if (view.ballsHidden) {
+        this.#hiddenHint(ctx, now);
+      }
     }
 
+    this.#flashes(ctx, now);
     this.#effects(ctx, now);
     if (view.reveal) this.#reveal(ctx, view.reveal, now);
     if (view.marker) this.#marker(ctx, view.marker, now);
     if (view.dim) this.#dim(ctx, view.dim);
-    if (view.guessRing != null) this.#guessRing(ctx, view.guessRing);
+    if (view.guessRing != null) this.#guessRing(ctx, view.guessRing, inset);
   }
 
   // ── layers ───────────────────────────────────────────────────────────
 
   #floor(ctx, view) {
     ctx.fillStyle = '#080a16';
-    ctx.fillRect(0, 0, ARENA.w, ARENA.h);
+    ctx.fillRect(-20, -20, ARENA.w + 40, ARENA.h + 40);
 
     const g = ctx.createRadialGradient(ARENA.w / 2, ARENA.h / 2, 40, ARENA.w / 2, ARENA.h / 2, ARENA.w * 0.68);
-    g.addColorStop(0, view.ballsHidden ? '#0d1024' : '#131a38');
+    g.addColorStop(0, view.ballsHidden ? '#0d1024' : (view.tint ? this.#mix(view.tint) : '#131a38'));
     g.addColorStop(1, '#06070f');
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, ARENA.w, ARENA.h);
+    ctx.fillRect(-20, -20, ARENA.w + 40, ARENA.h + 40);
 
     ctx.strokeStyle = 'rgba(90,110,190,.10)';
     ctx.lineWidth = 1;
@@ -86,19 +103,39 @@ export class Renderer {
     for (let x = 60; x < ARENA.w; x += 60) { ctx.moveTo(x, 0); ctx.lineTo(x, ARENA.h); }
     for (let y = 60; y < ARENA.h; y += 60) { ctx.moveTo(0, y); ctx.lineTo(ARENA.w, y); }
     ctx.stroke();
+
+    // The gravity well is invisible otherwise — draw what the ball is feeling.
+    if (view.modifier === 'gravity') {
+      const cx = ARENA.w / 2, cy = ARENA.h / 2;
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 700);
+      for (let i = 1; i <= 4; i++) {
+        ctx.strokeStyle = `rgba(199,146,234,${0.16 - i * 0.028 + pulse * 0.05})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 34 * i + pulse * 10, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
   }
 
-  #walls(ctx, view) {
+  #mix(tint) {
+    // Nudge the floor toward the modifier's colour without washing it out.
+    return tint + '2b';
+  }
+
+  #walls(ctx, view, inset) {
     const w = ARENA.wall;
     ctx.fillStyle = '#171c33';
-    ctx.fillRect(0, 0, ARENA.w, w);
-    ctx.fillRect(0, ARENA.h - w, ARENA.w, w);
-    ctx.fillRect(0, 0, w, ARENA.h);
-    ctx.fillRect(ARENA.w - w, 0, w, ARENA.h);
+    ctx.fillRect(-20, -20, ARENA.w + 40, w + inset + 20);
+    ctx.fillRect(-20, ARENA.h - w - inset, ARENA.w + 40, w + inset + 20);
+    ctx.fillRect(-20, -20, w + inset + 20, ARENA.h + 40);
+    ctx.fillRect(ARENA.w - w - inset, -20, w + inset + 20, ARENA.h + 40);
 
-    ctx.strokeStyle = view.ballsHidden ? 'rgba(255,77,157,.5)' : 'rgba(75,208,255,.42)';
+    ctx.strokeStyle = view.ballsHidden ? 'rgba(255,77,157,.5)'
+                    : (view.tint ? view.tint + 'aa' : 'rgba(75,208,255,.42)');
     ctx.lineWidth = 2;
-    ctx.strokeRect(w + 1, w + 1, ARENA.w - 2 * w - 2, ARENA.h - 2 * w - 2);
+    ctx.strokeRect(w + inset + 1, w + inset + 1,
+                   ARENA.w - 2 * (w + inset) - 2, ARENA.h - 2 * (w + inset) - 2);
   }
 
   #bumpers(ctx, bumpers, now) {
@@ -130,7 +167,7 @@ export class Renderer {
   #trails(ctx, trails, faded) {
     for (let i = 0; i < trails.length; i++) {
       const pts = trails[i];
-      if (pts.length < 2) continue;
+      if (!pts || pts.length < 2) continue;
       const color = BALL_COLORS[i % BALL_COLORS.length];
       for (let j = 1; j < pts.length; j++) {
         const t = j / pts.length;
@@ -147,11 +184,26 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  #balls(ctx, positions, velocities, now, calledBall) {
+  #balls(ctx, positions, velocities, now, calledBall, ghosted) {
     for (let i = 0; i < positions.length; i++) {
       const p = positions[i];
       const color = BALL_COLORS[i % BALL_COLORS.length];
       const speed = Math.hypot(velocities[i].x, velocities[i].y);
+
+      // Under `ghost` the ball blinks out on a fixed cadence. It is still there,
+      // still bouncing — you just cannot see it.
+      if (ghosted) {
+        ctx.globalAlpha = 0.13;
+        ctx.strokeStyle = color;
+        ctx.setLineDash([3, 6]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, BALL_RADIUS + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+        continue;
+      }
 
       const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, BALL_RADIUS * 4.2);
       glow.addColorStop(0, color);
@@ -200,6 +252,20 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
+  #flashes(ctx, now) {
+    this.flashes = this.flashes.filter((f) => now - f.born < f.life);
+    for (const f of this.flashes) {
+      const t = (now - f.born) / f.life;
+      ctx.globalAlpha = (1 - t) * (f.isBumper ? 0.7 : 0.4);
+      ctx.strokeStyle = f.isBumper ? '#c792ea' : '#4bd0ff';
+      ctx.lineWidth = (f.isBumper ? 3.5 : 2) * (1 - t) + 0.5;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 8 + t * (f.isBumper ? 52 : 30), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   #effects(ctx, now) {
     this.effects = this.effects.filter((e) => now - e.born < e.life);
     for (const e of this.effects) {
@@ -229,9 +295,7 @@ export class Renderer {
     ctx.stroke();
   }
 
-  /**
-   * reveal = { truth: [{x,y}], guesses: [{x,y,ball,color,name,points,mine}] }
-   */
+  /** reveal = { truth: [{x,y}], guesses: [{x,y,ball,color,points,mine}] } */
   #reveal(ctx, reveal, now) {
     const pulse = 0.5 + 0.5 * Math.sin(now / 320);
 
@@ -299,19 +363,19 @@ export class Renderer {
 
   #dim(ctx, amount) {
     ctx.fillStyle = `rgba(4,5,12,${amount})`;
-    ctx.fillRect(0, 0, ARENA.w, ARENA.h);
+    ctx.fillRect(-20, -20, ARENA.w + 40, ARENA.h + 40);
   }
 
   /** Shrinking ring around the arena edge showing the 3s guess window. */
-  #guessRing(ctx, fraction) {
-    const inset = ARENA.wall / 2;
-    const w = ARENA.w - inset * 2;
-    const h = ARENA.h - inset * 2;
+  #guessRing(ctx, fraction, inset) {
+    const edge = ARENA.wall / 2 + inset;
+    const w = ARENA.w - edge * 2;
+    const h = ARENA.h - edge * 2;
     const perimeter = (w + h) * 2;
     ctx.strokeStyle = fraction < 0.34 ? '#ff4d9d' : '#ffd166';
     ctx.lineWidth = ARENA.wall;
     ctx.setLineDash([perimeter * Math.max(0, fraction), perimeter]);
-    ctx.strokeRect(inset, inset, w, h);
+    ctx.strokeRect(edge, edge, w, h);
     ctx.setLineDash([]);
   }
 

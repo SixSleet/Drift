@@ -2,9 +2,10 @@
 
 import { Game } from './game.js';
 import { DEFAULT_ROUNDS } from './config.js';
+import { sfx } from './sfx.js';
 import {
-  $, showScreen, toast, buildKeypad, setCodeDisplay,
-  chipGroup, showError,
+  $, showScreen, toast, buildKeypad, setCodeDisplay, flashKey, setMuteButton,
+  chipGroup, showError, CODE_ALPHABET,
 } from './ui.js';
 
 const game = new Game();
@@ -39,7 +40,7 @@ $('#btn-join').addEventListener('click', () => {
   showScreen('screen-code');
 });
 
-// ── Code entry: taps only, auto-submits on the 4th character ──────────
+// ── Code entry: tap the pad or type on a real keyboard — both call this ──
 
 async function submitCode() {
   $('#code-note').textContent = 'Joining…';
@@ -47,19 +48,34 @@ async function submitCode() {
   catch (err) { fail(err); }
 }
 
-buildKeypad((ch) => {
-  if (codeBuffer.length >= 4) return;
+function enterChar(ch) {
+  if (codeBuffer.length >= 4 || !CODE_ALPHABET.includes(ch)) return;
   codeBuffer += ch;
   setCodeDisplay(codeBuffer);
+  flashKey(ch);
   if (codeBuffer.length === 4) submitCode();
-});
+}
 
-$('#btn-code-del').addEventListener('click', () => {
+function deleteChar() {
   codeBuffer = codeBuffer.slice(0, -1);
   setCodeDisplay(codeBuffer);
   $('#code-note').textContent = '';
-});
+}
+
+buildKeypad(enterChar);
+$('#btn-code-del').addEventListener('click', deleteChar);
 $('#btn-code-back').addEventListener('click', () => showScreen('screen-title'));
+
+// A physical keyboard does the same thing a tap does: any key on the pad
+// enters that character, Backspace deletes, and browser shortcuts (anything
+// held with Ctrl/Alt/Meta) are left alone rather than intercepted.
+document.addEventListener('keydown', (e) => {
+  if (!$('#screen-code[data-active]')) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === 'Backspace') { e.preventDefault(); deleteChar(); return; }
+  const ch = e.key.length === 1 ? e.key.toUpperCase() : '';
+  if (ch && CODE_ALPHABET.includes(ch)) { e.preventDefault(); enterChar(ch); }
+});
 
 // ── Lobby ──────────────────────────────────────────────────────────────
 
@@ -82,6 +98,9 @@ $('#btn-copy').addEventListener('click', async () => {
 
 chipGroup($('#wager-chips'), (v) => game.setWager(Number(v)), 'wager');
 chipGroup($('#ball-chips'), (v) => game.setBall(Number(v)), 'ball');
+
+setMuteButton(sfx.muted);
+$('#btn-mute').addEventListener('click', () => setMuteButton(sfx.toggleMute()));
 
 const arena = $('#arena');
 arena.addEventListener('pointerdown', (e) => {

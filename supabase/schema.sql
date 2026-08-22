@@ -26,29 +26,15 @@
 -- here so the file also stands up on a plain Postgres that does not.
 create extension if not exists pgcrypto with schema extensions;
 
+-- Dropping the tables cascades onto everything that depends on them —
+-- policies, indexes, and every RPC below, whatever its current signature —
+-- which is what makes this file safe to re-run after a signature changes.
 drop table if exists public.drift_guesses cascade;
 drop table if exists public.drift_wagers  cascade;
 drop table if exists public.drift_nudges  cascade;
 drop table if exists public.drift_rounds  cascade;
 drop table if exists public.drift_players cascade;
 drop table if exists public.drift_rooms   cascade;
-
-drop function if exists public.drift_is_member(uuid)          cascade;
-drop function if exists public.drift_round_room(uuid)         cascade;
-drop function if exists public.drift_player_in_round(uuid)    cascade;
-drop function if exists public.drift_create_room(int)         cascade;
-drop function if exists public.drift_join_room(text)          cascade;
-drop function if exists public.drift_heartbeat(uuid)          cascade;
-drop function if exists public.drift_start_game(uuid)         cascade;
-drop function if exists public.drift_next_round(uuid)         cascade;
-drop function if exists public.drift_finish_game(uuid)        cascade;
-drop function if exists public.drift_publish_truth(uuid, jsonb) cascade;
-drop function if exists public.drift_lock_wager(uuid, int)    cascade;
-drop function if exists public.drift_server_time()            cascade;
-drop function if exists public.drift_palette(int)             cascade;
-drop function if exists public.drift_nickname(int, int)       cascade;
-drop function if exists public.drift_submit_guess(uuid, int, double precision, double precision) cascade;
-drop function if exists public.drift_submit_nudge(uuid, int, int, double precision, double precision, double precision) cascade;
 
 -- ── Tables ─────────────────────────────────────────────────────────────────
 
@@ -94,6 +80,11 @@ create table public.drift_rounds (
   duration_ms  int  not null check (duration_ms between 3000 and 12000),
   blackout_ms  int  not null check (blackout_ms between 0 and 3000),
   starts_at    timestamptz not null,
+  -- Drawn once alongside the seed, so it is part of the same fixed input every
+  -- client rebuilds from. Every modifier is implemented with plain arithmetic
+  -- (no Math.sin, no wall-clock reads) so none of them can break determinism.
+  modifier     text not null default 'none'
+               check (modifier in ('none','gravity','turbo','drift','shrink','ghost')),
   -- Authoritative ball positions at the freeze tick, published by the host, so
   -- ten browsers can never disagree about a leaderboard.
   truth        jsonb,
@@ -103,15 +94,17 @@ create table public.drift_rounds (
 
 create index drift_rounds_room_idx on public.drift_rounds (room_id);
 
--- Exactly one nudge per player per round, enforced by the primary key.
+-- Exactly one nudge per player per round, enforced by the primary key. The
+-- clicked point is stored, not a precomputed direction: the actual push is
+-- resolved at the tick it lands on, by every client, from wherever the ball
+-- has moved to by then.
 create table public.drift_nudges (
   round_id    uuid not null references public.drift_rounds(id) on delete cascade,
   player_id   uuid not null references public.drift_players(id) on delete cascade,
   ball_index  int  not null check (ball_index between 0 and 2),
   apply_tick  int  not null check (apply_tick >= 0),
-  dx          double precision not null,
-  dy          double precision not null,
-  strength    double precision not null,
+  click_x     double precision not null,
+  click_y     double precision not null,
   created_at  timestamptz not null default now(),
   primary key (round_id, player_id)
 );
@@ -470,6 +463,7 @@ declare
   v_room  public.drift_rooms := public.drift_host_room(p_token, p_room);
   v_round public.drift_rounds;
   v_no    int;
+  v_mods  text[] := array['gravity','turbo','drift','shrink','ghost'];
 begin
   -- Idempotent: while the current round is still unsettled (no truth yet) a
   -- retry -- a double-tap, or a host reconnecting mid-round -- hands back that
@@ -488,7 +482,7 @@ begin
   end if;
 
   insert into public.drift_rounds
-    (room_id, round_no, seed, ball_count, duration_ms, blackout_ms, starts_at)
+    (room_id, round_no, seed, ball_count, duration_ms, blackout_ms, starts_at, modifier)
   values (
     p_room,
     v_no,
@@ -496,7 +490,12 @@ begin
     case when v_no % 3 = 0 then 2 + floor(random() * 2)::int else 1 end,
     4000 + floor(random() * 4001)::int,   -- 4.0s - 8.0s live
     500  + floor(random() * 901)::int,    -- 0.5s - 1.4s blackout tail
-    now() + interval '2500 milliseconds'  -- shared lead-in
+    now() + interval '2500 milliseconds', -- shared lead-in
+    -- Round 1 is always plain, so the first thing anyone sees is the base game.
+    case when v_no = 1 then 'none'
+         when random() < 0.25 then 'none'
+         else v_mods[1 + floor(random() * array_length(v_mods, 1))::int]
+    end
   )
   returning * into v_round;
 
@@ -510,7 +509,7 @@ $$;
 -- rather than an error the client has to special-case.
 create or replace function public.drift_submit_nudge(
   p_token text, p_round uuid, p_ball int, p_tick int,
-  p_dx double precision, p_dy double precision, p_strength double precision
+  p_x double precision, p_y double precision
 ) returns boolean
 language plpgsql
 security definer
@@ -523,19 +522,22 @@ declare
 begin
   select * into v_round from public.drift_rounds where id = p_round;
 
+  -- The window closes with the live phase, not at the freeze. That leaves the
+  -- whole blackout for a nudge to reach the database, so every client has the
+  -- complete set before it freezes the frame everyone guesses against.
   if now() < v_round.starts_at - interval '2 seconds'
      or now() > v_round.starts_at
-                + make_interval(secs => (v_round.duration_ms + v_round.blackout_ms) / 1000.0)
-                + interval '1 second' then
+                + make_interval(secs => v_round.duration_ms / 1000.0)
+                + interval '400 milliseconds' then
     raise exception 'drift: nudge window closed' using errcode = 'P0007';
   end if;
   if p_ball < 0 or p_ball >= v_round.ball_count then
     raise exception 'drift: no such ball' using errcode = 'P0008';
   end if;
 
-  insert into public.drift_nudges (round_id, player_id, ball_index, apply_tick, dx, dy, strength)
+  insert into public.drift_nudges (round_id, player_id, ball_index, apply_tick, click_x, click_y)
   values (p_round, v_player.id, p_ball, greatest(0, p_tick),
-          p_dx, p_dy, least(1.0, greatest(0.0, p_strength)))
+          least(960.0, greatest(0.0, p_x)), least(600.0, greatest(0.0, p_y)))
   on conflict (round_id, player_id) do nothing;
 
   get diagnostics v_ok = row_count;
@@ -767,7 +769,7 @@ begin
     'drift_publish_truth(text, uuid, jsonb)',
     'drift_lock_wager(text, uuid, int)',
     'drift_submit_guess(text, uuid, int, double precision, double precision)',
-    'drift_submit_nudge(text, uuid, int, int, double precision, double precision, double precision)',
+    'drift_submit_nudge(text, uuid, int, int, double precision, double precision)',
     'drift_state(text, uuid)',
     'drift_server_time()'
   ] loop

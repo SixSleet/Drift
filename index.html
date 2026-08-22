@@ -38,6 +38,7 @@
         <ol>
           <li>A ball launches into a bumper arena. Every 3rd round, two or three at once.</li>
           <li>You get <b>one</b> click all round — it shoves the nearest ball away from where you clicked.</li>
+          <li>Watch for round modifiers: gravity wells, turbo speed, drifting walls, a shrinking arena, a blinking ball.</li>
           <li>Tap <b>1</b>, <b>2</b> or <b>3</b> to wager how sure you are. Nobody sees your wager.</li>
           <li>Near the end the balls go dark and keep moving. Then everything freezes.</li>
           <li>You have 3 seconds to click where you think your ball ended up.</li>
@@ -47,7 +48,7 @@
     </div>
   </section>
 
-  <!-- ── Code entry (tap-only, no keyboard) ────────────────────────────── -->
+  <!-- ── Code entry: tap the pad or just type — both do the same thing ─── -->
   <section class="screen" id="screen-code">
     <div class="stack">
       <h2 class="heading">Room code</h2>
@@ -58,6 +59,7 @@
         <button class="btn btn-ghost" id="btn-code-del">Delete</button>
       </div>
       <p class="note" id="code-note"></p>
+      <p class="hint">You can type the code on your keyboard too.</p>
     </div>
   </section>
 
@@ -84,10 +86,12 @@
       <div class="hud-left">
         <span class="pill" id="hud-round">Round 1/10</span>
         <span class="pill pill-phase" id="hud-phase">Get ready</span>
+        <span class="pill pill-mod" id="hud-mod" hidden></span>
       </div>
       <div class="hud-right">
         <span class="pill" id="hud-you"></span>
         <span class="pill pill-score" id="hud-score">0</span>
+        <button class="btn-icon" id="btn-mute" type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
       </div>
     </header>
 
