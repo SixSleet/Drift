@@ -1,13 +1,15 @@
 # Wordforge
 
-A 2–10 player browser word game. Same idea as that word game you already know
+A 1–10 player browser word game. Same idea as that word game you already know
 — guess the secret word, get colour-coded feedback — with two twists that
 keep it from being a five-letter clone: the word length shifts every round
 (4–7 letters), and most rounds have to start with the last letter of the
 previous round's word.
 
-Two modes:
+Three modes:
 
+- **Solo** — no lobby, no code. Hit "Play solo" and you're straight into a
+  match, same guess budget as a duel, chasing your own score.
 - **PvP Duel** — two players race the same secret at the same time. You only
   ever see your own board; your opponent shows up as a live "ghost" bar —
   how many guesses they've burned, nothing more. Fewer guesses wins the
@@ -42,9 +44,13 @@ Matches run 4, 6, 8 or 12 rounds. Points build across the whole match — most
 points (or, in Co-op, most rounds solved) wins after the last one.
 
 **Scoring.** `points = max(0, max_guesses − guesses_used + 1) × 10`, plus a
-PvP-only speed bonus (+20 for a near-instant solve, +10 for a reasonably
-fast one). Co-op scores the same way off the shared attempt count, split
-identically across the whole team.
+speed bonus in Solo and PvP (+20 for a near-instant solve, +10 for a
+reasonably fast one). Co-op scores the same base formula off the shared
+attempt count, split identically across the whole team, with no speed bonus.
+
+**Guess budgets.** `word length + 2` in Solo and PvP — a solo run is exactly
+as hard as your half of a duel. `word length + 3` in Co-op, since that pool
+is shared across the whole team rather than per player.
 
 **The chain constraint.** From round 2 on, the secret usually has to start
 with the last letter of the previous round's secret — so you can't lean on
@@ -68,9 +74,10 @@ column-masking trick: the same read that was always allowed just starts
 returning a value once the round is over.
 
 Guess visibility is mode-aware, in one RLS policy: in Co-op every guess is
-visible to the room the moment it lands; in PvP you only ever see your own
-until the round settles, at which point both boards open up for the reveal
-screen.
+visible to the room the moment it lands; in PvP and Solo you only ever see
+your own until the round settles, at which point the board opens up for the
+reveal screen. Solo needs no special case here at all — a room of one only
+ever has its own guesses to see anyway.
 
 Settling a round is deliberately **not** host-only, unlike advancing to the
 next one — it independently re-derives "is this actually finished" from the
@@ -213,7 +220,9 @@ supabase/schema.sql    tables, RLS policies and every RPC
   the secret secret** above. Moving round advancement into a scheduled edge
   function would remove this limit entirely.
 - **Joining is lobby-only.** Once a game starts the room is closed to new
-  players. Refreshing your own tab is fine.
+  players. Refreshing your own tab is fine. A Solo room can never be joined
+  by anyone else, at any point — it auto-starts the instant it's created,
+  so there's no lobby window for a second player to land in even in theory.
 - **The token is a bearer secret.** Anyone who copies it out of your
   `localStorage` can act as you in your rooms — the same trade-off any
   session cookie makes, and the price of having no login at all.

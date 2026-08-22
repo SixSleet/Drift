@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wordforge</title>
-<meta name="description" content="A 2–10 player browser word game. Guess a word of shifting length before your guesses run out — race a rival head-to-head or share one guess pool with your whole team.">
+<meta name="description" content="A 1–10 player browser word game. Guess a word of shifting length before your guesses run out — solo, race a rival head-to-head, or share one guess pool with your whole team.">
 <meta name="theme-color" content="#06070f">
 <meta property="og:title" content="Wordforge">
 <meta property="og:description" content="Same idea as that word game you know. More letters, more modes, more pressure.">
@@ -25,7 +25,11 @@
       <div class="panel">
         <p class="label">Mode</p>
         <div class="mode-picker" id="mode-chips" role="group" aria-label="Game mode">
-          <button class="chip mode-chip is-on" data-mode="pvp" style="--tint:#ff4d9d">
+          <button class="chip mode-chip is-on" data-mode="solo" style="--tint:#4bd0ff">
+            <span class="mode-name">Solo</span>
+            <span class="mode-blurb">Just you and the clock. Same rules, no rival — chase your own best score.</span>
+          </button>
+          <button class="chip mode-chip" data-mode="pvp" style="--tint:#ff4d9d">
             <span class="mode-name">PvP Duel</span>
             <span class="mode-blurb">Same word, same start. Fewer guesses wins — you only see your own board.</span>
           </button>
@@ -43,7 +47,7 @@
           <button class="chip" data-rounds="12">12</button>
         </div>
 
-        <button class="btn btn-primary btn-lg" id="btn-create">Create a room</button>
+        <button class="btn btn-primary btn-lg" id="btn-create">Play solo</button>
         <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
       </div>
 
@@ -53,6 +57,7 @@
           <li>Every round picks a secret word — anywhere from 4 to 7 letters, so don't assume it's always five.</li>
           <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
           <li>Type guesses on the on-screen keyboard or your own. Tiles show hit (right spot), present (wrong spot) or miss.</li>
+          <li><b>Solo:</b> no lobby, no code — just you against the word, same guess budget as a duel. Good for warming up or chasing a personal best.</li>
           <li><b>PvP Duel:</b> you and a rival race the same word at the same time. You only ever see your own board — the "ghost" bar shows how many guesses your rival has burned, nothing more. Fewer guesses wins the round.</li>
           <li><b>Co-op:</b> the whole room shares one board and one guess budget (word length + 3, no bigger a team just because you invited more people). Anyone can drop the next guess — coordinate or waste attempts.</li>
           <li>Points build across the whole match. After the last round, whoever — or whichever team — has the most wins.</li>

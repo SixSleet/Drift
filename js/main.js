@@ -11,7 +11,7 @@ import {
 const game = new Game();
 // Exposed so the browser test harness can inspect the live simulation.
 window.__wordforge = game;
-let chosenMode = 'pvp';
+let chosenMode = 'solo';
 let chosenRounds = DEFAULT_ROUNDS;
 let codeBuffer = '';
 
@@ -25,7 +25,12 @@ function fail(err) {
 
 // ── Title ──────────────────────────────────────────────────────────────
 
-chipGroup($('#mode-chips'), (v) => { chosenMode = v; }, 'mode');
+function setCreateLabel(mode) {
+  $('#btn-create').textContent = mode === 'solo' ? 'Play solo' : 'Create a room';
+}
+setCreateLabel(chosenMode);
+
+chipGroup($('#mode-chips'), (v) => { chosenMode = v; setCreateLabel(v); }, 'mode');
 chipGroup($('#rounds-chips'), (v) => { chosenRounds = Number(v); }, 'rounds');
 
 $('#btn-create').addEventListener('click', async (e) => {

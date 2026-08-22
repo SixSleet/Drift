@@ -15,8 +15,11 @@
 --     word (see `chain_letter` / `chain_broken` below) — you can't lean on
 --     one memorised opening guess for the whole match.
 --
--- Two modes share this schema:
+-- Three modes share this schema:
 --
+--   * Solo — a room of exactly one, auto-started the instant it's created.
+--     Same individual guess budget as PvP; needs no special-casing in RLS
+--     or scoring, since both already key off "your own guesses."
 --   * PvP  — two players race the same secret at the same time. Each only
 --     ever sees their own guesses; the opponent is a live aggregate ("ghost")
 --     sent over Realtime Broadcast, never through a table read. Fewer
@@ -86,7 +89,7 @@ create table public.wf_rooms (
   id               uuid primary key default gen_random_uuid(),
   code             text not null unique check (code ~ '^[A-Z2-9]{4}$'),
   host_token_hash  text not null,
-  mode             text not null check (mode in ('pvp', 'coop')),
+  mode             text not null check (mode in ('pvp', 'coop', 'solo')),
   status           text not null default 'lobby' check (status in ('lobby', 'playing', 'finished')),
   total_rounds     int  not null default 6 check (total_rounds between 1 and 20),
   current_round    int  not null default 0,
@@ -431,8 +434,8 @@ begin
   if v_hash is null then
     raise exception 'wordforge: a 64-character hex token is required' using errcode = '28000';
   end if;
-  if p_mode not in ('pvp', 'coop') then
-    raise exception 'wordforge: mode must be pvp or coop' using errcode = 'P0001';
+  if p_mode not in ('pvp', 'coop', 'solo') then
+    raise exception 'wordforge: mode must be pvp, coop or solo' using errcode = 'P0001';
   end if;
 
   loop
@@ -492,7 +495,10 @@ begin
 
   perform 1 from public.wf_rooms where id = v_room.id for update;
 
-  v_cap := case when v_room.mode = 'pvp' then 1 else 9 end; -- seats 0..cap
+  -- seats 0..cap; solo has none to spare beyond the host who created it
+  v_cap := case when v_room.mode = 'pvp' then 1
+                when v_room.mode = 'solo' then 0
+                else 9 end;
   select min(s.n) into v_seat
     from generate_series(0, v_cap) as s(n)
    where not exists (select 1 from public.wf_players p
@@ -525,9 +531,10 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_room public.wf_rooms := public.wf_host_room(p_token, p_room);
 begin
-  perform public.wf_host_room(p_token, p_room);
-  if (select count(*) from public.wf_players where room_id = p_room) < 2 then
+  if v_room.mode <> 'solo' and (select count(*) from public.wf_players where room_id = p_room) < 2 then
     raise exception 'wordforge: need at least 2 players' using errcode = 'P0005';
   end if;
   update public.wf_rooms
@@ -618,7 +625,10 @@ begin
     raise exception 'wordforge: no words left for this length' using errcode = 'P0014';
   end if;
 
-  v_max_guesses := v_len + case when v_room.mode = 'pvp' then 2 else 3 end;
+  -- coop's shared pool gets extra room for a team to coordinate; pvp and
+  -- solo both get the same individual budget, so a solo run is exactly as
+  -- hard as your half of a duel.
+  v_max_guesses := v_len + case when v_room.mode = 'coop' then 3 else 2 end;
 
   insert into public.wf_rounds
     (room_id, round_no, word_length, max_guesses, chain_letter, chain_broken, starts_at)

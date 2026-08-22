@@ -52,6 +52,9 @@ export class Game {
   async createRoom(mode, rounds = DEFAULT_ROUNDS) {
     const res = await api.createRoom(mode, rounds);
     await this.enterRoom(res.room_id);
+    // Solo is a room of exactly one, forever — there is no one else to wait
+    // for, so skip the lobby and go straight in.
+    if (mode === 'solo') await this.startGame();
   }
 
   async joinRoom(code) {
@@ -86,7 +89,7 @@ export class Game {
     history.replaceState(null, '', url);
 
     this.#renderLobby();
-    if (this.room.status === 'lobby') showScreen('screen-lobby');
+    if (this.room.status === 'lobby' && this.mode !== 'solo') showScreen('screen-lobby');
   }
 
   async refreshState() {
@@ -124,7 +127,7 @@ export class Game {
     const cap = modeInfo?.maxPlayers ?? 10;
     $('#lobby-count-max').textContent = `/${cap}`;
     const btn = $('#btn-start');
-    const enough = this.players.length >= 2;
+    const enough = this.mode === 'solo' || this.players.length >= 2;
     btn.hidden = !this.isHost;
     btn.disabled = !enough;
     $('#lobby-note').textContent = this.isHost
@@ -250,6 +253,7 @@ export class Game {
     }
     const mine = gs.filter((g) => g.player_id === this.me?.id);
     const myDone = mine.length >= this.round.max_guesses || mine.some((g) => this.#allHit(g));
+    if (this.mode === 'solo') return myDone; // no opponent to wait for
     const oppDone = this.ghost ? (this.ghost.attempts >= this.round.max_guesses || this.ghost.solved) : false;
     return myDone && oppDone;
   }
@@ -349,12 +353,20 @@ export class Game {
   #showFinal() {
     this.refreshState().then(() => {
       const rows = this.#standings();
-      $('#board-title').textContent = 'Final standings';
       if (this.mode === 'coop') {
+        $('#board-title').textContent = 'Final standings';
         const solvedRounds = new Set(
           this.results.filter((r) => r.solved).map((r) => r.round_id)).size;
         $('#board-note').textContent = `Team solved ${solvedRounds}/${this.room.total_rounds} rounds.`;
+      } else if (this.mode === 'solo') {
+        $('#board-title').textContent = 'Run complete';
+        const solvedRounds = new Set(
+          this.results.filter((r) => r.solved).map((r) => r.round_id)).size;
+        $('#board-note').textContent = rows.length
+          ? `${rows[0].total} points — solved ${solvedRounds}/${this.room.total_rounds} rounds.`
+          : '';
       } else {
+        $('#board-title').textContent = 'Final standings';
         $('#board-note').textContent = rows.length ? `${rows[0].name} wins the duel.` : '';
       }
       $('#btn-again').hidden = false;

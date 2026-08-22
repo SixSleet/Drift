@@ -8,6 +8,12 @@ export const SUPABASE_URL = 'https://ycltdyjtjdrgoyrevepf.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_9XEu26xpqmLoP3t41iFZ1w_9lxZu9Vr';
 
 export const MODES = Object.freeze({
+  solo: {
+    label: 'Solo',
+    blurb: 'Just you and the clock. Same rules, no rival — chase your own best score.',
+    tint: '#4bd0ff',
+    maxPlayers: 1,
+  },
   pvp: {
     label: 'PvP Duel',
     blurb: 'Same word, same start. Fewer guesses wins — you only see your own board.',
