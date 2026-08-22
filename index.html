@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Drift: Chaos Mode</title>
-<meta name="description" content="A 2–10 player browser party game. A ball ricochets through a bumper arena, everyone gets one nudge, then it vanishes — click where you think it ended up.">
+<title>Wordforge</title>
+<meta name="description" content="A 2–10 player browser word game. Guess a word of shifting length before your guesses run out — race a rival head-to-head or share one guess pool with your whole team.">
 <meta name="theme-color" content="#06070f">
-<meta property="og:title" content="Drift: Chaos Mode">
-<meta property="og:description" content="Nudge the ball. Lose the ball. Guess where it went.">
+<meta property="og:title" content="Wordforge">
+<meta property="og:description" content="Same idea as that word game you know. More letters, more modes, more pressure.">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%234bd0ff'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='10' height='10' rx='2' fill='%234bd0ff'/%3E%3Crect x='18' y='4' width='10' height='10' rx='2' fill='%23ff4d9d'/%3E%3Crect x='11' y='18' width='10' height='10' rx='2' fill='%237be495'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -19,16 +19,30 @@
   <!-- ── Title ─────────────────────────────────────────────────────────── -->
   <section class="screen" id="screen-title" data-active>
     <div class="stack">
-      <h1 class="wordmark">Drift<span>: Chaos Mode</span></h1>
-      <p class="tagline">Nudge the ball. Lose the ball. Guess where it went.</p>
+      <h1 class="wordmark">Word<span>forge</span></h1>
+      <p class="tagline">Same idea as that word game you know. More letters, more modes, more pressure.</p>
 
       <div class="panel">
+        <p class="label">Mode</p>
+        <div class="mode-picker" id="mode-chips" role="group" aria-label="Game mode">
+          <button class="chip mode-chip is-on" data-mode="pvp" style="--tint:#ff4d9d">
+            <span class="mode-name">PvP Duel</span>
+            <span class="mode-blurb">Same word, same start. Fewer guesses wins — you only see your own board.</span>
+          </button>
+          <button class="chip mode-chip" data-mode="coop" style="--tint:#7be495">
+            <span class="mode-name">Co-op</span>
+            <span class="mode-blurb">One shared board, one shared guess pool. Everyone sees every guess.</span>
+          </button>
+        </div>
+
         <p class="label">Rounds</p>
         <div class="chips" id="rounds-chips" role="group" aria-label="Number of rounds">
-          <button class="chip" data-rounds="6">6</button>
-          <button class="chip is-on" data-rounds="10">10</button>
-          <button class="chip" data-rounds="15">15</button>
+          <button class="chip" data-rounds="4">4</button>
+          <button class="chip is-on" data-rounds="6">6</button>
+          <button class="chip" data-rounds="8">8</button>
+          <button class="chip" data-rounds="12">12</button>
         </div>
+
         <button class="btn btn-primary btn-lg" id="btn-create">Create a room</button>
         <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
       </div>
@@ -36,13 +50,12 @@
       <details class="how">
         <summary>How it works</summary>
         <ol>
-          <li>A ball launches into a bumper arena. Every 3rd round, two or three at once.</li>
-          <li>You get <b>one</b> click all round — it shoves the nearest ball away from where you clicked.</li>
-          <li>Watch for round modifiers: gravity wells, turbo speed, drifting walls, a shrinking arena, a blinking ball.</li>
-          <li>Tap <b>1</b>, <b>2</b> or <b>3</b> to wager how sure you are. Nobody sees your wager.</li>
-          <li>Near the end the balls go dark and keep moving. Then everything freezes.</li>
-          <li>You have 3 seconds to click where you think your ball ended up.</li>
-          <li>Points scale with how close you were, times your wager. Land 3 close guesses in a row for a multiplier.</li>
+          <li>Every round picks a secret word — anywhere from 4 to 7 letters, so don't assume it's always five.</li>
+          <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
+          <li>Type guesses on the on-screen keyboard or your own. Tiles show hit (right spot), present (wrong spot) or miss.</li>
+          <li><b>PvP Duel:</b> you and a rival race the same word at the same time. You only ever see your own board — the "ghost" bar shows how many guesses your rival has burned, nothing more. Fewer guesses wins the round.</li>
+          <li><b>Co-op:</b> the whole room shares one board and one guess budget (word length + 3, no bigger a team just because you invited more people). Anyone can drop the next guess — coordinate or waste attempts.</li>
+          <li>Points build across the whole match. After the last round, whoever — or whichever team — has the most wins.</li>
         </ol>
       </details>
     </div>
@@ -66,16 +79,16 @@
   <!-- ── Lobby ─────────────────────────────────────────────────────────── -->
   <section class="screen" id="screen-lobby">
     <div class="stack">
-      <p class="label">Room code</p>
+      <p class="label">Room code · <span id="lobby-mode"></span></p>
       <div class="code-big" id="lobby-code"></div>
       <button class="btn btn-ghost" id="btn-copy">Copy invite link</button>
 
       <div class="panel">
-        <p class="label">Players <span id="lobby-count" class="muted"></span></p>
+        <p class="label">Players <span id="lobby-count" class="muted"></span><span id="lobby-count-max" class="muted"></span></p>
         <ul class="players" id="lobby-players"></ul>
       </div>
 
-      <button class="btn btn-primary btn-lg" id="btn-start">Start game</button>
+      <button class="btn btn-primary btn-lg" id="btn-start" hidden>Start game</button>
       <p class="note" id="lobby-note"></p>
     </div>
   </section>
@@ -84,48 +97,31 @@
   <section class="screen screen-wide" id="screen-game">
     <header class="hud">
       <div class="hud-left">
-        <span class="pill" id="hud-round">Round 1/10</span>
+        <span class="pill" id="hud-round">Round 1/6</span>
         <span class="pill pill-phase" id="hud-phase">Get ready</span>
-        <span class="pill pill-mod" id="hud-mod" hidden></span>
+        <span class="pill pill-chain" id="hud-chain" hidden></span>
       </div>
       <div class="hud-right">
         <span class="pill" id="hud-you"></span>
-        <span class="pill pill-score" id="hud-score">0</span>
         <button class="btn-icon" id="btn-mute" type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
       </div>
     </header>
 
-    <div class="stage">
-      <canvas id="arena" width="960" height="600"></canvas>
-      <div class="stage-overlay" id="stage-overlay"></div>
+    <div class="ghost-bar" id="ghost-bar" hidden aria-label="Opponent progress"></div>
+
+    <div class="board-wrap">
+      <div class="tile-grid" id="board"></div>
     </div>
 
-    <footer class="controls">
-      <div class="control-group">
-        <p class="label">Wager <span class="muted">(secret)</span></p>
-        <div class="chips" id="wager-chips" role="group" aria-label="Confidence wager">
-          <button class="chip chip-wager is-on" data-wager="1">1</button>
-          <button class="chip chip-wager" data-wager="2">2</button>
-          <button class="chip chip-wager" data-wager="3">3</button>
-        </div>
-      </div>
+    <div class="status-line" id="status-line"></div>
 
-      <div class="control-group" id="ball-group" hidden>
-        <p class="label">Your ball</p>
-        <div class="chips" id="ball-chips" role="group" aria-label="Which ball you are calling"></div>
-      </div>
-
-      <div class="control-group control-status">
-        <p class="label">Nudge</p>
-        <div class="nudge-state" id="nudge-state">Ready</div>
-      </div>
-    </footer>
+    <div class="keyboard" id="keyboard"></div>
   </section>
 
   <!-- ── Between rounds / final ────────────────────────────────────────── -->
   <section class="screen" id="screen-board">
     <div class="stack">
-      <h2 class="heading" id="board-title">Leaderboard</h2>
+      <h2 class="heading" id="board-title">Standings</h2>
       <ol class="board" id="board-list"></ol>
       <p class="note" id="board-note"></p>
       <button class="btn btn-primary btn-lg" id="btn-again" hidden>New room</button>
@@ -144,7 +140,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 
-<script src="vendor/matter.min.js"></script>
 <script src="vendor/supabase.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>

@@ -10,7 +10,8 @@ import {
 
 const game = new Game();
 // Exposed so the browser test harness can inspect the live simulation.
-window.__drift = game;
+window.__wordforge = game;
+let chosenMode = 'pvp';
 let chosenRounds = DEFAULT_ROUNDS;
 let codeBuffer = '';
 
@@ -18,17 +19,18 @@ function fail(err) {
   const msg = String(err?.message ?? err);
   if (/no such room/i.test(msg)) { showScreen('screen-code'); $('#code-note').textContent = 'No room with that code.'; codeBuffer = ''; setCodeDisplay(''); return; }
   if (/already started/i.test(msg)) { showScreen('screen-code'); $('#code-note').textContent = 'That game has already started.'; codeBuffer = ''; setCodeDisplay(''); return; }
-  if (/room is full/i.test(msg)) { showScreen('screen-code'); $('#code-note').textContent = 'That room is full (10 players).'; codeBuffer = ''; setCodeDisplay(''); return; }
+  if (/room is full/i.test(msg)) { showScreen('screen-code'); $('#code-note').textContent = 'That room is full.'; codeBuffer = ''; setCodeDisplay(''); return; }
   showError('Something went wrong', msg);
 }
 
 // ── Title ──────────────────────────────────────────────────────────────
 
+chipGroup($('#mode-chips'), (v) => { chosenMode = v; }, 'mode');
 chipGroup($('#rounds-chips'), (v) => { chosenRounds = Number(v); }, 'rounds');
 
 $('#btn-create').addEventListener('click', async (e) => {
   e.target.disabled = true;
-  try { await game.createRoom(chosenRounds); }
+  try { await game.createRoom(chosenMode, chosenRounds); }
   catch (err) { fail(err); }
   finally { e.target.disabled = false; }
 });
@@ -66,9 +68,9 @@ buildKeypad(enterChar);
 $('#btn-code-del').addEventListener('click', deleteChar);
 $('#btn-code-back').addEventListener('click', () => showScreen('screen-title'));
 
-// A physical keyboard does the same thing a tap does: any key on the pad
-// enters that character, Backspace deletes, and browser shortcuts (anything
-// held with Ctrl/Alt/Meta) are left alone rather than intercepted.
+// A physical keyboard does the same thing a tap does on the code screen: any
+// key on the pad enters that character, Backspace deletes, and browser
+// shortcuts (anything held with Ctrl/Alt/Meta) are left alone.
 document.addEventListener('keydown', (e) => {
   if (!$('#screen-code[data-active]')) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -96,19 +98,20 @@ $('#btn-copy').addEventListener('click', async () => {
 
 // ── Game ───────────────────────────────────────────────────────────────
 
-chipGroup($('#wager-chips'), (v) => game.setWager(Number(v)), 'wager');
-chipGroup($('#ball-chips'), (v) => game.setBall(Number(v)), 'ball');
-
 setMuteButton(sfx.muted);
 $('#btn-mute').addEventListener('click', () => setMuteButton(sfx.toggleMute()));
 
-const arena = $('#arena');
-arena.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  game.handleArenaClick(e);
+// A physical keyboard drives guesses the same way the on-screen keyboard
+// does, but only while the game screen is showing (so it never fights the
+// code-entry listener above, and never fires during lobby/board screens).
+document.addEventListener('keydown', (e) => {
+  if (!$('#screen-game[data-active]')) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === 'Enter') { e.preventDefault(); game.handleKey('ENTER'); return; }
+  if (e.key === 'Backspace') { e.preventDefault(); game.handleKey('BACK'); return; }
+  const ch = e.key.length === 1 ? e.key.toUpperCase() : '';
+  if (ch && /^[A-Z]$/.test(ch)) { e.preventDefault(); game.handleKey(ch); }
 });
-// Stop a tap from also scrolling or firing a synthetic click.
-arena.addEventListener('contextmenu', (e) => e.preventDefault());
 
 $('#btn-again').addEventListener('click', () => { location.href = location.pathname; });
 $('#btn-error-back').addEventListener('click', () => { location.href = location.pathname; });

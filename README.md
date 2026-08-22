@@ -1,136 +1,153 @@
-# Drift: Chaos Mode
+# Wordforge
 
-A 2–10 player browser party game. A ball ricochets through a bumper arena,
-everyone gets exactly one nudge, then the ball goes dark — and you have three
-seconds to click where you think it ended up.
+A 2–10 player browser word game. Same idea as that word game you already know
+— guess the secret word, get colour-coded feedback — with two twists that
+keep it from being a five-letter clone: the word length shifts every round
+(4–7 letters), and most rounds have to start with the last letter of the
+previous round's word.
 
-No login, no chat, and no typing required — though the room code can be typed
-on a physical keyboard as well as tapped.
+Two modes:
+
+- **PvP Duel** — two players race the same secret at the same time. You only
+  ever see your own board; your opponent shows up as a live "ghost" bar —
+  how many guesses they've burned, nothing more. Fewer guesses wins the
+  round, ties break on speed.
+- **Co-op** — up to ten players share one board and one guess budget
+  (`word length + 3`, fixed no matter how many people join, so a bigger team
+  has to coordinate rather than just brute-force it). Anyone can drop the
+  next guess at any time.
+
+No login, no chat, and no typing required to join a room — though the room
+code and every guess can be typed on a physical keyboard as well as tapped.
 
 **Play: <https://sixsleet.github.io/Drift/>**
 
-Vanilla JS and `<canvas>`, Matter.js for physics, Supabase for realtime and
-persistence, GitHub Pages for hosting. No build step and no runtime CDN: the two
-dependencies are vendored under `vendor/`.
+Vanilla JS, no framework and no build step. Supabase for the database, RLS,
+and realtime signalling. GitHub Pages for hosting. The one dependency
+(`supabase-js`) is vendored under `vendor/`, so the page has no runtime CDN.
 
 ---
 
 ## The round
 
-| Phase | Length | What happens |
-| --- | --- | --- |
-| Countdown | 2.5s | Everyone's clock lines up on the server's `starts_at`. A modifier banner shows here if the round has one. |
-| Live | 4–8s, random | Balls fly. One click each: it shoves the nearest ball away from wherever you clicked, harder the closer you clicked, resolved at the instant it lands rather than the instant you clicked. Tap **1**, **2** or **3** to set your secret wager. |
-| Blackout | 0.5–1.4s, random | The balls vanish but keep moving. All you have left is the trail from the moment they went dark — nudging is closed by this point, so nothing you do here can leak where the ball is. |
-| Freeze | — | Everything stops. |
-| Guess | 3s | Click where you think your ball is. Every 3rd round runs 2–3 balls at once, so you also pick which one you're calling. |
-| Reveal | ~5s | True positions, everyone's guesses, everyone's points, tiered as a bullseye / close / miss. |
-| Leaderboard | ~6.5s | Running totals, then the next round. |
+| Phase | What happens |
+| --- | --- |
+| Countdown | 3s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained. |
+| Live | Type guesses on the on-screen keyboard or your own. Each submitted guess is scored server-side and its tiles flip in: hit (right letter, right spot), present (right letter, wrong spot), miss. |
+| Settling | Brief. Any client — not just the host — can ask the server "is this round actually over," and the server independently re-checks before agreeing. |
+| Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed. |
+| Board | ~5.5s. Running standings, then the next round. |
 
-Ten rounds by default; the host can pick 6, 10 or 15.
+Matches run 4, 6, 8 or 12 rounds. Points build across the whole match — most
+points (or, in Co-op, most rounds solved) wins after the last one.
 
-**Scoring.** `points = base × wager × streak multiplier`, where `base` falls off
-linearly from 100 at a perfect click to 0 at 400px. A guess within 55px counts
-as *close*; three close guesses in a row earns ×1.5, four earns ×1.75, five or
-more earns ×2. One miss resets the streak.
+**Scoring.** `points = max(0, max_guesses − guesses_used + 1) × 10`, plus a
+PvP-only speed bonus (+20 for a near-instant solve, +10 for a reasonably
+fast one). Co-op scores the same way off the shared attempt count, split
+identically across the whole team.
 
-**Modifiers.** Most rounds after the first draw one, server-side and seeded
-alongside the arena: a **gravity well** pulling everything toward the centre,
-**turbo** speed, **drifting** obstacles that slide back and forth, an arena that
-keeps **shrinking**, or a ball that **ghosts** in and out of visibility on a
-fixed cadence. Every one of them is built from plain arithmetic — no
-`Math.sin`, no wall-clock reads — so none of them can break the determinism the
-shared simulation depends on.
+**The chain constraint.** From round 2 on, the secret usually has to start
+with the last letter of the previous round's secret — so you can't lean on
+one memorised opening guess all match. If no word of the right length starts
+with that letter, the constraint quietly drops for that round (`chain_broken`)
+rather than the round ever failing to start.
 
-## How the simulation stays in sync
+## Keeping the secret secret
 
-Ball positions are never sent over the wire. Instead:
+The actual answer for a round is never sent to a client before it's safe to
+know. It lives in `wf_round_secrets`, a table with row-level security enabled
+and **zero policies** — completely unreachable from the API directly, no
+matter the request, reachable only from inside the `SECURITY DEFINER`
+functions that need it. The answer pool to draw from (`wf_words`) is locked
+the exact same way, so the client can't even ask "what words are possible at
+length 6."
 
-1. The server mints a round with a **seed**, a ball count, a **modifier** and
-   both durations (`drift_next_round`). That row is the entire input to the round.
-2. Every client rebuilds the identical arena from the seed — obstacle layout,
-   ball spawns, launch vectors — and steps Matter.js on a fixed 60Hz timestep.
-3. The only live input is nudges, and nudging closes with the live phase, not
-   the freeze — that leaves the whole blackout for a click to reach the
-   database before anyone has to act on it. Each nudge carries the **point that
-   was clicked** and the **tick** it applies on, not a precomputed direction:
-   the push is resolved at that tick, always directly away from that point,
-   however far the ball has moved since. Applying the same set of nudges to the
-   same seed necessarily produces the same round in every browser.
-4. Nudges travel over a Supabase **Broadcast** channel, flushed on a 10Hz tick
-   and resent a few times to ride out packet loss. The matching row in
-   `drift_nudges` is what makes them durable.
-5. A nudge that arrives after its tick has already been stepped past triggers a
-   replay from tick zero. A whole round is only ~500 ticks, so that costs about
-   8ms — cheap enough to do inside a frame.
-6. At the freeze every client re-reads the round's nudges and folds in anything
-   the broadcast missed, so the frame you are guessing against is the one the
-   host is about to publish.
+Once a round settles, `wf_rounds.revealed_secret` — a normal, always-visible
+column — gets filled in. It is genuinely `NULL` until then, so there's no
+column-masking trick: the same read that was always allowed just starts
+returning a value once the round is over.
 
-The host then writes the authoritative freeze positions to `drift_rounds.truth`,
-and the database scores every guess in the same statement. Ten browsers can
-disagree about a pixel; they can never disagree about a leaderboard.
+Guess visibility is mode-aware, in one RLS policy: in Co-op every guess is
+visible to the room the moment it lands; in PvP you only ever see your own
+until the round settles, at which point both boards open up for the reveal
+screen.
 
-The physics itself only ever advances in whole 60Hz ticks; what gets drawn is
-interpolated between the last two simulated positions, so the ball moves
-smoothly on any display refresh rate instead of snapping from tick to tick.
-
-> Matter.js leans on `Math.sin`/`Math.cos` when it builds body vertices, and
-> those are not bit-identical across JS engines. In practice the drift over a
-> few hundred ticks is invisible, and because scoring is measured against the
-> host's published truth rather than each client's own copy, it cannot affect
-> the result either way.
-
-Round and room changes ride a `poke` broadcast carrying the new rows inline, so
-they land instantly; a 1.5s poll of `drift_state` is the backstop that keeps a
-client that missed one — or joined late, or was backgrounded — from getting
-stuck.
+Settling a round is deliberately **not** host-only, unlike advancing to the
+next one — it independently re-derives "is this actually finished" from the
+guesses table before agreeing, so it's safe for any player to trigger,
+repeatedly, without the game stalling if the host's tab dies.
 
 ## Identity without accounts
 
-There is no login and no auth session. Each browser mints a 256-bit random token
-on first visit and keeps it in `localStorage`. The server never stores the token,
-only its SHA-256 hash, and a player *is* whoever presents the token matching a
-`drift_players` row. Holding on to that token is what lets a mid-game refresh
-drop you back into your own seat.
+There is no login and no auth session. Each browser mints a 256-bit random
+token on first visit and keeps it in `localStorage`. The server never stores
+the token itself, only its SHA-256 hash, and a player *is* whoever presents
+the token matching a `wf_players` row. Holding on to that token is what lets
+a mid-game refresh drop you back into your own seat.
 
 The token reaches Postgres two ways, deliberately:
 
 - as an argument to the RPCs, which are the only write path, and
-- as the `x-drift-player` request header, which PostgREST exposes as
+- as the `x-wf-player` request header, which PostgREST exposes as
   `request.headers` and which the RLS policies read.
 
-So the policies genuinely gate direct table access on room membership, and the
-game does not depend on header plumbing in order to work.
+So the policies genuinely gate direct table access on room membership, and
+the game does not depend on header plumbing in order to work.
 
 ## Data model
 
-Six tables, all with row-level security scoped to room membership. See
+Seven tables, all with row-level security. See
 [`supabase/schema.sql`](supabase/schema.sql).
 
 | Table | Holds |
 | --- | --- |
-| `drift_rooms` | code, host, status, round count |
-| `drift_players` | seat, generated name and colour, token hash, per room |
-| `drift_rounds` | seed, ball count, modifier, durations, `starts_at`, `truth` |
-| `drift_nudges` | the clicked point and its apply tick; one row per player per round (enforced by the primary key) |
-| `drift_wagers` | secret until the round is revealed |
-| `drift_guesses` | the click, plus the server-computed distance, streak and points |
+| `wf_rooms` | code, mode, status, round count |
+| `wf_players` | seat, generated name and colour, token hash, per room |
+| `wf_words` | the curated answer pool — **RLS-locked, no policies** |
+| `wf_rounds` | word length, guess budget, chain letter, timing, `revealed_secret` |
+| `wf_round_secrets` | the live secret for a round — **RLS-locked, no policies** |
+| `wf_guesses` | word, per-letter feedback, attempt number; visibility is mode-aware |
+| `wf_results` | settled points, per player per round, which is what the leaderboard sums |
 
-**There are no INSERT or UPDATE policies on any of these tables.** Every write
-goes through a `SECURITY DEFINER` function that resolves the caller from the
-token it was handed and re-checks membership, host rights, and the timing
-window. A player cannot nudge twice, guess before the freeze, guess after the
-window closes, guess on a ball that does not exist in the round, see anyone
-else's wager before the reveal, publish a round's truth unless they are the
-host, or touch a room they never joined.
+**There are no INSERT or UPDATE policies on any of these tables.** Every
+write goes through a `SECURITY DEFINER` function that resolves the caller
+from the token it was handed and re-checks membership, host rights, and
+round state. A player cannot guess after their budget is spent, guess in a
+round that hasn't started or has already settled, settle a round that isn't
+actually finished, see an opponent's PvP guesses before the reveal, or touch
+a room they never joined.
+
+The server does not validate that a guess is a real dictionary word — only
+its length and that it's alphabetic. Dictionary checking (`js/words.js`,
+`data/valid-*.json`) is client-side UX only, to catch a typo before it burns
+a guess; a modified client could submit anything, but it would only ever
+spend that client's own guess (or, in Co-op, the team's shared one).
+
+## Realtime
+
+Live updates ride Supabase Broadcast, not `postgres_changes` — a replication
+stream carries no request headers, so it can't evaluate the RLS policies
+above. Two payload shapes, both content-free about the one thing that
+matters:
+
+- `poke` — "something changed, refetch `wf_state`." Sent after every guess
+  and every room/round transition. Carries nothing else, so the same signal
+  works for a Co-op teammate's guess and a PvP round advancing, without
+  duplicating any access logic here.
+- `ghost` — PvP only, and always an aggregate: `{attempts, hits, present,
+  solved}` describing the sender's own progress. No word, no per-letter
+  feedback, ever. The receiver renders it as "my opponent's progress."
+
+A 1.5s poll of `wf_state` is the backstop that keeps a client which missed a
+broadcast — or joined late, or was backgrounded — from getting stuck.
 
 ## Setting it up
 
 **1. Database.** Create a Supabase project and run
 [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor. It is
-re-runnable — it drops and rebuilds every `drift_*` object. No auth providers
-need enabling; the game only ever talks as the `anon` role.
+re-runnable — it drops and rebuilds every `wf_*` object, including the seeded
+word list. No auth providers need enabling; the game only ever talks as the
+`anon` role.
 
 **2. Keys.** Put your project URL and publishable key in
 [`js/config.js`](js/config.js). Committing them is fine and intended: the
@@ -139,11 +156,12 @@ route into the data is gated by the policies above.
 
 **3. Hosting.** Push to `main`. The workflow in
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) publishes the
-playable files to GitHub Pages — `index.html`, `css/`, `js/` and `vendor/`, but
-not the schema or the docs. Pages has to be switched on once by hand first
-(**Settings → Pages → Source: GitHub Actions**), since the workflow token is not
-permitted to create the Pages site itself, and Pages needs the repo to be public
-unless you are on a paid plan.
+playable files to GitHub Pages — `index.html`, `css/`, `js/`, `vendor/`, and
+only the `valid-*.json` dictionaries out of `data/` (never `answers-*.json`;
+see **Known limits** below). Pages has to be switched on once by hand first
+(**Settings → Pages → Source: GitHub Actions**), since the workflow token is
+not permitted to create the Pages site itself, and Pages needs the repo to be
+public unless you are on a paid plan.
 
 ## Running it locally
 
@@ -160,32 +178,45 @@ Supabase project.
 ## Layout
 
 ```
-index.html          screens; every control is a button, and the room code
-                    can also be typed
+index.html          screens; guesses go in on the on-screen keyboard or a
+                    physical one
 css/app.css
-js/config.js        connection details and every tunable
-js/rng.js           seeded PRNG (mulberry32) — integer ops only
-js/sim.js           arena generation, modifiers, and the deterministic
-                    simulation (interpolation, bounce events)
-js/render.js        canvas drawing — trails, flashes, screen shake, reveal
-js/sfx.js           synthesised WebAudio sound; no audio files
-js/net.js           token identity, clock sync, RPCs, realtime channel
-js/game.js          phase clock, host duties, input, scoring display
-js/main.js          wires the buttons (and the keyboard) up
-vendor/             matter-js 0.20.0, supabase-js 2.58.0 (unmodified)
-supabase/schema.sql tables, RLS policies and every RPC
+js/config.js         connection details and every tunable
+js/net.js            token identity, clock sync, RPCs, realtime channel
+js/words.js           client-side "is this a real word" check (UX only)
+js/sfx.js             synthesised WebAudio sound; no audio files
+js/game.js            phase clock, round settlement, input, scoring display
+js/ui.js               DOM rendering: tile grid, on-screen keyboard, boards
+js/main.js            wires the buttons (and the keyboard) up
+vendor/               supabase-js 2.58.0, unmodified
+data/answers-*.json    the exact seed for wf_words — dev/repo only, never
+                       deployed (see Known limits)
+data/valid-*.json      the broader guess-validation dictionary — deployed
+supabase/schema.sql    tables, RLS policies and every RPC
 ```
 
 ## Known limits
 
-- **The host drives the round loop.** If the host closes their tab mid-game the
-  room stops advancing and everyone else sits on "waiting for the host". Moving
-  that loop into a scheduled edge function would fix it.
+- **The repo is public, and so is the answer key.** `data/answers-*.json`
+  and the seed section at the bottom of `schema.sql` both list every word
+  the game can ever pick as a secret, in plain text, in a public repo. The
+  Pages deploy deliberately excludes `answers-*.json` and the RLS lock keeps
+  the *running app* from ever handing a client the pool — that stops casual
+  peeking during a live game — but it is not a defense against someone who
+  goes and reads the open-source code. Same trust model as most party games
+  built this way: enough friction for the people you're actually playing
+  with.
+- **The host drives round advancement.** If the host closes their tab
+  mid-game, the room stops minting new rounds and everyone else sits on
+  "waiting for the host." Settling an in-progress round still works for
+  everyone, since that part deliberately isn't host-gated — see **Keeping
+  the secret secret** above. Moving round advancement into a scheduled edge
+  function would remove this limit entirely.
 - **Joining is lobby-only.** Once a game starts the room is closed to new
   players. Refreshing your own tab is fine.
 - **The token is a bearer secret.** Anyone who copies it out of your
-  `localStorage` can act as you in your rooms — the same trade-off any session
-  cookie makes, and the price of having no login at all.
+  `localStorage` can act as you in your rooms — the same trade-off any
+  session cookie makes, and the price of having no login at all.
 - **Private browsing loses your seat.** If `localStorage` is unavailable the
   token lives in memory only, so a reload creates a new identity.
 

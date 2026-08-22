@@ -27,14 +27,20 @@ jobs:
 
       - uses: actions/configure-pages@v5
 
-      # The game is plain files — no build step, nothing to bundle. Matter.js
-      # and supabase-js are vendored, so the page has no third-party runtime
-      # dependencies. Only the playable files ship; the schema and docs stay in
-      # the repo.
+      # The game is plain files — no build step, nothing to bundle. supabase-js
+      # is vendored, so the page has no third-party runtime dependencies. Only
+      # the playable files ship; the schema and docs stay in the repo.
+      #
+      # data/valid-*.json (the broad dictionary used for client-side "is this
+      # a real word" UX checks) ships; data/answers-*.json does NOT — it is
+      # the exact secret pool wf_next_round draws from server-side, and
+      # publishing it would let anyone read every possible answer in
+      # devtools, defeating the whole point of locking wf_words behind RLS.
       - name: Stage the site
         run: |
-          mkdir -p _site
+          mkdir -p _site/data
           cp -r index.html css js vendor _site/
+          cp data/valid-*.json _site/data/
 
       - uses: actions/upload-pages-artifact@v3
         with:

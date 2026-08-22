@@ -1,57 +1,45 @@
-// Round orchestration: phase clock, host duties, input handling and scoring
-// display. The host is the only client that writes round state; everybody else
-// follows along over realtime and reproduces the round locally from its seed.
+// Round orchestration: phase clock, host duties (round advancement only —
+// settling a finished round is validated server-side and any member can
+// trigger it), input handling, and the live board.
 
 import {
-  ARENA, DT_MS, NUDGE_LEAD_TICKS,
-  GUESS_WINDOW_MS, REVEAL_MS, LEADERBOARD_MS, DEFAULT_ROUNDS, POLL_MS,
-  MODIFIERS, CLOSE_PX, BULLSEYE_PX,
+  MODES, ROUND_LEAD_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
+  POLL_MS, DEFAULT_ROUNDS, TIER_RANK,
 } from './config.js';
-import { Sim } from './sim.js';
-import { Renderer, BALL_COLORS, BALL_NAMES } from './render.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
+import { loadDictionary, isValidWord } from './words.js';
 import { sfx } from './sfx.js';
 import {
-  $, showScreen, toast, renderPlayers, renderBoard,
-  setPhase, setOverlay, selectChip,
+  $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
+  setPhase, setStatusLine, selectChip, buildLetterKeyboard, paintKeyboard,
 } from './ui.js';
-
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 export class Game {
   constructor() {
-    this.renderer = new Renderer($('#arena'));
     this.roomId = null;
     this.room = null;
     this.players = [];
     this.me = null;
     this.round = null;
-    this.sim = null;
+    this.guessesByRound = new Map(); // round_id -> guess[]
+    this.results = [];               // every settled wf_results row visible to us
+    this.leaderboard = [];           // [{ player_id, total }]
     this.phase = 'idle';
     this.channel = null;
-    this.allGuesses = new Map(); // `${round_id}:${player_id}` -> scored guess row
+    this.ghost = null;               // pvp only: opponent's live aggregate
     this.local = this.#freshLocal();
-    this.host = { advancing: false, publishing: false, minting: false };
+    this.host = { advancing: false };
+    this.settling = false;
     this.frame = this.frame.bind(this);
+    buildLetterKeyboard((k) => this.handleKey(k));
   }
 
   #freshLocal() {
-    return {
-      wager: 1,
-      ball: 0,
-      nudged: false,
-      guessed: false,
-      guessPoint: null,
-      reconcileStarted: false,
-      reconcileDone: false,
-      freezeSeenAt: 0,
-      guessOpenedAt: 0,
-      revealAt: 0,
-      revealFetched: false,
-    };
+    return { active: '', shake: false, revealAt: 0, boardAt: 0, lastSettleTry: 0 };
   }
 
   get isHost() { return !!this.me?.is_host; }
+  get mode() { return this.room?.mode; }
 
   // ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -61,14 +49,8 @@ export class Game {
     requestAnimationFrame(this.frame);
   }
 
-  async startGame() {
-    await api.startGame(this.roomId);
-    this.room = { ...this.room, status: 'playing' };
-    this.channel?.poke({ room: this.room });
-  }
-
-  async createRoom(rounds = DEFAULT_ROUNDS) {
-    const res = await api.createRoom(rounds);
+  async createRoom(mode, rounds = DEFAULT_ROUNDS) {
+    const res = await api.createRoom(mode, rounds);
     await this.enterRoom(res.room_id);
   }
 
@@ -77,18 +59,21 @@ export class Game {
     await this.enterRoom(res.room_id);
   }
 
+  async startGame() {
+    await api.startGame(this.roomId);
+    this.room = { ...this.room, status: 'playing' };
+    this.channel?.poke();
+  }
+
   async enterRoom(roomId) {
     this.roomId = roomId;
 
     this.channel?.close();
     this.channel = openRoomChannel(roomId, {
-      onNudge: (payload) => this.#onRemoteNudge(payload),
-      onPoke: (payload) => this.#onPoke(payload),
+      onPoke: () => this.refreshState(),
+      onGhost: (payload) => { this.ghost = payload; },
     });
 
-    // One round trip brings back everything: room, roster, the running round,
-    // and every guess and wager we are allowed to see. A refresh mid-game lands
-    // here too, which is what puts you back in your seat.
     await this.refreshState();
 
     clearInterval(this._poll);
@@ -104,18 +89,10 @@ export class Game {
     if (this.room.status === 'lobby') showScreen('screen-lobby');
   }
 
-  /**
-   * Poll the authoritative room state. Broadcast pokes make round changes feel
-   * instant; this is the backstop that keeps a client that missed one — or
-   * joined late, or was backgrounded by the browser — from getting stuck.
-   */
   async refreshState() {
     let state;
-    try {
-      state = await api.state(this.roomId);
-    } catch {
-      return; // transient; the next tick tries again
-    }
+    try { state = await api.state(this.roomId); }
+    catch { return; }
     this.#applyState(state);
   }
 
@@ -123,19 +100,29 @@ export class Game {
     if (!state) return;
     this.me = state.me ?? this.me;
     this.players = state.players ?? [];
-    this._standings = null;
+    this.results = state.results ?? [];
+    this.leaderboard = state.leaderboard ?? [];
+
+    this.guessesByRound = new Map();
     for (const g of state.guesses ?? []) {
-      this.allGuesses.set(`${g.round_id}:${g.player_id}`, g);
+      if (!this.guessesByRound.has(g.round_id)) this.guessesByRound.set(g.round_id, []);
+      this.guessesByRound.get(g.round_id).push(g);
     }
+    for (const list of this.guessesByRound.values()) list.sort((a, b) => a.attempt_no - b.attempt_no);
+
     this.#onRoom(state.room);
     if (state.round) this.#onRound(state.round);
-    this.#renderLobby();
   }
 
   #renderLobby() {
     if (!this.room) return;
     $('#lobby-code').textContent = this.room.code;
+    const modeInfo = MODES[this.room.mode];
+    $('#lobby-mode').textContent = modeInfo?.label ?? '';
+    $('#lobby-mode').style.color = modeInfo?.tint ?? '';
     renderPlayers(this.players, this.me?.id);
+    const cap = modeInfo?.maxPlayers ?? 10;
+    $('#lobby-count-max').textContent = `/${cap}`;
     const btn = $('#btn-start');
     const enough = this.players.length >= 2;
     btn.hidden = !this.isHost;
@@ -149,7 +136,7 @@ export class Game {
     }
   }
 
-  // ── Realtime handlers ────────────────────────────────────────────────
+  // ── Realtime application ─────────────────────────────────────────────
 
   #onRoom(row) {
     if (!row || row.id !== this.roomId) return;
@@ -159,268 +146,170 @@ export class Game {
     this.#renderLobby();
   }
 
-  /**
-   * The host broadcasts a poke with the new rows inline whenever room or round
-   * state changes, so the rest of the table reacts immediately instead of
-   * waiting up to a poll interval.
-   */
-  #onPoke(payload) {
-    if (!payload) return;
-    if (payload.room?.id === this.roomId) this.#onRoom(payload.room);
-    if (payload.round?.room_id === this.roomId) this.#onRound(payload.round);
-    this.refreshState();
-  }
-
   #onRound(row) {
     if (!row || row.room_id !== this.roomId) return;
     if (this.round && row.id === this.round.id) {
-      const hadTruth = !!this.round.truth;
       this.round = { ...this.round, ...row };
-      if (!hadTruth && this.round.truth) this.local.revealAt = 0; // reveal starts on next frame
       return;
     }
     if (this.round && row.round_no <= this.round.round_no) return;
     this.#startRound(row);
   }
 
-  #onRemoteNudge(payload) {
-    if (!this.sim || !this.round || payload?.round_id !== this.round.id) return;
-    if (this.sim.addNudge(payload)) {
-      const who = this.players.find((x) => x.id === payload.player_id);
-      this.renderer.ping(payload.click_x, payload.click_y, who?.color ?? '#ffffff');
-    }
-  }
-
-  // ── Round setup ──────────────────────────────────────────────────────
-
-  /** Host-side: adopt a freshly minted round and tell the room about it. */
-  #mintRound(row) {
-    this.#onRound(row);
-    this.channel?.poke({ round: row });
-  }
-
   #startRound(row) {
     this.round = row;
-    this.sim = new Sim(row);
-    this._standings = null;
     this.local = this.#freshLocal();
-    this.host.publishing = false;
+    this.ghost = null;
     this.host.advancing = false;
+    this.settling = false;
     showScreen('screen-game');
     $('#hud-round').textContent = `Round ${row.round_no}/${this.room.total_rounds}`;
-    this.#renderModifierBadge(row.modifier);
-    selectChip($('#wager-chips'), 'wager', 1);
-    [...$('#wager-chips').querySelectorAll('.chip')].forEach((c) => { c.disabled = false; });
-    this.#renderBallChips(row.ball_count);
-    this.#setNudgeState('Ready', false);
-    // The wager defaults to 1, so persist it up front: a player who never taps
-    // still has a wager on record rather than being scored as an absentee.
-    api.lockWager(row.id, 1).catch(() => {});
-  }
-
-  #renderModifierBadge(modifier) {
-    const badge = $('#hud-mod');
-    if (!badge) return;
-    const info = MODIFIERS[modifier] ?? MODIFIERS.none;
-    if (!modifier || modifier === 'none') {
-      badge.hidden = true;
-      return;
+    const chainEl = $('#hud-chain');
+    if (row.chain_letter) {
+      chainEl.hidden = false;
+      chainEl.textContent = `starts with "${row.chain_letter.toUpperCase()}"`;
+    } else {
+      chainEl.hidden = true;
     }
-    badge.hidden = false;
-    badge.textContent = info.label;
-    badge.style.color = info.tint;
-    badge.style.borderColor = `${info.tint}66`;
-    badge.title = info.blurb;
-  }
-
-  #renderBallChips(count) {
-    const group = $('#ball-group');
-    const chips = $('#ball-chips');
-    group.hidden = count < 2;
-    chips.innerHTML = '';
-    if (count < 2) return;
-    for (let i = 0; i < count; i++) {
-      const b = document.createElement('button');
-      b.className = 'chip chip-ball' + (i === 0 ? ' is-on' : '');
-      b.type = 'button';
-      b.dataset.ball = String(i);
-      const dot = document.createElement('i');
-      dot.style.background = BALL_COLORS[i % BALL_COLORS.length];
-      b.append(dot, document.createTextNode(BALL_NAMES[i]));
-      chips.appendChild(b);
-    }
-  }
-
-  #setNudgeState(text, spent) {
-    const el = $('#nudge-state');
-    el.textContent = text;
-    el.dataset.spent = spent ? '1' : '0';
+    $('#ghost-bar').hidden = this.mode !== 'pvp';
+    loadDictionary(row.word_length);
+    paintKeyboard(new Map());
   }
 
   // ── Input ────────────────────────────────────────────────────────────
 
-  setWager(w) {
-    this.local.wager = w;
-    sfx.lock();
-    if (this.round) api.lockWager(this.round.id, w).catch((e) => toast(e.message));
+  handleKey(key) {
+    if (this.phase !== 'live') return;
+    if (key === 'ENTER') { this.#submit(); return; }
+    if (key === 'BACK') {
+      this.local.active = this.local.active.slice(0, -1);
+      sfx.type();
+      return;
+    }
+    if (/^[A-Z]$/.test(key) && this.local.active.length < this.round.word_length) {
+      this.local.active += key;
+      sfx.type();
+    }
   }
 
-  setBall(i) { this.local.ball = i; }
-
-  handleArenaClick(event) {
-    if (!this.round || !this.sim) return;
-    const p = this.renderer.toArena(event);
-    if (p.x < 0 || p.y < 0 || p.x > ARENA.w || p.y > ARENA.h) return;
-    // Nudging closes with the live phase — that leaves the whole blackout for
-    // the click to reach the database, so every client has the complete set of
-    // nudges before it freezes the frame everyone guesses against.
-    if (this.phase === 'guess') this.#placeGuess(p);
-    else if (this.phase === 'live') this.#nudge(p);
-  }
-
-  /**
-   * One click per player per round. The point clicked is what gets sent, not a
-   * precomputed direction — the actual push is resolved at the tick it lands
-   * on, always directly away from that point, however far the ball has moved
-   * since. That is what makes it feel accurate instead of a beat behind.
-   */
-  #nudge(point) {
-    if (this.local.nudged || !this.me) return;
-
-    // Which ball owns this nudge is decided now, from where the ball is at the
-    // moment of the click; the direction of the push is resolved later.
-    const positions = this.sim.positions();
-    let best = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < positions.length; i++) {
-      const d = Math.hypot(positions[i].x - point.x, positions[i].y - point.y);
-      if (d < bestD) { bestD = d; best = i; }
+  async #submit() {
+    const word = this.local.active.toLowerCase();
+    if (word.length !== this.round.word_length) {
+      this.#invalidShake();
+      return;
+    }
+    if (!(await isValidWord(word, this.round.word_length))) {
+      this.#invalidShake();
+      toast('Not a word I know.');
+      return;
     }
 
-    const payload = {
-      round_id: this.round.id,
-      player_id: this.me.id,
-      ball_index: best,
-      // Scheduled slightly ahead of the local render tick so most clients apply
-      // it without ever rewinding. Clamped so a last-instant click still lands.
-      apply_tick: Math.min(this.sim.tick + NUDGE_LEAD_TICKS, this.sim.freezeTick - 1),
-      click_x: point.x,
-      click_y: point.y,
-    };
-
-    this.local.nudged = true;
-    this.sim.addNudge(payload);
-    this.renderer.ping(point.x, point.y, this.me.color);
-    sfx.nudge();
-    this.#setNudgeState('Spent', true);
-
-    this.channel?.sendNudge(payload);
-    api.submitNudge(this.round.id, best, payload.apply_tick, point.x, point.y)
-      .catch(() => toast('Your nudge did not reach the server.'));
-  }
-
-  #placeGuess(point) {
-    if (this.local.guessed) return;
-    this.local.guessed = true;
-    this.local.guessPoint = { x: point.x, y: point.y, ball: this.local.ball };
-    sfx.lock();
-    api.submitGuess(this.round.id, this.local.ball, point.x, point.y)
-      .catch((e) => toast(e.message || 'Guess rejected.'));
-  }
-
-  // ── Nudge reconciliation ─────────────────────────────────────────────
-
-  /**
-   * Re-read the durable nudge rows and fold in anything the broadcast missed.
-   * This is what guarantees the frame you are guessing against matches the one
-   * the host will publish as truth.
-   */
-  async #reconcile() {
-    if (!this.round) return;
+    const roundId = this.round.id;
     try {
-      const rows = await api.nudges(this.round.id);
-      for (const n of rows) this.sim.addNudge(n);
+      const row = await api.submitGuess(roundId, word);
+      this.local.active = '';
+      if (!this.guessesByRound.has(roundId)) this.guessesByRound.set(roundId, []);
+      this.guessesByRound.get(roundId).push(row);
+
+      row.feedback.forEach((tier, i) => setTimeout(() => sfx.reveal(tier), i * 90));
+
+      if (this.mode === 'pvp') {
+        const mine = this.guessesByRound.get(roundId).filter((g) => g.player_id === this.me.id);
+        this.channel?.sendGhost({
+          attempts: mine.length,
+          hits: row.feedback.filter((f) => f === 'hit').length,
+          present: row.feedback.filter((f) => f === 'present').length,
+          solved: row.feedback.every((f) => f === 'hit'),
+        });
+      } else {
+        this.channel?.poke();
+      }
+    } catch (e) {
+      if (e.code === 'P0019') toast('Already solved — nothing left to guess.');
+      else if (e.code === 'P0018') toast('No guesses left.');
+      else toast(e.message || 'Guess rejected.');
+      this.#invalidShake();
+    }
+  }
+
+  #invalidShake() {
+    this.local.shake = true;
+    sfx.invalid();
+    setTimeout(() => { this.local.shake = false; }, 400);
+  }
+
+  // ── Completion / settlement ──────────────────────────────────────────
+
+  #allHit(g) { return g.feedback.every((f) => f === 'hit'); }
+
+  #roundSeemsFinished() {
+    if (!this.round) return false;
+    const gs = this.guessesByRound.get(this.round.id) ?? [];
+    if (this.mode === 'coop') {
+      return gs.length >= this.round.max_guesses || gs.some((g) => this.#allHit(g));
+    }
+    const mine = gs.filter((g) => g.player_id === this.me?.id);
+    const myDone = mine.length >= this.round.max_guesses || mine.some((g) => this.#allHit(g));
+    const oppDone = this.ghost ? (this.ghost.attempts >= this.round.max_guesses || this.ghost.solved) : false;
+    return myDone && oppDone;
+  }
+
+  async #trySettle() {
+    if (this.settling) return;
+    const now = Date.now();
+    if (now - this.local.lastSettleTry < SETTLE_RETRY_MS) return;
+    this.local.lastSettleTry = now;
+    this.settling = true;
+    try {
+      const row = await api.checkSettle(this.round.id);
+      this.#onRound(row);
+      if (row.status === 'settled') await this.refreshState();
     } catch {
-      /* the host's published truth is still the authority for scoring */
+      /* not finished yet from the server's point of view — retry later */
     } finally {
-      this.local.reconcileDone = true;
+      this.settling = false;
     }
   }
 
   // ── Phase clock ──────────────────────────────────────────────────────
 
   #computePhase() {
-    const r = this.round;
     if (!this.room) return 'idle';
     if (this.room.status === 'lobby') return 'lobby';
     if (this.room.status === 'finished') return 'final';
-    if (!r) return 'waiting';
+    if (!this.round) return 'waiting';
 
-    const t = serverNow() - Date.parse(r.starts_at);
+    const t = serverNow() - Date.parse(this.round.starts_at);
     if (t < 0) return 'countdown';
-    if (t < r.duration_ms) return 'live';
-    if (t < r.duration_ms + r.blackout_ms) return 'blackout';
 
-    if (!r.truth) {
-      const L = this.local;
-      if (!L.freezeSeenAt) L.freezeSeenAt = Date.now();
-      if (!L.reconcileStarted) { L.reconcileStarted = true; this.#reconcile(); }
-      // Give reconciliation a moment before the clock starts, but never stall
-      // the round on a slow request.
-      if (!L.guessOpenedAt && (L.reconcileDone || Date.now() - L.freezeSeenAt > 700)) {
-        L.guessOpenedAt = Date.now();
-      }
-      if (!L.guessOpenedAt) return 'settling';
-      return Date.now() - L.guessOpenedAt < GUESS_WINDOW_MS ? 'guess' : 'settling';
+    if (this.round.status === 'active') {
+      return this.#roundSeemsFinished() ? 'settling' : 'live';
     }
 
     if (!this.local.revealAt) this.local.revealAt = Date.now();
-    return Date.now() - this.local.revealAt < REVEAL_MS ? 'reveal' : 'board';
+    if (Date.now() - this.local.revealAt < REVEAL_MS) return 'reveal';
+    if (!this.local.boardAt) this.local.boardAt = Date.now();
+    return Date.now() - this.local.boardAt < BOARD_MS ? 'board' : 'next';
   }
 
-  // ── Host duties ──────────────────────────────────────────────────────
+  // ── Host duties: round advancement only ───────────────────────────────
 
-  async #hostTick() {
+  async #hostTick(phase) {
     if (!this.isHost || this.room?.status !== 'playing') return;
 
-    if (!this.round && !this.host.minting) {
-      this.host.minting = true;
+    if (!this.round) {
       try { this.#mintRound(await api.nextRound(this.roomId)); }
       catch (e) { toast(e.message); }
-      finally { this.host.minting = false; }
-      return;
-    }
-    if (!this.round) return;
-
-    const r = this.round;
-    const freezeAt = Date.parse(r.starts_at) + r.duration_ms + r.blackout_ms;
-
-    // Publish truth only once the guess window has closed — the moment it
-    // lands, RLS opens up everyone's wagers and guesses.
-    if (!r.truth && !this.host.publishing && serverNow() > freezeAt + GUESS_WINDOW_MS + 1200) {
-      this.host.publishing = true;
-      try {
-        await this.#reconcile();
-        this.sim.advanceTo(this.sim.freezeTick);
-        const truth = this.sim.positions().map((p) => ({ x: p.x, y: p.y }));
-        await api.publishTruth(r.id, truth);
-        this.round = { ...this.round, truth };
-        this.channel?.poke({ round: this.round });
-      } catch (e) {
-        this.host.publishing = false;
-        toast(e.message || 'Could not settle the round.');
-      }
       return;
     }
 
-    if (this.phase === 'board' && !this.host.advancing) {
-      if (Date.now() - this.local.revealAt < REVEAL_MS + LEADERBOARD_MS) return;
+    if (phase === 'next' && !this.host.advancing) {
       this.host.advancing = true;
       try {
-        if (r.round_no >= this.room.total_rounds) {
+        if (this.round.round_no >= this.room.total_rounds) {
           await api.finishGame(this.roomId);
           this.room = { ...this.room, status: 'finished' };
-          this.channel?.poke({ room: this.room });
+          this.channel?.poke();
           this.#showFinal();
         } else {
           this.#mintRound(await api.nextRound(this.roomId));
@@ -432,87 +321,46 @@ export class Game {
     }
   }
 
+  #mintRound(row) {
+    this.#onRound(row);
+    this.channel?.poke();
+  }
+
   // ── Results ──────────────────────────────────────────────────────────
 
-  async #refreshResults() { await this.refreshState(); }
-
   #standings() {
-    // Recomputed only when a scored guess lands, not on every frame.
-    if (this._standings) return this._standings;
-    const totals = new Map();
+    const byId = new Map(this.leaderboard.map((r) => [r.player_id, r.total]));
     const lastRound = new Map();
-    for (const g of this.allGuesses.values()) {
-      totals.set(g.player_id, (totals.get(g.player_id) ?? 0) + (g.points ?? 0));
-      if (this.round && g.round_id === this.round.id) lastRound.set(g.player_id, g);
+    if (this.round) {
+      for (const r of this.results) {
+        if (r.round_id === this.round.id) lastRound.set(r.player_id, r);
+      }
     }
-    this._standings = this.players
-      .map((p) => {
-        const last = lastRound.get(p.id);
-        return {
-          name: p.name,
-          color: p.color,
-          total: totals.get(p.id) ?? 0,
-          delta: last?.points ?? 0,
-          streak: last?.streak ?? 0,
-          isMe: p.id === this.me?.id,
-        };
-      })
+    return this.players
+      .map((p) => ({
+        name: p.name, color: p.color,
+        total: byId.get(p.id) ?? 0,
+        delta: lastRound.get(p.id)?.points ?? 0,
+        isMe: p.id === this.me?.id,
+      }))
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-    return this._standings;
-  }
-
-  #revealView() {
-    if (!this.round?.truth) return null;
-    const guesses = [];
-    for (const g of this.allGuesses.values()) {
-      if (g.round_id !== this.round.id) continue;
-      const p = this.players.find((x) => x.id === g.player_id);
-      if (!p) continue;
-      guesses.push({
-        x: g.gx, y: g.gy, ball: g.ball_index,
-        color: p.color, points: g.points ?? 0, mine: p.id === this.me?.id,
-      });
-    }
-    return { truth: this.round.truth, guesses };
-  }
-
-  /**
-   * [html, color] for the reveal overlay, tiered the same way the sound is.
-   * Whether *this* client guessed is read from local state rather than from
-   * `g` — the scored row can lag a beat behind the freeze while it is still
-   * being fetched, and that lag must never read as "you didn't guess".
-   */
-  #revealCallout(g) {
-    if (!this.local.guessed) return ['<div style="font-size:.6em;opacity:.7">no guess</div>', '#8d95bd'];
-    if (!g || g.points == null) return ['<div style="font-size:.5em;opacity:.6">scoring…</div>', '#8d95bd'];
-    if (g.distance != null && g.distance <= BULLSEYE_PX) {
-      return [`<div>🎯 BULLSEYE<div style="font-size:.4em;margin-top:6px">+${g.points}</div></div>`, '#ffd166'];
-    }
-    if (g.distance != null && g.distance <= CLOSE_PX) {
-      return [`<div style="font-size:.75em">CLOSE<div style="font-size:.55em;margin-top:5px">+${g.points}</div></div>`, '#7be495'];
-    }
-    return [`<div>+${g.points}</div>`, '#7be495'];
-  }
-
-  /** Pitches the reveal sound to how well the local player actually did. */
-  #playRevealSfx() {
-    const mine = this.round && this.me
-      ? this.allGuesses.get(`${this.round.id}:${this.me.id}`) : null;
-    if (!mine || mine.distance == null) { sfx.score('miss'); return; }
-    const tier = mine.distance <= BULLSEYE_PX ? 'bullseye'
-               : mine.distance <= CLOSE_PX ? 'close' : 'miss';
-    sfx.score(tier);
-    if ((mine.streak ?? 0) >= 3) sfx.streak(mine.streak);
   }
 
   #showFinal() {
-    this.#refreshResults().then(() => {
+    this.refreshState().then(() => {
       const rows = this.#standings();
       $('#board-title').textContent = 'Final standings';
-      $('#board-note').textContent = rows.length ? `${rows[0].name} wins.` : '';
+      if (this.mode === 'coop') {
+        const solvedRounds = new Set(
+          this.results.filter((r) => r.solved).map((r) => r.round_id)).size;
+        $('#board-note').textContent = `Team solved ${solvedRounds}/${this.room.total_rounds} rounds.`;
+      } else {
+        $('#board-note').textContent = rows.length ? `${rows[0].name} wins the duel.` : '';
+      }
       $('#btn-again').hidden = false;
       renderBoard(rows);
       showScreen('screen-board');
+      sfx.win();
     });
   }
 
@@ -524,95 +372,78 @@ export class Game {
     const changed = phase !== this.phase;
     this.phase = phase;
     if (changed) this.#onPhaseChange(phase);
-    if (this.isHost) this.#hostTick();
+    this.#hostTick(phase);
+    if (phase === 'settling') this.#trySettle();
 
-    if (!this.round || !this.sim) return;
-    if (phase === 'lobby' || phase === 'final') return;
+    if (!this.round) return;
+    if (phase === 'lobby' || phase === 'final' || phase === 'waiting') return;
 
-    const r = this.round;
-    const t = serverNow() - Date.parse(r.starts_at);
-    // The physics only ever advances in whole ticks; `alpha` is how far past
-    // the last tick the render clock actually is, so the ball can be drawn
-    // smoothly between two simulated positions instead of snapping tick to
-    // tick — that snapping is what read as "out of sync" before.
-    const rawTick = Math.max(0, t / DT_MS);
-    const targetTick = Math.floor(rawTick);
-    this.sim.advanceTo(targetTick);
-    const alpha = Math.max(0, Math.min(1, rawTick - targetTick));
+    this.#renderFrame(phase);
+  }
 
-    const ballsHidden = phase !== 'countdown' && phase !== 'live';
-
-    // Bumper and wall hits: a flash only while the balls are actually visible.
-    // During the blackout the sound alone carries the excitement — a flash at
-    // the impact point would otherwise give the position away for free.
-    for (const b of this.sim.drainBounces()) {
-      if (!ballsHidden) this.renderer.impact(b.x, b.y, b.speed, b.bumper);
-      sfx.bounce(b.speed, b.bumper);
-    }
-
-    const modInfo = MODIFIERS[this.sim.modifier] ?? MODIFIERS.none;
-
-    const view = {
-      sim: this.sim,
-      layout: this.sim.layout,
-      showTrails: true,
-      ballsHidden,
-      positions: ballsHidden ? null : this.sim.interpolated(alpha),
-      // Once the balls are hidden, all anyone gets is where they were last seen.
-      trails: phase === 'countdown' || phase === 'live' ? this.sim.trails : (this.sim.lastSeen ?? []),
-      calledBall: this.local.ball,
-      modifier: this.sim.modifier,
-      tint: this.sim.modifier === 'none' ? null : modInfo.tint,
-      obstacles: this.sim.obstacles(),
-      wallInset: this.sim.wallInset(),
-      ghosted: !ballsHidden && !this.sim.ghostVisible(),
-      marker: null,
-      reveal: null,
-      dim: 0,
-      guessRing: null,
-    };
+  #renderFrame(phase) {
+    const gs = this.guessesByRound.get(this.round.id) ?? [];
+    const visible = this.mode === 'pvp' ? gs.filter((g) => g.player_id === this.me?.id) : gs;
 
     if (phase === 'countdown') {
-      view.showTrails = false;
-      const secs = Math.ceil(-t / 1000);
-      const modLine = this.sim.modifier !== 'none'
-        ? `<div style="font-size:.26em;letter-spacing:.1em;margin-top:8px;opacity:.85">${modInfo.label.toUpperCase()}</div>`
-        : '';
-      setOverlay(`<div>${secs > 0 ? secs : 'GO'}</div>${modLine}`, secs > 0 ? '#4bd0ff' : (modInfo.tint ?? '#4bd0ff'));
-    } else if (phase === 'live') {
-      setOverlay(this.local.nudged ? '' : '<div style="font-size:.5em;opacity:.5">click to nudge</div>');
-    } else if (phase === 'blackout') {
-      view.dim = 0.25;
-      setOverlay('<div style="opacity:.75">WHERE IS IT?</div>', '#ff4d9d');
-    } else if (phase === 'guess') {
-      const left = GUESS_WINDOW_MS - (Date.now() - this.local.guessOpenedAt);
-      view.guessRing = clamp(left / GUESS_WINDOW_MS, 0, 1);
-      view.dim = 0.32;
-      if (this.local.guessPoint) {
-        view.marker = { ...this.local.guessPoint, color: this.me?.color };
-        setOverlay('<div style="font-size:.5em;opacity:.6">locked in</div>');
-      } else {
-        setOverlay(`<div style="font-size:.62em">CLICK YOUR BALL${
-          r.ball_count > 1 ? ` <span style="opacity:.6">(${BALL_NAMES[this.local.ball]})</span>` : ''}</div>`,
-          '#ffd166');
-      }
-    } else if (phase === 'settling') {
-      view.dim = 0.4;
-      if (this.local.guessPoint) view.marker = { ...this.local.guessPoint, color: this.me?.color };
-      setOverlay('<div style="font-size:.5em;opacity:.6">settling…</div>');
-    } else if (phase === 'reveal') {
-      view.ballsHidden = true;
-      view.showTrails = false;
-      view.dim = 0.42;
-      view.reveal = this.#revealView();
-      const mineRaw = this.round && this.me
-        ? this.allGuesses.get(`${this.round.id}:${this.me.id}`) : null;
-      const [html, color] = this.#revealCallout(mineRaw);
-      setOverlay(html, color);
+      const secs = Math.ceil(-(serverNow() - Date.parse(this.round.starts_at)) / 1000);
+      setStatusLine(`<div class="big">${secs > 0 ? secs : 'GO'}</div>`);
+      renderGrid({
+        wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
+        guesses: [], active: '', canType: false,
+      });
+      return;
     }
 
-    this.renderer.draw(view);
-    $('#hud-score').textContent = this.#standings().find((s) => s.isMe)?.total ?? 0;
+    const playerColor = this.mode === 'coop'
+      ? new Map(this.players.map((p) => [p.id, p.color])) : null;
+
+    renderGrid({
+      wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
+      guesses: visible, active: this.local.active,
+      canType: phase === 'live', playerColor, shake: this.local.shake,
+    });
+
+    const tiers = new Map();
+    for (const g of visible) {
+      g.word.split('').forEach((ch, i) => {
+        const t = g.feedback[i];
+        if (!tiers.has(ch) || TIER_RANK[t] > TIER_RANK[tiers.get(ch)]) tiers.set(ch, t);
+      });
+    }
+    paintKeyboard(tiers);
+
+    if (phase === 'live') {
+      setStatusLine(this.mode === 'pvp' && this.ghost
+        ? `<div class="small">Opponent: ${this.ghost.attempts}/${this.round.max_guesses} guesses</div>`
+        : '');
+      this.#renderGhostBar();
+    } else if (phase === 'settling') {
+      setStatusLine('<div class="small">Settling…</div>');
+    } else if (phase === 'reveal') {
+      setStatusLine(`<div class="reveal-word">${(this.round.revealed_secret ?? '').toUpperCase()}</div>`);
+    } else if (phase === 'board' || phase === 'next') {
+      $('#board-title').textContent = `After round ${this.round.round_no}`;
+      $('#board-note').textContent = this.isHost ? 'Next round starting…' : 'Waiting for the host…';
+      $('#btn-again').hidden = true;
+      renderBoard(this.#standings());
+    }
+  }
+
+  #renderGhostBar() {
+    const bar = $('#ghost-bar');
+    if (bar.hidden) return;
+    const filled = this.ghost ? this.ghost.attempts : 0;
+    const total = this.round.max_guesses;
+    bar.innerHTML = '';
+    for (let i = 0; i < total; i++) {
+      const dot = document.createElement('i');
+      if (i < filled) {
+        dot.dataset.tier = this.ghost.solved && i === filled - 1 ? 'hit'
+          : i < (this.ghost.hits ?? 0) ? 'hit' : 'present';
+      }
+      bar.appendChild(dot);
+    }
   }
 
   #onPhaseChange(phase) {
@@ -620,25 +451,17 @@ export class Game {
       setPhase(phase === 'countdown' ? 'Get ready' : 'Live', null);
       showScreen('screen-game');
       if (phase === 'live') sfx.go();
-    } else if (phase === 'blackout') {
-      setPhase('Balls hidden', 'hot');
-      sfx.blackout();
-      // Wagers close with the live phase; the tap stops mattering here.
-      [...$('#wager-chips').querySelectorAll('.chip')].forEach((c) => { c.disabled = true; });
-    } else if (phase === 'guess') {
-      setPhase('Guess!', 'warn');
-      sfx.freeze();
     } else if (phase === 'settling') {
-      setPhase('Settling', null);
+      setPhase('Settling', 'warn');
     } else if (phase === 'reveal') {
       setPhase('Reveal', null);
-      if (!this.local.revealFetched) {
-        this.local.revealFetched = true;
-        this.#refreshResults().then(() => this.#playRevealSfx());
-      }
-    } else if (phase === 'board') {
+      const mine = (this.guessesByRound.get(this.round.id) ?? [])
+        .filter((g) => this.mode === 'coop' || g.player_id === this.me?.id);
+      if (mine.some((g) => this.#allHit(g))) sfx.solved();
+      else sfx.lost();
+    } else if (phase === 'board' || phase === 'next') {
+      setPhase('Standings', null);
       $('#board-title').textContent = `After round ${this.round?.round_no ?? ''}`;
-      $('#board-note').textContent = this.isHost ? 'Next round starting…' : 'Waiting for the host…';
       $('#btn-again').hidden = true;
       renderBoard(this.#standings());
       showScreen('screen-board');
@@ -646,7 +469,6 @@ export class Game {
       setPhase('Waiting', null);
     } else if (phase === 'final') {
       this.#showFinal();
-      sfx.fanfare();
     }
   }
 }
