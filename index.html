@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drift: Chaos Mode</title>
+<meta name="description" content="A 2–10 player browser party game. A ball ricochets through a bumper arena, everyone gets one nudge, then it vanishes — click where you think it ended up.">
+<meta name="theme-color" content="#06070f">
+<meta property="og:title" content="Drift: Chaos Mode">
+<meta property="og:description" content="Nudge the ball. Lose the ball. Guess where it went.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%234bd0ff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Title ─────────────────────────────────────────────────────────── -->
+  <section class="screen" id="screen-title" data-active>
+    <div class="stack">
+      <h1 class="wordmark">Drift<span>: Chaos Mode</span></h1>
+      <p class="tagline">Nudge the ball. Lose the ball. Guess where it went.</p>
+
+      <div class="panel">
+        <p class="label">Rounds</p>
+        <div class="chips" id="rounds-chips" role="group" aria-label="Number of rounds">
+          <button class="chip" data-rounds="6">6</button>
+          <button class="chip is-on" data-rounds="10">10</button>
+          <button class="chip" data-rounds="15">15</button>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btn-create">Create a room</button>
+        <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
+      </div>
+
+      <details class="how">
+        <summary>How it works</summary>
+        <ol>
+          <li>A ball launches into a bumper arena. Every 3rd round, two or three at once.</li>
+          <li>You get <b>one</b> click all round — it shoves the nearest ball away from where you clicked.</li>
+          <li>Tap <b>1</b>, <b>2</b> or <b>3</b> to wager how sure you are. Nobody sees your wager.</li>
+          <li>Near the end the balls go dark and keep moving. Then everything freezes.</li>
+          <li>You have 3 seconds to click where you think your ball ended up.</li>
+          <li>Points scale with how close you were, times your wager. Land 3 close guesses in a row for a multiplier.</li>
+        </ol>
+      </details>
+    </div>
+  </section>
+
+  <!-- ── Code entry (tap-only, no keyboard) ────────────────────────────── -->
+  <section class="screen" id="screen-code">
+    <div class="stack">
+      <h2 class="heading">Room code</h2>
+      <div class="code-display" id="code-display" aria-live="polite"></div>
+      <div class="keypad" id="keypad"></div>
+      <div class="row">
+        <button class="btn btn-ghost" id="btn-code-back">Back</button>
+        <button class="btn btn-ghost" id="btn-code-del">Delete</button>
+      </div>
+      <p class="note" id="code-note"></p>
+    </div>
+  </section>
+
+  <!-- ── Lobby ─────────────────────────────────────────────────────────── -->
+  <section class="screen" id="screen-lobby">
+    <div class="stack">
+      <p class="label">Room code</p>
+      <div class="code-big" id="lobby-code"></div>
+      <button class="btn btn-ghost" id="btn-copy">Copy invite link</button>
+
+      <div class="panel">
+        <p class="label">Players <span id="lobby-count" class="muted"></span></p>
+        <ul class="players" id="lobby-players"></ul>
+      </div>
+
+      <button class="btn btn-primary btn-lg" id="btn-start">Start game</button>
+      <p class="note" id="lobby-note"></p>
+    </div>
+  </section>
+
+  <!-- ── Game ──────────────────────────────────────────────────────────── -->
+  <section class="screen screen-wide" id="screen-game">
+    <header class="hud">
+      <div class="hud-left">
+        <span class="pill" id="hud-round">Round 1/10</span>
+        <span class="pill pill-phase" id="hud-phase">Get ready</span>
+      </div>
+      <div class="hud-right">
+        <span class="pill" id="hud-you"></span>
+        <span class="pill pill-score" id="hud-score">0</span>
+      </div>
+    </header>
+
+    <div class="stage">
+      <canvas id="arena" width="960" height="600"></canvas>
+      <div class="stage-overlay" id="stage-overlay"></div>
+    </div>
+
+    <footer class="controls">
+      <div class="control-group">
+        <p class="label">Wager <span class="muted">(secret)</span></p>
+        <div class="chips" id="wager-chips" role="group" aria-label="Confidence wager">
+          <button class="chip chip-wager is-on" data-wager="1">1</button>
+          <button class="chip chip-wager" data-wager="2">2</button>
+          <button class="chip chip-wager" data-wager="3">3</button>
+        </div>
+      </div>
+
+      <div class="control-group" id="ball-group" hidden>
+        <p class="label">Your ball</p>
+        <div class="chips" id="ball-chips" role="group" aria-label="Which ball you are calling"></div>
+      </div>
+
+      <div class="control-group control-status">
+        <p class="label">Nudge</p>
+        <div class="nudge-state" id="nudge-state">Ready</div>
+      </div>
+    </footer>
+  </section>
+
+  <!-- ── Between rounds / final ────────────────────────────────────────── -->
+  <section class="screen" id="screen-board">
+    <div class="stack">
+      <h2 class="heading" id="board-title">Leaderboard</h2>
+      <ol class="board" id="board-list"></ol>
+      <p class="note" id="board-note"></p>
+      <button class="btn btn-primary btn-lg" id="btn-again" hidden>New room</button>
+    </div>
+  </section>
+
+  <!-- ── Errors / setup ────────────────────────────────────────────────── -->
+  <section class="screen" id="screen-error">
+    <div class="stack">
+      <h2 class="heading" id="error-title">Something went wrong</h2>
+      <p class="note" id="error-body"></p>
+      <button class="btn btn-primary btn-lg" id="btn-error-back">Back to start</button>
+    </div>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script src="vendor/matter.min.js"></script>
+<script src="vendor/supabase.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

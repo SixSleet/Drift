@@ -1,0 +1,45 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two Pages deployments race; queue instead of cancelling, so a
+# finished deploy is not thrown away half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      # The game is plain files — no build step, nothing to bundle. Matter.js
+      # and supabase-js are vendored, so the page has no third-party runtime
+      # dependencies. Only the playable files ship; the schema and docs stay in
+      # the repo.
+      - name: Stage the site
+        run: |
+          mkdir -p _site
+          cp -r index.html css js vendor _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
