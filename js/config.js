@@ -30,29 +30,35 @@ export const MODES = Object.freeze({
 
 // ── Round shape ──────────────────────────────────────────────────────────
 export const WORD_LENGTHS = [4, 5]; // 6-7 proved too hard to be fun
-export const ROUND_LEAD_MS = 3000;  // matches wf_next_round's starts_at offset
+export const ROUND_LEAD_MS = 5000;  // matches wf_next_round's starts_at offset —
+                                     // long enough to read a full-screen event card
 export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
                                              // round.time_limit_ms is authoritative
                                              // (a blitz event shortens it)
 
 // ── Random events ────────────────────────────────────────────────────────
-// Picked server-side in wf_next_round (35% none, 15% each of the four
-// regular events, 5% jackpot) — this is display metadata only, the *effect*
-// of each one already happened by the time the client ever sees the round
-// row. `fx` names the per-event presentation treatment in game.js/app.css:
-// 'coins' rains money emoji, 'pop' bounces the pill open, 'siren' strobes
-// the flash and shakes the screen, 'dread' pulses a slow red vignette, and
-// 'jackpot' is all of the above plus a slot-reel spin on the pill itself.
+// Picked server-side in wf_next_round (25% none, 14% each of five events,
+// 5% jackpot) — this is display metadata only, any *numeric* effect (blitz's
+// clock, jackpot's guess budget) already happened by the time the client
+// ever sees the round row. `fx` names the per-event presentation treatment
+// in game.js/app.css: 'coins' rains money, 'siren' strobes the flash and
+// shakes the screen, 'eclipse' dims the keyboard's hint colours, 'shuffle'
+// scrambles the on-screen keyboard layout, 'scope' hides per-letter tile
+// colours behind a hit-count badge, and 'jackpot' stacks all of it. `rule`
+// (blackout/shuffle/bullseye) is read directly by game.js to change how a
+// round is actually played, not just how it looks.
 export const EVENTS = Object.freeze({
   none: null,
   double_points: { label: 'Double Points', emoji: '💰', tint: '#ffd166', blurb: 'This round pays double.', fx: 'coins' },
-  extra_guess:   { label: 'Extra Guess',   emoji: '🎁', tint: '#7be495', blurb: 'One more guess than usual.', fx: 'pop' },
   blitz:         { label: 'Blitz',         emoji: '⚡', tint: '#4bd0ff', blurb: 'Only 90 seconds on the clock.', fx: 'siren' },
-  sudden_death:  { label: 'Sudden Death',  emoji: '💀', tint: '#ff6161', blurb: 'One fewer guess than usual.', fx: 'dread' },
+  blackout:      { label: 'Blackout',      emoji: '🙈', tint: '#8a7bff', blurb: 'The keyboard stops showing you which letters you know.', fx: 'eclipse', rule: 'blackout' },
+  shuffle:       { label: 'Shuffle',       emoji: '🔀', tint: '#ff9f4b', blurb: 'The keyboard layout is scrambled for the round.', fx: 'shuffle', rule: 'shuffle' },
+  bullseye:      { label: 'Bullseye',      emoji: '🎯', tint: '#ff4d9d', blurb: "Tiles won't show hit/present/miss — only how many you got exactly right.", fx: 'scope', rule: 'bullseye' },
   jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#ffd166', blurb: 'Extra guess AND double points!', fx: 'jackpot', rare: true },
 });
 
 export const TICK_START_MS = 10000; // audible tick begins this far from zero
+export const EVENT_CARD_MS = 5000;  // full-screen event card, minimum readable time
 
 // ── Scoring preview (server's numbers in wf_check_settle are authoritative;
 // these are only for in-flight UI hints) ────────────────────────────────

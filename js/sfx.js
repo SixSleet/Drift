@@ -104,15 +104,22 @@ export const sfx = {
     if (kind === 'double_points') {
       [660, 880, 1100, 1320].forEach((f, i) =>
         blip({ freq: f, dur: 0.14, type: 'triangle', gain: 0.14, delay: i * 0.06 }));
-    } else if (kind === 'extra_guess') {
-      [523, 784].forEach((f, i) =>
-        blip({ freq: f, to: f * 1.3, dur: 0.16, type: 'square', gain: 0.14, delay: i * 0.1 }));
     } else if (kind === 'blitz') {
       [900, 700, 900, 700, 900].forEach((f, i) =>
         blip({ freq: f, dur: 0.06, type: 'square', gain: 0.15, delay: i * 0.07 }));
-    } else if (kind === 'sudden_death') {
-      [440, 330, 220].forEach((f, i) =>
-        blip({ freq: f, to: f * 0.7, dur: 0.28, type: 'sawtooth', gain: 0.15, delay: i * 0.13 }));
+    } else if (kind === 'blackout') {
+      // Lights going out: a slow, muffled descent into near-silence.
+      blip({ freq: 480, to: 90, dur: 0.6, type: 'sine', gain: 0.16 });
+      blip({ freq: 200, to: 60, dur: 0.4, type: 'sine', gain: 0.1, delay: 0.15 });
+    } else if (kind === 'shuffle') {
+      // A scatter of quick, randomly-pitched clicks -- keys being shuffled.
+      for (let i = 0; i < 14; i++) {
+        blip({ freq: 300 + Math.random() * 900, dur: 0.03, type: 'triangle', gain: 0.09, delay: i * 0.025 });
+      }
+    } else if (kind === 'bullseye') {
+      // A dart zipping in, then a sharp thud on the target.
+      blip({ freq: 260, to: 1200, dur: 0.14, type: 'sawtooth', gain: 0.13 });
+      blip({ freq: 140, dur: 0.12, type: 'square', gain: 0.18, delay: 0.14 });
     } else if (kind === 'jackpot') {
       // Slot-machine reel spin-up, an ascending fanfare, then a shimmer tail.
       for (let i = 0; i < 10; i++) {
@@ -123,6 +130,11 @@ export const sfx = {
       [1568, 1976, 2637].forEach((f, i) =>
         blip({ freq: f, to: f * 1.15, dur: 0.5, type: 'sine', gain: 0.1, delay: 0.82 + i * 0.04 }));
     }
+  },
+
+  /** A guess that landed zero hits -- a dud, "not even one." */
+  whiff() {
+    blip({ freq: 220, to: 90, dur: 0.22, type: 'sawtooth', gain: 0.13 });
   },
 
   /** The last few seconds of a round's clock. Pitch climbs as it nears zero. */

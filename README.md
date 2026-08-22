@@ -35,8 +35,8 @@ and realtime signalling. GitHub Pages for hosting. The one dependency
 
 | Phase | What happens |
 | --- | --- |
-| Countdown | 3s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained, and this round's event (if any) flashes across the screen with a matching stinger sound. |
-| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. Type guesses on the on-screen keyboard or your own — tiles flip in as each guess is scored (hit / present / miss), and any letter you've used that isn't in the word greys out on the keyboard so you don't waste a guess retyping it. |
+| Countdown | 5s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained. If this round rolled an event, a full-screen card takes over for the whole 5 seconds — emoji, name, and what it does — so nobody starts guessing before they've actually read what changed. |
+| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. Type guesses on the on-screen keyboard or your own — each letter pops as you type it, tiles flip in as each guess is scored (hit / present / miss), and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out on the keyboard so you don't waste a guess retyping it — unless this round is Blackout or Bullseye (see below). |
 | Settling | Brief. Any client — not just the host — can ask the server "is this round actually over," and the server independently re-checks before agreeing. |
 | Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed, plus who won the round. |
 | Board | ~5.5s. Running standings, then the next round. |
@@ -60,8 +60,8 @@ the whole team, with no speed bonus (still doubled by Double Points).
 
 **Guess budgets.** `word length + 2` in Solo and PvP — a solo run is exactly
 as hard as your half of a duel. `word length + 3` in Co-op, since that pool
-is shared across the whole team rather than per player. Extra Guess and
-Sudden Death events adjust this by ±1 for the round.
+is shared across the whole team rather than per player. Jackpot adds one
+more guess on top of that, for the round.
 
 **Winning a PvP round.** First to solve it wins — not fewest guesses. The
 round ends the instant either player gets it, so there's no reason to wait
@@ -74,28 +74,32 @@ one memorised opening guess all match. If no word of the right length starts
 with that letter, the constraint quietly drops for that round (`chain_broken`)
 rather than the round ever failing to start.
 
-**Random events.** Every round has a 65% chance of rolling an event, decided
+**Random events.** Every round has a 75% chance of rolling an event, decided
 server-side the instant the round is minted (`wf_next_round`, one shared
 `random()` roll compared against cumulative odds — not one draw per
-outcome, which would silently skew them) and baked straight into that
-round's `max_guesses` / `time_limit_ms`, so there's nothing for the client
-to derive — just render. Each gets its own full-screen flash, HUD pill, and
-WebAudio stinger; four also carry a distinct physical effect —
-screen-shake, falling confetti, a strobing flash, a creeping red vignette:
+outcome, which would silently skew them) and — where it has a *numeric*
+effect at all — baked straight into that round's `max_guesses` /
+`time_limit_ms`, so there's nothing for the client to derive there. Three
+of the six actually change how the round is *played*, not just scored:
 
-| Event | Odds | Effect | Presentation |
-| --- | --- | --- | --- |
-| 💰 Double Points | 15% | Score doubled. | Gold confetti burst |
-| 🎁 Extra Guess | 15% | One more guess than usual. | Pill pops open |
-| ⚡ Blitz | 15% | Clock cut to 90 seconds. | Strobing flash + screen shake |
-| 💀 Sudden Death | 15% | One fewer guess (never below the word length). | Slow red vignette |
-| 🎰 **Jackpot** | 5% | Extra guess **and** double points, at once. | Confetti + screen shake + a gold spinning pill + a slot-machine fanfare |
-| *(none)* | 35% | A normal round. | — |
+| Event | Odds | Effect |
+| --- | --- | --- |
+| 💰 Double Points | 14% | Score doubled. |
+| ⚡ Blitz | 14% | Clock cut to 90 seconds. |
+| 🙈 Blackout | 14% | The keyboard stops greying out letters you already know — no more free memory aid. |
+| 🔀 Shuffle | 14% | The on-screen keyboard layout is scrambled for the round (ENTER/BACK stay anchored). |
+| 🎯 Bullseye | 14% | Tiles stop showing hit/present/miss. You only learn how many letters you got in the exact right spot — a hit-count badge, not a colour map. |
+| 🎰 **Jackpot** | 5% | Extra guess **and** double points, at once — the rare one worth stopping for. |
+| *(none)* | 25% | A normal round. |
 
-Jackpot is the rare one worth stopping for: everything else fires at once
-— a rainbow flash sweeps the screen, sixty pieces of confetti fall, the
-screen shakes, the HUD pill spins in gold and shimmers for the rest of the
-round, and the sound is a slot-machine reel spin-up into a rising fanfare.
+Every event gets a full-screen card for the whole 5-second countdown (so
+there's no missing what just changed), plus a HUD pill for the rest of the
+round, and a distinct WebAudio stinger. Four also carry a physical effect:
+Blitz strobes the screen and shakes it, Double Points and Jackpot rain
+confetti, and Jackpot piles on a gold spinning pill and a slot-machine
+fanfare on top of everything else. Blackout, Shuffle and Bullseye are pure
+client-side rule changes — same secret, same scoring, just a harder way to
+find it — so they carry no `max_guesses`/`time_limit_ms` effect at all.
 
 ## Keeping the secret secret
 

@@ -4,7 +4,7 @@
 
 import {
   MODES, ROUND_LEAD_MS, ROUND_TIME_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
-  POLL_MS, DEFAULT_ROUNDS, TIER_RANK, EVENTS, TICK_START_MS,
+  POLL_MS, DEFAULT_ROUNDS, TIER_RANK, EVENTS, TICK_START_MS, EVENT_CARD_MS,
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
@@ -12,6 +12,7 @@ import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
   setPhase, setStatusLine, selectChip, buildLetterKeyboard, paintKeyboard,
+  shuffledLetterRows,
 } from './ui.js';
 
 const CONFETTI_COLORS = ['#ffd166', '#ff6161', '#7be495', '#4bd0ff', '#ff4d9d'];
@@ -178,7 +179,16 @@ export class Game {
     }
     $('#ghost-bar').hidden = this.mode !== 'pvp';
     loadDictionary(row.word_length);
+
+    // `rule` (blackout/shuffle/bullseye) actually changes how this round is
+    // played, not just how it looks -- read directly off EVENTS elsewhere
+    // in the render loop instead of re-deriving it from row.event each time.
+    this.roundRule = EVENTS[row.event]?.rule ?? null;
+    const shuffled = this.roundRule === 'shuffle';
+    buildLetterKeyboard((k) => this.handleKey(k), shuffled ? shuffledLetterRows() : undefined, shuffled);
+    $('#keyboard').classList.toggle('is-blackout', this.roundRule === 'blackout');
     paintKeyboard(new Map());
+
     this.#applyEvent(row.event);
   }
 
@@ -188,11 +198,16 @@ export class Game {
     const info = EVENTS[event];
     const flash = $('#event-flash');
     const screen = $('#screen-game');
+    const card = $('#event-card');
 
     screen.classList.remove('screen-shake');
     flash.classList.remove('is-active');
 
-    if (!info) { el.hidden = true; el.classList.remove('is-rare'); return; }
+    if (!info) {
+      el.hidden = true; el.classList.remove('is-rare');
+      card.hidden = true;
+      return;
+    }
 
     el.hidden = false;
     el.classList.toggle('is-rare', !!info.rare);
@@ -216,6 +231,21 @@ export class Game {
     if (info.fx === 'coins' || info.fx === 'jackpot') {
       this.#spawnConfetti(info.fx === 'jackpot' ? 60 : 26);
     }
+
+    // The full-screen card: dominant, readable for the whole 5s countdown
+    // (EVENT_CARD_MS matches ROUND_LEAD_MS/wf_next_round's starts_at offset)
+    // so nobody has to squint at the small HUD pill to know what changed.
+    card.hidden = false;
+    card.dataset.fx = info.fx ?? '';
+    card.style.setProperty('--tint', info.tint);
+    $('#event-card-emoji').textContent = info.emoji;
+    $('#event-card-label').textContent = info.label;
+    $('#event-card-blurb').textContent = info.blurb;
+    card.classList.remove('is-active');
+    void card.offsetWidth;
+    card.classList.add('is-active');
+    clearTimeout(this._eventCardTimer);
+    this._eventCardTimer = setTimeout(() => { card.hidden = true; }, EVENT_CARD_MS);
 
     sfx.event(event);
   }
@@ -272,6 +302,11 @@ export class Game {
       this.guessesByRound.get(roundId).push(row);
 
       row.feedback.forEach((tier, i) => setTimeout(() => sfx.reveal(tier), i * 90));
+      // "Not even one" -- a distinct sting after the whole row's flipped, on
+      // top of the row's own is-whiff shake (see renderGrid).
+      if (row.feedback.every((f) => f !== 'hit')) {
+        setTimeout(() => sfx.whiff(), row.feedback.length * 90 + 80);
+      }
 
       if (this.mode === 'pvp') {
         const mine = this.guessesByRound.get(roundId).filter((g) => g.player_id === this.me.id);
@@ -488,9 +523,9 @@ export class Game {
 
     if (phase === 'countdown') {
       const secs = Math.ceil(-(serverNow() - Date.parse(this.round.starts_at)) / 1000);
-      const info = EVENTS[this.round.event];
-      const sub = info ? `<div class="small">${info.emoji} ${info.label} — ${info.blurb}</div>` : '';
-      setStatusLine(`<div class="big">${secs > 0 ? secs : 'GO'}</div>${sub}`);
+      setStatusLine(`<div class="big">${secs > 0 ? secs : 'GO'}</div>`);
+      const countEl = $('#event-card-count');
+      if (countEl) countEl.textContent = secs > 0 ? `Starts in ${secs}…` : 'GO!';
       renderGrid({
         wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
         guesses: [], active: '', canType: false,
@@ -500,24 +535,32 @@ export class Game {
 
     const playerColor = this.mode === 'coop'
       ? new Map(this.players.map((p) => [p.id, p.color])) : null;
+    const bullseye = this.roundRule === 'bullseye';
 
     renderGrid({
       wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
       guesses: visible, active: this.local.active,
-      canType: phase === 'live', playerColor, shake: this.local.shake,
+      canType: phase === 'live', playerColor, shake: this.local.shake, bullseye,
     });
 
-    const tiers = new Map();
-    for (const g of visible) {
-      // g.word comes back lowercase from the server; the on-screen keyboard's
-      // keys are uppercase, so this has to match case or every key stays
-      // unpainted.
-      g.word.toUpperCase().split('').forEach((ch, i) => {
-        const t = g.feedback[i];
-        if (!tiers.has(ch) || TIER_RANK[t] > TIER_RANK[tiers.get(ch)]) tiers.set(ch, t);
-      });
+    // Blackout and Bullseye both retire the keyboard's letter-tracking —
+    // Bullseye has to, or the keyboard would leak exactly what its tile
+    // colours are hiding.
+    if (this.roundRule === 'blackout' || bullseye) {
+      paintKeyboard(new Map());
+    } else {
+      const tiers = new Map();
+      for (const g of visible) {
+        // g.word comes back lowercase from the server; the on-screen keyboard's
+        // keys are uppercase, so this has to match case or every key stays
+        // unpainted.
+        g.word.toUpperCase().split('').forEach((ch, i) => {
+          const t = g.feedback[i];
+          if (!tiers.has(ch) || TIER_RANK[t] > TIER_RANK[tiers.get(ch)]) tiers.set(ch, t);
+        });
+      }
+      paintKeyboard(tiers);
     }
-    paintKeyboard(tiers);
 
     if (phase === 'live') {
       setStatusLine(this.mode === 'pvp' && this.ghost

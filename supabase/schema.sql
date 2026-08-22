@@ -21,12 +21,14 @@
 --     itself a completion condition, in every mode) — not just a
 --     client-side display.
 --   * wf_next_round also rolls a random party-game `event` for the round —
---     35% none, 15% each of double_points, extra_guess, blitz (shortens
---     time_limit_ms to 90s) and sudden_death (drops max_guesses by one),
---     plus a rare 5% jackpot (extra_guess + double_points at once) — baked
---     into that round's guess budget and time limit at mint time so every
---     client just reads the consequences off the round row rather than
---     re-deriving them.
+--     25% none, 14% each of double_points, blitz (shortens time_limit_ms to
+--     90s), blackout, shuffle and bullseye (the latter three are pure
+--     client-side rule changes with no server-side numeric effect), plus a
+--     rare 5% jackpot (double_points + one extra guess, at once). Whatever
+--     has a numeric effect is baked into that round's guess budget/time
+--     limit at mint time, so the client only ever reads it off the round
+--     row rather than re-deriving it. Every round's countdown is 5 seconds
+--     (`starts_at`), long enough to read a full-screen event announcement.
 --
 -- Three modes share this schema:
 --
@@ -149,7 +151,8 @@ create table public.wf_rounds (
   team_solved        boolean,                                  -- coop only
   pool_used          int  not null default 0,                  -- coop only
   event              text not null default 'none'
-                       check (event in ('none', 'double_points', 'extra_guess', 'blitz', 'sudden_death', 'jackpot')),
+                       check (event in ('none', 'double_points', 'blitz', 'blackout', 'shuffle', 'bullseye', 'jackpot',
+                                        'extra_guess', 'sudden_death')), -- last two retired, kept legal for old rows
   time_limit_ms      int  not null default 300000 check (time_limit_ms > 0), -- blitz shortens this
   created_at         timestamptz not null default now(),
   unique (room_id, round_no)
@@ -654,24 +657,27 @@ begin
 
   -- A party-game random event, one shared roll compared against cumulative
   -- thresholds (NOT one random() per WHEN -- that silently skews the odds,
-  -- since each branch would draw its own independent number): 35% nothing,
-  -- 15% each of four spice-it-up events, and a rare 5% Jackpot (extra guess
-  -- + double points at once, with a much bigger presentation on the client).
+  -- since each branch would draw its own independent number): 25% nothing,
+  -- 14% each of five interaction-changing events (double_points, blitz,
+  -- blackout, shuffle, bullseye), and a rare 5% jackpot. Blackout, shuffle,
+  -- bullseye and double_points are purely client-side presentation/rules
+  -- changes -- they never touch max_guesses or time_limit_ms, only blitz
+  -- (shorter clock) and jackpot (double points + one extra guess) carry a
+  -- server-side numeric effect. (extra_guess/sudden_death are retired --
+  -- the check constraint still allows them so older in-flight rounds that
+  -- already minted with one of those stay valid.)
   v_roll := random();
   v_event := case
-    when v_roll < 0.35 then 'none'
-    when v_roll < 0.50 then 'double_points'
-    when v_roll < 0.65 then 'extra_guess'
-    when v_roll < 0.80 then 'blitz'
-    when v_roll < 0.95 then 'sudden_death'
+    when v_roll < 0.25 then 'none'
+    when v_roll < 0.39 then 'double_points'
+    when v_roll < 0.53 then 'blitz'
+    when v_roll < 0.67 then 'blackout'
+    when v_roll < 0.81 then 'shuffle'
+    when v_roll < 0.95 then 'bullseye'
     else 'jackpot'
   end;
 
-  if v_event = 'extra_guess' then
-    v_max_guesses := v_max_guesses + 1;
-  elsif v_event = 'sudden_death' then
-    v_max_guesses := greatest(v_len, v_max_guesses - 1);
-  elsif v_event = 'blitz' then
+  if v_event = 'blitz' then
     v_time_limit_ms := 90000;
   elsif v_event = 'jackpot' then
     v_max_guesses := v_max_guesses + 1;
@@ -684,7 +690,7 @@ begin
     p_room, v_no, v_len, v_max_guesses,
     case when v_chain_broken then null else v_chain_letter end,
     v_chain_broken,
-    now() + interval '3 seconds',
+    now() + interval '5 seconds',
     v_event, v_time_limit_ms
   )
   returning * into v_round;
