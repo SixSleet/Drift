@@ -142,6 +142,7 @@ create or replace function public.drift_hash(p_token text)
 returns text
 language sql
 immutable
+set search_path = public, pg_temp
 as $$
   select case
            when p_token ~ '^[0-9a-f]{64}$'
@@ -155,6 +156,7 @@ create or replace function public.drift_header_hash()
 returns text
 language sql
 stable
+set search_path = public, pg_temp
 as $$
   select public.drift_hash(
     nullif(current_setting('request.headers', true), '')::json ->> 'x-drift-player'
@@ -246,10 +248,12 @@ create policy drift_guesses_select on public.drift_guesses
 -- the timing window before touching anything.
 
 create or replace function public.drift_server_time()
-returns timestamptz language sql stable as $$ select now() $$;
+returns timestamptz language sql stable
+set search_path = public, pg_temp as $$ select now() $$;
 
 create or replace function public.drift_palette(p_seat int)
-returns text language sql immutable as $$
+returns text language sql immutable
+set search_path = public, pg_temp as $$
   select (array[
     '#ff5c7a','#4bd0ff','#ffd166','#7be495','#c792ea',
     '#ff9f45','#5eead4','#f472b6','#93c5fd','#fde047'
@@ -257,7 +261,8 @@ returns text language sql immutable as $$
 $$;
 
 create or replace function public.drift_nickname(p_seat int, p_salt text)
-returns text language sql immutable as $$
+returns text language sql immutable
+set search_path = public, pg_temp as $$
   select (array[
     'Crimson','Cobalt','Amber','Jade','Violet',
     'Ember','Teal','Rose','Frost','Gold'
@@ -770,6 +775,9 @@ end $$;
 -- drift_player / drift_player_in_round / drift_host_room take a token and would
 -- otherwise let anyone probe membership directly; they exist only for the RPCs
 -- above to call internally.
+-- drift_is_member and drift_round_room stay executable by anon: RLS policies
+-- run as the querying role, so that role needs EXECUTE on the functions they
+-- call. Neither reveals anything a member could not already read.
 revoke all on function public.drift_player(text, uuid)          from public, anon, authenticated;
 revoke all on function public.drift_player_in_round(text, uuid) from public, anon, authenticated;
 revoke all on function public.drift_host_room(text, uuid)       from public, anon, authenticated;
