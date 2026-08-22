@@ -14,6 +14,10 @@
 --   * Most rounds must start with the last letter of the previous round's
 --     word (see `chain_letter` / `chain_broken` below) — you can't lean on
 --     one memorised opening guess for the whole match.
+--   * Every round has a hard 5-minute clock from `starts_at`, enforced
+--     server-side in both wf_submit_guess (rejects a late guess) and
+--     wf_check_settle (time running out is itself a completion condition,
+--     in every mode) — not just a client-side display.
 --
 -- Three modes share this schema:
 --
@@ -22,8 +26,9 @@
 --     or scoring, since both already key off "your own guesses."
 --   * PvP  — two players race the same secret at the same time. Each only
 --     ever sees their own guesses; the opponent is a live aggregate ("ghost")
---     sent over Realtime Broadcast, never through a table read. Fewer
---     guesses wins the round; ties break on solve speed.
+--     sent over Realtime Broadcast, never through a table read. The round
+--     ends the instant either player solves it — first to the word wins,
+--     however many guesses it took — rather than waiting for both to finish.
 --   * Coop — up to ten players share one board and one guess budget
 --     (word_length + 3, fixed regardless of headcount, so a bigger team has
 --     to coordinate rather than out-brute-force a small one). Anyone can
@@ -673,6 +678,9 @@ begin
   if now() < v_round.starts_at then
     raise exception 'wordforge: round has not started yet' using errcode = 'P0016';
   end if;
+  if now() >= v_round.starts_at + interval '5 minutes' then
+    raise exception 'wordforge: time is up for this round' using errcode = 'P0021';
+  end if;
   if length(v_word) <> v_round.word_length or v_word !~ '^[a-z]+$' then
     raise exception 'wordforge: guess must be a % letter word', v_round.word_length using errcode = 'P0017';
   end if;
@@ -726,6 +734,9 @@ declare
   v_mode   text;
   v_secret text;
   v_all_hit text[];
+  v_time_up boolean;
+  v_any_solved boolean;
+  v_all_exhausted boolean;
   v_done boolean;
   v_solved boolean;
   v_used int;
@@ -734,7 +745,6 @@ declare
   v_base int;
   v_bonus int;
   v_winner uuid;
-  v_best_guesses int := null;
   v_best_time timestamptz := null;
   rec record;
 begin
@@ -746,18 +756,29 @@ begin
   end if;
 
   v_all_hit := array_fill('hit'::text, array[v_round.word_length]);
+  v_time_up := now() >= v_round.starts_at + interval '5 minutes';
 
   if v_mode = 'coop' then
-    v_done := v_round.pool_used >= v_round.max_guesses
+    v_done := v_time_up
+              or v_round.pool_used >= v_round.max_guesses
               or exists (select 1 from public.wf_guesses where round_id = p_round and feedback = v_all_hit);
   else
-    select bool_and(
+    -- PvP and Solo: the round ends the instant anyone solves it (first to
+    -- the word wins the round), once everyone still playing has run out of
+    -- guesses, or when time runs out — whichever comes first.
+    select bool_or(
       exists (select 1 from public.wf_guesses g
                where g.round_id = p_round and g.player_id = p.id and g.feedback = v_all_hit)
-      or (select count(*) from public.wf_guesses g2
-           where g2.round_id = p_round and g2.player_id = p.id) >= v_round.max_guesses
-    ) into v_done
+    ) into v_any_solved
     from public.wf_players p where p.room_id = v_round.room_id;
+
+    select bool_and(
+      (select count(*) from public.wf_guesses g2
+        where g2.round_id = p_round and g2.player_id = p.id) >= v_round.max_guesses
+    ) into v_all_exhausted
+    from public.wf_players p where p.room_id = v_round.room_id;
+
+    v_done := v_time_up or coalesce(v_any_solved, false) or coalesce(v_all_exhausted, false);
   end if;
 
   if not v_done then
@@ -801,9 +822,8 @@ begin
       insert into public.wf_results (round_id, player_id, solved, guesses_used, elapsed_ms, points)
       values (p_round, rec.player_id, rec.solved, rec.used, v_elapsed_ms, v_pts);
 
-      if rec.solved and (v_best_guesses is null or rec.used < v_best_guesses
-                          or (rec.used = v_best_guesses and rec.solved_at < v_best_time)) then
-        v_best_guesses := rec.used;
+      -- First to solve wins the round, full stop — not fewest guesses.
+      if rec.solved and (v_best_time is null or rec.solved_at < v_best_time) then
         v_best_time := rec.solved_at;
         v_winner := rec.player_id;
       end if;

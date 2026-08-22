@@ -263,6 +263,12 @@ body {
 .pill-phase { color: var(--cyan); border-color: rgba(75, 208, 255, .35); }
 .pill-phase[data-tone="warn"] { color: var(--amber); border-color: rgba(255, 209, 102, .4); }
 .pill-chain { color: var(--amber); border-color: rgba(255, 209, 102, .4); text-transform: lowercase; }
+.pill-timer { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pill-timer.is-low {
+  color: var(--red); border-color: rgba(255, 97, 97, .45);
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+@keyframes timer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 
 .btn-icon {
   appearance: none; border: 1px solid var(--line); background: var(--panel-2);

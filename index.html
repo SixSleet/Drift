@@ -56,9 +56,10 @@
         <ol>
           <li>Every round picks a secret word — anywhere from 4 to 7 letters, so don't assume it's always five.</li>
           <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
-          <li>Type guesses on the on-screen keyboard or your own. Tiles show hit (right spot), present (wrong spot) or miss.</li>
+          <li>Type guesses on the on-screen keyboard or your own. Tiles show hit (right spot), present (wrong spot) or miss — and any letter you've used that isn't in the word greys out on the keyboard, so you never waste a guess retyping it.</li>
+          <li>Every round has a 5-minute clock. Run out, and the round ends there — revealed, unsolved, for whoever hadn't gotten it yet.</li>
           <li><b>Solo:</b> no lobby, no code — just you against the word, same guess budget as a duel. Good for warming up or chasing a personal best.</li>
-          <li><b>PvP Duel:</b> you and a rival race the same word at the same time. You only ever see your own board — the "ghost" bar shows how many guesses your rival has burned, nothing more. Fewer guesses wins the round.</li>
+          <li><b>PvP Duel:</b> you and a rival race the same word at the same time. You only ever see your own board — the "ghost" bar shows how many guesses your rival has burned, nothing more. Whoever solves it first wins the round, however many guesses it took.</li>
           <li><b>Co-op:</b> the whole room shares one board and one guess budget (word length + 3, no bigger a team just because you invited more people). Anyone can drop the next guess — coordinate or waste attempts.</li>
           <li>Points build across the whole match. After the last round, whoever — or whichever team — has the most wins.</li>
         </ol>
@@ -105,6 +106,7 @@
         <span class="pill" id="hud-round">Round 1/6</span>
         <span class="pill pill-phase" id="hud-phase">Get ready</span>
         <span class="pill pill-chain" id="hud-chain" hidden></span>
+        <span class="pill pill-timer" id="hud-timer" hidden></span>
       </div>
       <div class="hud-right">
         <span class="pill" id="hud-you"></span>

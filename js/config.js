@@ -31,6 +31,7 @@ export const MODES = Object.freeze({
 // ── Round shape ──────────────────────────────────────────────────────────
 export const WORD_LENGTHS = [4, 5, 6, 7];
 export const ROUND_LEAD_MS = 3000;  // matches wf_next_round's starts_at offset
+export const ROUND_TIME_MS = 5 * 60 * 1000; // matches wf_submit_guess/wf_check_settle's 5-minute cap
 
 // ── Scoring preview (server's numbers in wf_check_settle are authoritative;
 // these are only for in-flight UI hints) ────────────────────────────────

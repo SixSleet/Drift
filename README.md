@@ -12,8 +12,8 @@ Three modes:
   match, same guess budget as a duel, chasing your own score.
 - **PvP Duel** — two players race the same secret at the same time. You only
   ever see your own board; your opponent shows up as a live "ghost" bar —
-  how many guesses they've burned, nothing more. Fewer guesses wins the
-  round, ties break on speed.
+  how many guesses they've burned, nothing more. Whoever solves it first
+  wins the round, however many guesses it took.
 - **Co-op** — up to ten players share one board and one guess budget
   (`word length + 3`, fixed no matter how many people join, so a bigger team
   has to coordinate rather than just brute-force it). Anyone can drop the
@@ -35,13 +35,19 @@ and realtime signalling. GitHub Pages for hosting. The one dependency
 | Phase | What happens |
 | --- | --- |
 | Countdown | 3s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained. |
-| Live | Type guesses on the on-screen keyboard or your own. Each submitted guess is scored server-side and its tiles flip in: hit (right letter, right spot), present (right letter, wrong spot), miss. |
+| Live | A 5-minute clock, ticking down in the HUD (red and pulsing under 30s). Type guesses on the on-screen keyboard or your own — tiles flip in as each guess is scored (hit / present / miss), and any letter you've used that isn't in the word greys out on the keyboard so you don't waste a guess retyping it. |
 | Settling | Brief. Any client — not just the host — can ask the server "is this round actually over," and the server independently re-checks before agreeing. |
-| Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed. |
+| Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed, plus who won the round. |
 | Board | ~5.5s. Running standings, then the next round. |
 
 Matches run 4, 6, 8 or 12 rounds. Points build across the whole match — most
 points (or, in Co-op, most rounds solved) wins after the last one.
+
+**The 5-minute clock.** Every round has one, from `starts_at`, enforced
+server-side — `wf_submit_guess` rejects a guess submitted after it expires,
+and `wf_check_settle` treats time running out as a completion condition in
+every mode. Run out with the word unsolved and the round ends there, secret
+revealed, same as running out of guesses.
 
 **Scoring.** `points = max(0, max_guesses − guesses_used + 1) × 10`, plus a
 speed bonus in Solo and PvP (+20 for a near-instant solve, +10 for a
@@ -51,6 +57,11 @@ attempt count, split identically across the whole team, with no speed bonus.
 **Guess budgets.** `word length + 2` in Solo and PvP — a solo run is exactly
 as hard as your half of a duel. `word length + 3` in Co-op, since that pool
 is shared across the whole team rather than per player.
+
+**Winning a PvP round.** First to solve it wins — not fewest guesses. The
+round ends the instant either player gets it, so there's no reason to wait
+for your rival to finish; a wrong guess against the clock can cost you the
+race even if you'd have gotten there eventually.
 
 **The chain constraint.** From round 2 on, the secret usually has to start
 with the last letter of the previous round's secret — so you can't lean on
@@ -119,10 +130,10 @@ Seven tables, all with row-level security. See
 **There are no INSERT or UPDATE policies on any of these tables.** Every
 write goes through a `SECURITY DEFINER` function that resolves the caller
 from the token it was handed and re-checks membership, host rights, and
-round state. A player cannot guess after their budget is spent, guess in a
-round that hasn't started or has already settled, settle a round that isn't
-actually finished, see an opponent's PvP guesses before the reveal, or touch
-a room they never joined.
+round state. A player cannot guess after their budget is spent, guess after
+the round's 5-minute clock has run out, guess in a round that hasn't started
+or has already settled, settle a round that isn't actually finished, see an
+opponent's PvP guesses before the reveal, or touch a room they never joined.
 
 The server does not validate that a guess is a real dictionary word — only
 its length and that it's alphabetic. Dictionary checking (`js/words.js`,

@@ -3,7 +3,7 @@
 // trigger it), input handling, and the live board.
 
 import {
-  MODES, ROUND_LEAD_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
+  MODES, ROUND_LEAD_MS, ROUND_TIME_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
   POLL_MS, DEFAULT_ROUNDS, TIER_RANK,
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
@@ -230,6 +230,7 @@ export class Game {
     } catch (e) {
       if (e.code === 'P0019') toast('Already solved — nothing left to guess.');
       else if (e.code === 'P0018') toast('No guesses left.');
+      else if (e.code === 'P0021') toast("Time's up for this round.");
       else toast(e.message || 'Guess rejected.');
       this.#invalidShake();
     }
@@ -247,6 +248,8 @@ export class Game {
 
   #roundSeemsFinished() {
     if (!this.round) return false;
+    if (serverNow() - Date.parse(this.round.starts_at) >= ROUND_TIME_MS) return true; // 5-minute cap, any mode
+
     const gs = this.guessesByRound.get(this.round.id) ?? [];
     if (this.mode === 'coop') {
       return gs.length >= this.round.max_guesses || gs.some((g) => this.#allHit(g));
@@ -254,8 +257,12 @@ export class Game {
     const mine = gs.filter((g) => g.player_id === this.me?.id);
     const myDone = mine.length >= this.round.max_guesses || mine.some((g) => this.#allHit(g));
     if (this.mode === 'solo') return myDone; // no opponent to wait for
-    const oppDone = this.ghost ? (this.ghost.attempts >= this.round.max_guesses || this.ghost.solved) : false;
-    return myDone && oppDone;
+
+    // PvP: first to solve wins, so the round ends the instant either side
+    // gets it — no need to wait for the other player to also finish.
+    if (mine.some((g) => this.#allHit(g)) || this.ghost?.solved) return true;
+    const oppExhausted = this.ghost ? this.ghost.attempts >= this.round.max_guesses : false;
+    return myDone && oppExhausted;
   }
 
   async #trySettle() {
@@ -387,13 +394,24 @@ export class Game {
     this.#hostTick(phase);
     if (phase === 'settling') this.#trySettle();
 
-    if (!this.round) return;
-    if (phase === 'lobby' || phase === 'final' || phase === 'waiting') return;
+    if (!this.round) { $('#hud-timer').hidden = true; return; }
+    if (phase === 'lobby' || phase === 'final' || phase === 'waiting') { $('#hud-timer').hidden = true; return; }
 
     this.#renderFrame(phase);
   }
 
+  #renderTimer(phase) {
+    const el = $('#hud-timer');
+    if (phase !== 'live') { el.hidden = true; return; }
+    const remaining = Math.max(0, ROUND_TIME_MS - (serverNow() - Date.parse(this.round.starts_at)));
+    const secs = Math.ceil(remaining / 1000);
+    el.hidden = false;
+    el.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    el.classList.toggle('is-low', remaining <= 30000);
+  }
+
   #renderFrame(phase) {
+    this.#renderTimer(phase);
     const gs = this.guessesByRound.get(this.round.id) ?? [];
     const visible = this.mode === 'pvp' ? gs.filter((g) => g.player_id === this.me?.id) : gs;
 
@@ -418,7 +436,10 @@ export class Game {
 
     const tiers = new Map();
     for (const g of visible) {
-      g.word.split('').forEach((ch, i) => {
+      // g.word comes back lowercase from the server; the on-screen keyboard's
+      // keys are uppercase, so this has to match case or every key stays
+      // unpainted.
+      g.word.toUpperCase().split('').forEach((ch, i) => {
         const t = g.feedback[i];
         if (!tiers.has(ch) || TIER_RANK[t] > TIER_RANK[tiers.get(ch)]) tiers.set(ch, t);
       });
@@ -433,7 +454,18 @@ export class Game {
     } else if (phase === 'settling') {
       setStatusLine('<div class="small">Settling…</div>');
     } else if (phase === 'reveal') {
-      setStatusLine(`<div class="reveal-word">${(this.round.revealed_secret ?? '').toUpperCase()}</div>`);
+      const word = `<div class="reveal-word">${(this.round.revealed_secret ?? '').toUpperCase()}</div>`;
+      let sub = '';
+      if (this.mode === 'pvp') {
+        if (this.round.winner_player_id) {
+          const iWon = this.round.winner_player_id === this.me?.id;
+          const winner = this.players.find((p) => p.id === this.round.winner_player_id);
+          sub = `<div class="small">${iWon ? 'You got it first!' : `${winner?.name ?? 'Your rival'} got it first.`}</div>`;
+        } else {
+          sub = '<div class="small">Nobody solved it in time.</div>';
+        }
+      }
+      setStatusLine(word + sub);
     } else if (phase === 'board' || phase === 'next') {
       $('#board-title').textContent = `After round ${this.round.round_no}`;
       $('#board-note').textContent = this.isHost ? 'Next round starting…' : 'Waiting for the host…';
