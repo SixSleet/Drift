@@ -2,10 +2,10 @@
 //
 // The Supabase URL and publishable key are meant to be public: every write goes
 // through a SECURITY DEFINER RPC and every read is gated by row-level security
-// scoped to room membership. See supabase/migrations/0005_drift_chaos_mode.sql.
+// scoped to room membership. See supabase/schema.sql.
 
-export const SUPABASE_URL = 'https://xjfexrlejdkssnwkljet.supabase.co';
-export const SUPABASE_KEY = 'sb_publishable_1VfCUi8orTq18RIivwdPQA_OsoDrrsd';
+export const SUPABASE_URL = 'https://ycltdyjtjdrgoyrevepf.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_9XEu26xpqmLoP3t41iFZ1w_9lxZu9Vr';
 
 // ── Arena ──────────────────────────────────────────────────────────────────
 export const ARENA = Object.freeze({ w: 960, h: 600, wall: 16 });

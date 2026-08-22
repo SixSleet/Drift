@@ -22,6 +22,10 @@
 -- not depend on header plumbing to work.
 -- ---------------------------------------------------------------------------
 
+-- Supabase ships pgcrypto in the `extensions` schema on every project; this is
+-- here so the file also stands up on a plain Postgres that does not.
+create extension if not exists pgcrypto with schema extensions;
+
 drop table if exists public.drift_guesses cascade;
 drop table if exists public.drift_wagers  cascade;
 drop table if exists public.drift_nudges  cascade;
