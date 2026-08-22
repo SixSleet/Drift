@@ -6,7 +6,7 @@ seconds to click where you think it ended up.
 
 No login, no typing, no chat. A room code and a mouse.
 
-**Play:** _(live URL goes here once GitHub Pages is enabled)_
+**Play: <https://sixsleet.github.io/Drift/>**
 
 Vanilla JS and `<canvas>`, Matter.js for physics, Supabase for realtime and
 persistence, GitHub Pages for hosting. No build step and no runtime CDN: the two
@@ -122,10 +122,11 @@ route into the data is gated by the policies above.
 
 **3. Hosting.** Push to `main`. The workflow in
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) publishes the
-playable files to GitHub Pages. Pages has to be switched on once by hand first:
-**Settings → Pages → Source: GitHub Actions**. (The workflow token is not
+playable files to GitHub Pages — `index.html`, `css/`, `js/` and `vendor/`, but
+not the schema or the docs. Pages has to be switched on once by hand first
+(**Settings → Pages → Source: GitHub Actions**), since the workflow token is not
 permitted to create the Pages site itself, and Pages needs the repo to be public
-unless you are on a paid plan.)
+unless you are on a paid plan.
 
 ## Running it locally
 
