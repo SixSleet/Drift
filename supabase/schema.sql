@@ -279,8 +279,8 @@ immutable
 set search_path = public, pg_temp
 as $$
   select (array[
-    '#ff5c7a','#4bd0ff','#ffd166','#7be495','#c792ea',
-    '#ff9f45','#5eead4','#f472b6','#93c5fd','#fde047'
+    '#e2a259','#8fa9a0','#cf8465','#94b073','#d9b45a',
+    '#c2705a','#7f9bb5','#c08a92','#b98a5c','#a3a86e'
   ])[(p_seat % 10) + 1];
 $$;
 

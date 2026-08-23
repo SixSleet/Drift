@@ -5,197 +5,303 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wordforge</title>
 <meta name="description" content="A 1–10 player browser word game with party-game random events. Guess a 4- or 5-letter word before your guesses (or the clock) run out — solo, race a rival head-to-head, or share one guess pool with your whole team.">
-<meta name="theme-color" content="#06070f">
+<meta name="theme-color" content="#1b1712">
 <meta property="og:title" content="Wordforge">
-<meta property="og:description" content="Same idea as that word game you know. More letters, more modes, more pressure.">
+<meta property="og:description" content="Same idea as that word game you know. More letters, more modes, more pressure — played at a desk in a quiet room.">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='10' height='10' rx='2' fill='%234bd0ff'/%3E%3Crect x='18' y='4' width='10' height='10' rx='2' fill='%23ff4d9d'/%3E%3Crect x='11' y='18' width='10' height='10' rx='2' fill='%237be495'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='10' height='10' rx='2' fill='%23e2a259'/%3E%3Crect x='18' y='4' width='10' height='10' rx='2' fill='%23c97f5a'/%3E%3Crect x='11' y='18' width='10' height='10' rx='2' fill='%238ba86c'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 
-<div id="app">
+<!-- ───────────────────────────────────────────────────────────────────────
+     The room. Not a picture of a room -- actual CSS 3D geometry: floor,
+     ceiling and three walls placed with translate3d/rotate inside one
+     shared preserve-3d space, a desk built from two more planes, and the
+     monitor standing on it. The camera sits behind the chair looking at
+     the screen, so everything you see is that one point of view.
 
-  <!-- ── Title ─────────────────────────────────────────────────────────── -->
-  <section class="screen" id="screen-title" data-active>
-    <div class="stack">
-      <h1 class="wordmark">Word<span>forge</span></h1>
-      <p class="tagline">Same idea as that word game you know. More letters, more modes, more pressure.</p>
+     The monitor's screen is a real DOM element in that 3D space, which is
+     why the whole app lives inside it: tiles, HUD and text stay crisp and
+     selectable instead of being painted into a texture.
 
-      <div class="panel">
-        <p class="label">Mode</p>
-        <div class="mode-picker" id="mode-chips" role="group" aria-label="Game mode">
-          <button class="chip mode-chip is-on" data-mode="solo" style="--tint:#4bd0ff">
-            <span class="mode-name">Solo</span>
-            <span class="mode-blurb">Just you and the clock. Same rules, no rival — chase your own best score.</span>
-          </button>
-          <button class="chip mode-chip" data-mode="pvp" style="--tint:#ff4d9d">
-            <span class="mode-name">PvP Duel</span>
-            <span class="mode-blurb">Same word, same start. Fewer guesses wins — you only see your own board.</span>
-          </button>
-          <button class="chip mode-chip" data-mode="coop" style="--tint:#7be495">
-            <span class="mode-name">Co-op</span>
-            <span class="mode-blurb">One shared board, one shared guess pool. Everyone sees every guess.</span>
-          </button>
-        </div>
+     Lighting is baked: each surface carries gradients matching where the
+     lamp (warm, left) and the monitor (cool, centre) actually throw light,
+     plus contact shadows where objects meet the desk.
+     ─────────────────────────────────────────────────────────────────── -->
+<div class="room" id="room-scene">
+  <div class="room-stage">
 
-        <p class="label">Rounds</p>
-        <div class="chips" id="rounds-chips" role="group" aria-label="Number of rounds">
-          <button class="chip" data-rounds="4">4</button>
-          <button class="chip is-on" data-rounds="6">6</button>
-          <button class="chip" data-rounds="8">8</button>
-          <button class="chip" data-rounds="12">12</button>
-        </div>
+    <!-- ── Shell ────────────────────────────────────────────────────── -->
+    <div class="surface floor" aria-hidden="true">
+      <i class="rug"></i>
+      <i class="floor-light floor-light-lamp"></i>
+      <i class="floor-light floor-light-screen"></i>
+    </div>
+    <div class="surface ceiling" aria-hidden="true"></div>
+    <div class="surface wall wall-back" aria-hidden="true">
+      <i class="wall-wash"></i>
 
-        <button class="btn btn-primary btn-lg" id="btn-create">Play solo</button>
-        <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
+      <div class="prop window">
+        <i class="window-sky"></i>
+        <i class="window-bar window-bar-v"></i>
+        <i class="window-bar window-bar-h"></i>
+        <i class="window-sill"></i>
       </div>
 
-      <details class="how">
-        <summary>How it works</summary>
-        <ol>
-          <li>Every round picks a secret word — 4 or 5 letters, so don't assume it's always five.</li>
-          <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
-          <li>Type guesses on your own physical keyboard — there's no on-screen keyboard to tap, only a monitor to watch. Each letter pops in as you type it. Tiles flip to show hit (right spot), present (wrong spot) or miss, and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out in the legend below the board, so you never waste a guess retyping it.</li>
-          <li>Every round has a 5-minute clock, ticking audibly in the last 10 seconds. Run out, and the round ends there — revealed, unsolved, for whoever hadn't gotten it yet.</li>
-          <li><b>Round-start events:</b> about 2 rounds in 3 draw one, announced full-screen for the whole 5-second countdown so nobody misses it — 💰 double points, ⚡ a 90-second blitz, 🙈 blackout (the keyboard stops greying out known letters), and a rare (1 in 20) 🎰 <b>Jackpot</b>: extra guess AND double points, with confetti, a screen shake and a slot-machine fanfare.</li>
-          <li><b>Mid-round events:</b> about half of all rounds also spring something on you partway through, out in the room around your monitor rather than on it — 🐈 a cat wanders in (click within 4 seconds for 20 bonus seconds on the clock), or 📱 the phone rings on the desk (answer within 4 seconds for one extra guess). Either way, missing it costs nothing. In Co-op only, a 🔀 <b>Letter Swap</b> can also strike: two guesses (never a winning one) suddenly have their tiles mixed up.</li>
-          <li><b>Solo:</b> no lobby, no code — just you against the word, same guess budget as a duel. Good for warming up or chasing a personal best.</li>
-          <li><b>PvP Duel:</b> you and a rival race the same word at the same time. You only ever see your own board — the "ghost" bar shows how many guesses your rival has burned, nothing more. Whoever solves it first wins the round, however many guesses it took.</li>
-          <li><b>Co-op:</b> the whole room shares one board and one guess budget (word length + 3, no bigger a team just because you invited more people). Anyone can drop the next guess — coordinate or waste attempts.</li>
-          <li>Points build across the whole match. After the last round, whoever — or whichever team — has the most wins.</li>
-        </ol>
-      </details>
-    </div>
-  </section>
-
-  <!-- ── Code entry: tap the pad or just type — both do the same thing ─── -->
-  <section class="screen" id="screen-code">
-    <div class="stack">
-      <h2 class="heading">Room code</h2>
-      <div class="code-display" id="code-display" aria-live="polite"></div>
-      <div class="keypad" id="keypad"></div>
-      <div class="row">
-        <button class="btn btn-ghost" id="btn-code-back">Back</button>
-        <button class="btn btn-ghost" id="btn-code-del">Delete</button>
-      </div>
-      <p class="note" id="code-note"></p>
-      <p class="hint">You can type the code on your keyboard too.</p>
-    </div>
-  </section>
-
-  <!-- ── Lobby ─────────────────────────────────────────────────────────── -->
-  <section class="screen" id="screen-lobby">
-    <div class="stack">
-      <p class="label">Room code · <span id="lobby-mode"></span></p>
-      <div class="code-big" id="lobby-code"></div>
-      <button class="btn btn-ghost" id="btn-copy">Copy invite link</button>
-
-      <div class="panel">
-        <p class="label">Players <span id="lobby-count" class="muted"></span><span id="lobby-count-max" class="muted"></span></p>
-        <ul class="players" id="lobby-players"></ul>
+      <div class="prop shelf">
+        <i class="shelf-plank"></i>
+        <i class="shelf-books"></i>
+        <i class="shelf-plant"></i>
       </div>
 
-      <button class="btn btn-primary btn-lg" id="btn-start" hidden>Start game</button>
-      <p class="note" id="lobby-note"></p>
+      <div class="prop frame frame-a"></div>
+      <div class="prop frame frame-b"></div>
     </div>
-  </section>
+    <div class="surface wall wall-left" aria-hidden="true"></div>
+    <div class="surface wall wall-right" aria-hidden="true"></div>
 
-  <!-- ── Game ──────────────────────────────────────────────────────────── -->
-  <!-- A little room: a desk, a chair, someone typing (seen from behind),
-       and a monitor whose screen is the actual game -- everything below
-       already existed, it just now lives inside room-scene/monitor-screen.
-       Mid-round distractions (the cat) happen out here in the room, never
-       on the screen itself. -->
-  <section class="screen screen-wide" id="screen-game">
-    <div class="room-scene" id="room-scene">
-      <div class="room-window" aria-hidden="true"><i class="room-window-glow"></i></div>
-      <div class="desk-lamp" aria-hidden="true"><i class="lamp-glow"></i><i class="lamp-shade"></i><i class="lamp-neck"></i></div>
-      <div class="room-desk" aria-hidden="true"></div>
+    <!-- ── Desk ─────────────────────────────────────────────────────── -->
+    <div class="surface desk-top" aria-hidden="true">
+      <i class="desk-grain"></i>
+      <i class="desk-pool desk-pool-lamp"></i>
+      <i class="desk-pool desk-pool-screen"></i>
+      <i class="contact contact-monitor"></i>
+      <i class="contact contact-lamp"></i>
+      <i class="contact contact-mug"></i>
+    </div>
+    <div class="surface desk-edge" aria-hidden="true"></div>
 
-      <div class="monitor">
-        <div class="monitor-bezel">
-          <i class="monitor-cam" aria-hidden="true"></i>
-          <div class="monitor-screen" id="monitor-screen">
-            <div class="event-flash" id="event-flash" aria-hidden="true"></div>
-            <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
+    <!-- Desk props. The keyboard is scenery, not a control: guesses are
+         typed on the player's own keyboard, and this is the one their
+         hands are on. -->
+    <div class="prop deskware keyboard-prop" aria-hidden="true">
+      <i class="kb-deck"></i>
+      <i class="kb-keys"></i>
+      <i class="kb-space"></i>
+    </div>
+    <div class="prop deskware mouse-prop" aria-hidden="true"><i class="mouse-body"></i></div>
+    <div class="prop deskware notebook-prop" aria-hidden="true">
+      <i class="notebook-page"></i>
+      <i class="notebook-line"></i>
+      <i class="notebook-line"></i>
+    </div>
 
-            <header class="hud">
-              <div class="hud-left">
-                <span class="pill" id="hud-round">Round 1/6</span>
-                <span class="pill pill-phase" id="hud-phase">Get ready</span>
-                <span class="pill pill-chain" id="hud-chain" hidden></span>
-                <span class="pill pill-event" id="hud-event" hidden></span>
-                <span class="pill pill-timer" id="hud-timer" hidden></span>
+    <div class="prop lamp" aria-hidden="true">
+      <i class="lamp-base"></i>
+      <i class="lamp-arm"></i>
+      <i class="lamp-shade"></i>
+      <i class="lamp-bulb"></i>
+      <i class="lamp-cone"></i>
+      <i class="lamp-halo"></i>
+    </div>
+
+    <div class="prop mug" aria-hidden="true">
+      <i class="mug-body"></i>
+      <i class="mug-handle"></i>
+      <i class="mug-brew"></i>
+      <i class="steam steam-1"></i>
+      <i class="steam steam-2"></i>
+      <i class="steam steam-3"></i>
+    </div>
+
+    <div class="prop desk-plant" aria-hidden="true">
+      <i class="pot"></i>
+      <i class="leaf leaf-1"></i>
+      <i class="leaf leaf-2"></i>
+      <i class="leaf leaf-3"></i>
+      <i class="leaf leaf-4"></i>
+    </div>
+
+    <!-- ── Monitor: the screen below is the entire application ──────── -->
+    <div class="monitor">
+      <div class="monitor-bezel">
+        <i class="monitor-cam" aria-hidden="true"></i>
+        <div class="monitor-screen" id="monitor-screen">
+
+          <div id="app">
+
+            <!-- ── Title ─────────────────────────────────────────────── -->
+            <section class="screen" id="screen-title" data-active>
+              <div class="stack">
+                <h1 class="wordmark">Word<span>forge</span></h1>
+                <p class="tagline">Same idea as that word game you know. More letters, more modes, more pressure.</p>
+
+                <div class="panel">
+                  <p class="label">Mode</p>
+                  <div class="mode-picker" id="mode-chips" role="group" aria-label="Game mode">
+                    <button class="chip mode-chip is-on" data-mode="solo" style="--tint:#e2a259">
+                      <span class="mode-name">Solo</span>
+                      <span class="mode-blurb">Just you and the clock. Same rules, no rival — chase your own best score.</span>
+                    </button>
+                    <button class="chip mode-chip" data-mode="pvp" style="--tint:#cf8465">
+                      <span class="mode-name">PvP Duel</span>
+                      <span class="mode-blurb">Same word, same start. Fewer guesses wins — you only see your own board.</span>
+                    </button>
+                    <button class="chip mode-chip" data-mode="coop" style="--tint:#94b073">
+                      <span class="mode-name">Co-op</span>
+                      <span class="mode-blurb">One shared board, one shared guess pool. Everyone sees every guess.</span>
+                    </button>
+                  </div>
+
+                  <p class="label">Rounds</p>
+                  <div class="chips" id="rounds-chips" role="group" aria-label="Number of rounds">
+                    <button class="chip" data-rounds="4">4</button>
+                    <button class="chip is-on" data-rounds="6">6</button>
+                    <button class="chip" data-rounds="8">8</button>
+                    <button class="chip" data-rounds="12">12</button>
+                  </div>
+
+                  <button class="btn btn-primary btn-lg" id="btn-create">Play solo</button>
+                  <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
+                </div>
+
+                <details class="how">
+                  <summary>How it works</summary>
+                  <ol>
+                    <li>Every round picks a secret word — 4 or 5 letters, so don't assume it's always five.</li>
+                    <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
+                    <li>Type guesses on your own keyboard — the one on the desk in front of you. There's nothing on screen to click. Each letter pops in as you type it. Tiles flip to show hit (right spot), present (wrong spot) or miss, and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out in the legend below the board, so you never waste a guess retyping it.</li>
+                    <li>Every round has a 5-minute clock, ticking audibly in the last 10 seconds. Run out, and the round ends there — revealed, unsolved, for whoever hadn't gotten it yet.</li>
+                    <li><b>Round-start events:</b> about 2 rounds in 3 draw one, announced across the whole screen for the full 5-second countdown so nobody misses it — 💰 double points, ⚡ a 90-second blitz, 🙈 blackout (the legend stops greying out known letters), and a rare (1 in 20) 🎰 <b>Jackpot</b>: extra guess AND double points, with confetti, a screen shake and a slot-machine fanfare.</li>
+                    <li><b>Mid-round events:</b> about half of all rounds also spring something on you partway through, out in the room around your monitor rather than on it — 🐈 a cat wanders in (click within 4 seconds for 20 bonus seconds on the clock), or 📱 the phone rings on the desk (answer within 4 seconds for one extra guess). Either way, missing it costs nothing. In Co-op only, a 🔀 <b>Letter Swap</b> can also strike: two guesses (never a winning one) suddenly have their tiles mixed up.</li>
+                    <li><b>Solo:</b> no lobby, no code — just you against the word, same guess budget as a duel. Good for warming up or chasing a personal best.</li>
+                    <li><b>PvP Duel:</b> you and a rival race the same word at the same time. You only ever see your own board — the "ghost" bar shows how many guesses your rival has burned, nothing more. Whoever solves it first wins the round, however many guesses it took.</li>
+                    <li><b>Co-op:</b> the whole room shares one board and one guess budget (word length + 3, no bigger a team just because you invited more people). Anyone can drop the next guess — coordinate or waste attempts.</li>
+                    <li>Points build across the whole match. After the last round, whoever — or whichever team — has the most wins.</li>
+                  </ol>
+                </details>
               </div>
-              <div class="hud-right">
-                <span class="pill" id="hud-you"></span>
-                <button class="btn-icon" id="btn-mute" type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
+            </section>
+
+            <!-- ── Code entry ────────────────────────────────────────── -->
+            <section class="screen" id="screen-code">
+              <div class="stack">
+                <h2 class="heading">Room code</h2>
+                <div class="code-display" id="code-display" aria-live="polite"></div>
+                <div class="keypad" id="keypad"></div>
+                <div class="row">
+                  <button class="btn btn-ghost" id="btn-code-back">Back</button>
+                  <button class="btn btn-ghost" id="btn-code-del">Delete</button>
+                </div>
+                <p class="note" id="code-note"></p>
+                <p class="hint">You can type the code on your keyboard too.</p>
               </div>
-            </header>
+            </section>
 
-            <div class="ghost-bar" id="ghost-bar" hidden aria-label="Opponent progress"></div>
+            <!-- ── Lobby ─────────────────────────────────────────────── -->
+            <section class="screen" id="screen-lobby">
+              <div class="stack">
+                <p class="label">Room code · <span id="lobby-mode"></span></p>
+                <div class="code-big" id="lobby-code"></div>
+                <button class="btn btn-ghost" id="btn-copy">Copy invite link</button>
 
-            <div class="board-wrap">
-              <div class="tile-grid" id="board"></div>
-            </div>
+                <div class="panel">
+                  <p class="label">Players <span id="lobby-count" class="muted"></span><span id="lobby-count-max" class="muted"></span></p>
+                  <ul class="players" id="lobby-players"></ul>
+                </div>
 
-            <div class="status-line" id="status-line"></div>
+                <button class="btn btn-primary btn-lg" id="btn-start" hidden>Start game</button>
+                <p class="note" id="lobby-note"></p>
+              </div>
+            </section>
 
-            <!-- No on-screen keys to tap -- guesses are typed on your own
-                 physical keyboard. This is just a compact reference for
-                 which letters you already know (hit/present/miss). -->
-            <div class="letter-legend" id="letter-legend"></div>
+            <!-- ── Game ──────────────────────────────────────────────── -->
+            <section class="screen screen-game" id="screen-game">
+              <div class="event-flash" id="event-flash" aria-hidden="true"></div>
+              <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
+
+              <header class="hud">
+                <div class="hud-left">
+                  <span class="pill" id="hud-round">Round 1/6</span>
+                  <span class="pill pill-phase" id="hud-phase">Get ready</span>
+                  <span class="pill pill-chain" id="hud-chain" hidden></span>
+                  <span class="pill pill-event" id="hud-event" hidden></span>
+                  <span class="pill pill-timer" id="hud-timer" hidden></span>
+                </div>
+                <div class="hud-right">
+                  <span class="pill" id="hud-you"></span>
+                  <button class="btn-icon" id="btn-mute" type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
+                </div>
+              </header>
+
+              <div class="play-area">
+                <div class="ghost-bar" id="ghost-bar" hidden aria-label="Opponent progress"></div>
+
+                <div class="board-wrap">
+                  <div class="tile-grid" id="board"></div>
+                </div>
+
+                <div class="status-line" id="status-line"></div>
+
+                <!-- Reference only -- nothing here is clickable. The keyboard
+                     you type on is the one on the desk. -->
+                <div class="letter-legend" id="letter-legend"></div>
+              </div>
+            </section>
+
+            <!-- ── Between rounds / final ────────────────────────────── -->
+            <section class="screen" id="screen-board">
+              <div class="stack">
+                <h2 class="heading" id="board-title">Standings</h2>
+                <ol class="board" id="board-list"></ol>
+                <p class="note" id="board-note"></p>
+                <button class="btn btn-primary btn-lg" id="btn-again" hidden>New room</button>
+              </div>
+            </section>
+
+            <!-- ── Errors / setup ────────────────────────────────────── -->
+            <section class="screen" id="screen-error">
+              <div class="stack">
+                <h2 class="heading" id="error-title">Something went wrong</h2>
+                <p class="note" id="error-body"></p>
+                <button class="btn btn-primary btn-lg" id="btn-error-back">Back to start</button>
+              </div>
+            </section>
+
           </div>
+
+          <!-- Round-event takeover: covers the monitor for the whole 5s
+               countdown so a modifier is impossible to miss. -->
+          <div class="event-card" id="event-card" hidden aria-live="polite">
+            <div class="event-card-inner">
+              <div class="event-card-emoji" id="event-card-emoji"></div>
+              <div class="event-card-label" id="event-card-label"></div>
+              <div class="event-card-blurb" id="event-card-blurb"></div>
+              <div class="event-card-count" id="event-card-count"></div>
+            </div>
+          </div>
+
+          <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+          <!-- Glass: scanlines and an off-axis reflection. Sells "this is a
+               lit panel", and sits above everything on the screen. -->
+          <i class="screen-glass" aria-hidden="true"></i>
         </div>
-        <div class="monitor-stand" aria-hidden="true"></div>
       </div>
-
-      <!-- The camera sits behind them: chair, shoulders and the back of a
-           head, closest to the viewer, overlapping the monitor's base --
-           never its screen. -->
-      <div class="room-character" aria-hidden="true">
-        <i class="chair-back"></i>
-        <i class="chair-arm chair-arm-left"></i>
-        <i class="chair-arm chair-arm-right"></i>
-        <i class="character-shoulders"></i>
-        <i class="character-head"><i class="character-hair"></i></i>
-      </div>
+      <div class="monitor-neck" aria-hidden="true"></div>
+      <div class="monitor-foot" aria-hidden="true"></div>
     </div>
-  </section>
 
-  <!-- Full-screen round-event card: shown for the whole 5s countdown so a
-       modifier is impossible to miss, not just a small HUD pill. -->
-  <div class="event-card" id="event-card" hidden aria-live="polite">
-    <div class="event-card-inner">
-      <div class="event-card-emoji" id="event-card-emoji"></div>
-      <div class="event-card-label" id="event-card-label"></div>
-      <div class="event-card-blurb" id="event-card-blurb"></div>
-      <div class="event-card-count" id="event-card-count"></div>
+    <!-- ── The player, closest to camera ────────────────────────────── -->
+    <div class="room-character" aria-hidden="true">
+      <i class="chair-back"></i>
+      <i class="chair-arm chair-arm-left"></i>
+      <i class="chair-arm chair-arm-right"></i>
+      <i class="character-head"><i class="character-hair"></i></i>
+      <i class="character-shoulders"></i>
     </div>
+
   </div>
 
-  <!-- ── Between rounds / final ────────────────────────────────────────── -->
-  <section class="screen" id="screen-board">
-    <div class="stack">
-      <h2 class="heading" id="board-title">Standings</h2>
-      <ol class="board" id="board-list"></ol>
-      <p class="note" id="board-note"></p>
-      <button class="btn btn-primary btn-lg" id="btn-again" hidden>New room</button>
-    </div>
-  </section>
+  <!-- Mid-round distractions (cat, phone) spawn here: a flat layer over the
+       room, never over the monitor's screen. -->
+  <div class="room-fx" id="room-fx"></div>
 
-  <!-- ── Errors / setup ────────────────────────────────────────────────── -->
-  <section class="screen" id="screen-error">
-    <div class="stack">
-      <h2 class="heading" id="error-title">Something went wrong</h2>
-      <p class="note" id="error-body"></p>
-      <button class="btn btn-primary btn-lg" id="btn-error-back">Back to start</button>
-    </div>
-  </section>
-
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="room-vignette" aria-hidden="true"></div>
 </div>
+
+<p class="small-screen-note">Wordforge is built for a desktop screen — the room needs the room. Open it on a bigger display for the full thing.</p>
 
 <script src="vendor/supabase.js"></script>
 <script type="module" src="js/main.js"></script>

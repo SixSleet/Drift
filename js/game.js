@@ -16,7 +16,7 @@ import {
   spawnCat, spawnPhone,
 } from './ui.js';
 
-const CONFETTI_COLORS = ['#ffd166', '#ff6161', '#7be495', '#4bd0ff', '#ff4d9d'];
+const CONFETTI_COLORS = ['#dfae52', '#cc6f56', '#94b073', '#e2a259', '#cf8465'];
 
 export class Game {
   constructor() {

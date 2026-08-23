@@ -11,19 +11,19 @@ export const MODES = Object.freeze({
   solo: {
     label: 'Solo',
     blurb: 'Just you and the clock. Same rules, no rival — chase your own best score.',
-    tint: '#4bd0ff',
+    tint: '#e2a259',
     maxPlayers: 1,
   },
   pvp: {
     label: 'PvP Duel',
     blurb: 'Same word, same start. Fewer guesses wins — you only see your own board.',
-    tint: '#ff4d9d',
+    tint: '#cf8465',
     maxPlayers: 2,
   },
   coop: {
     label: 'Co-op',
     blurb: 'One shared board, one shared guess pool. Everyone sees every guess.',
-    tint: '#7be495',
+    tint: '#94b073',
     maxPlayers: 10,
   },
 });
@@ -42,15 +42,15 @@ export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
 // clock, jackpot's guess budget) already happened by the time the client
 // ever sees the round row. `fx` names the per-event presentation treatment
 // in game.js/app.css: 'coins' rains money, 'siren' strobes the flash and
-// shakes the screen, 'eclipse' dims the keyboard's hint colours, and
+// shakes the screen, 'eclipse' dims the letter legend's hint colours, and
 // 'jackpot' stacks all of it. `rule` ('blackout') is read directly by
 // game.js to change how a round is actually played, not just how it looks.
 export const EVENTS = Object.freeze({
   none: null,
-  double_points: { label: 'Double Points', emoji: '💰', tint: '#ffd166', blurb: 'This round pays double.', fx: 'coins' },
-  blitz:         { label: 'Blitz',         emoji: '⚡', tint: '#4bd0ff', blurb: 'Only 90 seconds on the clock.', fx: 'siren' },
-  blackout:      { label: 'Blackout',      emoji: '🙈', tint: '#8a7bff', blurb: 'The keyboard stops showing you which letters you know.', fx: 'eclipse', rule: 'blackout' },
-  jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#ffd166', blurb: 'Extra guess AND double points!', fx: 'jackpot', rare: true },
+  double_points: { label: 'Double Points', emoji: '💰', tint: '#dfae52', blurb: 'This round pays double.', fx: 'coins' },
+  blitz:         { label: 'Blitz',         emoji: '⚡', tint: '#d98b5c', blurb: 'Only 90 seconds on the clock.', fx: 'siren' },
+  blackout:      { label: 'Blackout',      emoji: '🙈', tint: '#9c8f7a', blurb: 'The legend stops showing you which letters you know.', fx: 'eclipse', rule: 'blackout' },
+  jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#dfae52', blurb: 'Extra guess AND double points!', fx: 'jackpot', rare: true },
 });
 
 // ── Mid-round events ─────────────────────────────────────────────────────

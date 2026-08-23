@@ -8,8 +8,9 @@ start with the last letter of the previous round's word, a round can roll a
 start-of-round event that changes the stakes, and — partway through, when
 you're not expecting it — something can happen mid-round instead: a cat
 wanders into the room and is worth chasing down, or (Co-op) two guesses
-suddenly swap tiles. The whole thing is staged as a little room, with the
-actual puzzle living on a monitor screen inside it.
+suddenly swap tiles. The whole thing is staged inside a room built in real
+CSS 3D — a desk, a warm lamp, someone in a chair with their back to you —
+and the puzzle runs on the monitor they're sitting at.
 
 Three modes:
 
@@ -28,6 +29,10 @@ No login, no chat needed to join a room — the code and keypad can be tapped.
 Guesses, though, are physical-keyboard only: there's no on-screen keyboard to
 tap, since the whole point of the room is that you're watching someone type
 at a monitor, not poking a touchscreen.
+
+Built for a desktop screen. Below about 1080px wide the 3D room is dropped
+and the game falls back to a plain (still warm) flat layout, because at that
+size the monitor would end up smaller than the text on it.
 
 **Play: <https://sixsleet.github.io/Drift/>**
 
@@ -127,25 +132,52 @@ flaky connection can't double-apply an event or hand out two bonuses.
 
 ## The room
 
-The game screen is staged as a small room instead of bare UI, shot from
-behind the player's chair like a camera looking over their shoulder: a
-warm desk lamp, a window glowing cool blue behind the monitor's own light,
-someone typing (seen from behind), and a monitor — tilted slightly toward
-camera — whose screen *is* the actual game. The HUD, tile grid, status
-line and letter legend all render strictly inside `.monitor-screen`;
-nothing game-related is allowed to sit loose in the room around it. There's
-no on-screen keyboard anywhere in the scene — every guess comes from the
-player's own physical keyboard, same as someone actually typing at a desk.
-It's all hand-drawn CSS (gradients, shapes, a couple of emoji, a 3D
-`rotateY` tilt on the monitor bezel) — no image assets, no build step,
-same as everything else here.
+The game isn't a page with a room drawn behind it — it's a room, and the
+page is what's on the monitor inside it.
 
-The character's head and shoulders idle-bob while a round is actually live,
-so the room reads as occupied rather than a static diorama.
+The scene is real CSS 3D: one `perspective` on the container, one
+`preserve-3d` stage, and floor, ceiling, three walls, a desk and the monitor
+all placed with `translate3d`/`rotate` in shared 3D units. The walls
+converge because they're genuinely angled away from the camera, not because
+a gradient fakes it. The camera sits behind the chair, so what you see is
+that one point of view: the back of someone's head, their desk, and the
+screen they're working on.
 
-The cat and phone from the mid-round events above always appear in the room
-itself, never over the monitor screen — a distraction happening around you
-while you play, not a change to what's on the puzzle in front of you.
+Every screen in the app — title, lobby, code entry, the board, standings,
+the full-screen event takeover — renders on that monitor's panel, a fixed
+1100x740 surface standing at z = -900. Because it's ordinary DOM inside the
+3D scene rather than a texture, the tiles and text stay crisp, selectable
+and accessible. The trade is that perspective scales the panel to about
+67%, so type inside it is authored proportionally larger, and nothing in
+there uses `vw`/`vh` — the panel is a fixed box, not the viewport.
+
+Two things worth knowing before touching this:
+
+- **`.room-stage` sets `pointer-events: none` and `.monitor-screen` sets it
+  back to `auto`.** The stage's own box fills the viewport at z = 0, which
+  puts it nearer the camera than everything it contains — so without that
+  pair it silently swallows every click aimed at the monitor, and the UI
+  looks perfect while being completely dead to the mouse.
+  `wf-room-scene-test.mjs` hit-tests real controls to catch exactly this.
+- **Tiles size themselves from the row count.** The panel's height is fixed,
+  so `--rows` (set by `renderGrid`) drives a `min(60px, …)` calc. A Co-op
+  5-letter round is 8 rows and answering the phone buys a 9th; without this
+  the board runs off the bottom of the screen.
+
+Lighting is baked per surface rather than computed: one warm source (the
+desk lamp, on the left) and one cool one (the monitor itself), with matching
+pools on the desk and floor, contact shadows where objects meet the wood,
+and a cool rim on the back of the player's head where the screen's light
+wraps around them. That warm/cool disagreement is most of what reads as
+"cozy" rather than "dark UI".
+
+Mid-round distractions (the cat, the phone) live in `#room-fx`, a flat layer
+over the room rather than inside the 3D stage — a sprite placed in the stage
+would inherit the perspective scaling of whatever plane it sat on. They show
+up out in the room, never over the screen.
+
+It's all hand-drawn CSS: gradients, clip-paths and a couple of emoji. No
+image assets, no build step, same as everything else here.
 
 ## Keeping the secret secret
 
@@ -274,9 +306,11 @@ Supabase project.
 ## Layout
 
 ```
-index.html          screens; guesses go in on the player's physical keyboard,
-                    no on-screen keyboard to tap
-css/app.css
+index.html          the 3D room, with every app screen nested inside the
+                    monitor's panel; guesses go in on the player's own
+                    physical keyboard, nothing on screen to tap
+css/app.css          two coordinate systems: the 3D room, then the flat
+                    panel standing in it (see The room)
 js/config.js         connection details and every tunable
 js/net.js            token identity, clock sync, RPCs, realtime channel
 js/words.js           client-side "is this a real word" check (UX only)

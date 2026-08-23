@@ -179,6 +179,10 @@ export function renderGrid(opts) {
   const board = $('#board');
   board.innerHTML = '';
   board.style.setProperty('--word-length', wordLength);
+  // The panel is a fixed height, so the tiles have to size themselves to the
+  // row count -- a Co-op 5-letter round is 8 rows, and answering the phone
+  // buys a 9th. Without this the board grows past the bottom of the screen.
+  board.style.setProperty('--rows', maxGuesses);
 
   for (let i = 0; i < maxGuesses; i++) {
     const row = document.createElement('div');
@@ -224,9 +228,15 @@ export function renderGrid(opts) {
  * lingers for `windowMs`. Clicking it before it leaves calls `onCatch` and
  * plays a caught exit; letting it time out plays a fled exit instead.
  * Self-removing either way -- callers never have to clean this up.
+ *
+ * These live in #room-fx, a flat layer sitting above the 3D room rather
+ * than inside it: a sprite placed in the preserve-3d stage would need its
+ * own depth to look right, and would inherit the perspective scaling of
+ * whatever plane it sat on. Flat and on top is both simpler and correct
+ * for something meant to grab your eye.
  */
 function spawnDistraction({ className, emoji, ariaLabel, windowMs, onCatch }) {
-  const scene = $('#room-scene');
+  const scene = $('#room-fx');
   if (!scene) return;
   const el = document.createElement('button');
   el.type = 'button';
