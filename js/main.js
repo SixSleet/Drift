@@ -1,6 +1,7 @@
 // Bootstrap: wire the buttons to the game, and nothing else.
 
 import { Game } from './game.js';
+import { startScreenFit } from './screen-fit.js';
 import { DEFAULT_ROUNDS, DEFAULT_WORD_LENGTH, WORD_LENGTH_CHOICES } from './config.js';
 import { sfx } from './sfx.js';
 import {
@@ -148,6 +149,8 @@ $('#btn-again').addEventListener('click', () => { location.href = location.pathn
 $('#btn-error-back').addEventListener('click', () => { location.href = location.pathname; });
 
 // ── Go ─────────────────────────────────────────────────────────────────
+
+startScreenFit();
 
 (async () => {
   try {

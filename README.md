@@ -9,8 +9,10 @@ the stakes — and a *second* one can strike partway through, when you're not
 expecting it.
 
 Around all of that the room gets on with its own life: a cat walks across the
-desk in front of your screen, a moth finds the lamp, the phone buzzes, the
-light stutters, rain starts at the window. The whole thing is staged inside a
+desk in front of your screen, a moth settles on the board and blurs a letter
+you'd already earned, the phone buzzes, the light stutters, and a
+thunderstorm rolls in — every strike knocks the lamp out and flashes the
+whole room. The whole thing is staged inside a
 room built in real CSS 3D — a desk, a warm lamp, someone in a chair with their
 back to you — and the puzzle runs on the monitor they're sitting at.
 
@@ -148,15 +150,15 @@ distractions at different moments, and neither can see the other's.
 | Event | What it does |
 | --- | --- |
 | 🐈 Cat | Walks the desk in front of the screen — a real SVG model with four animated legs, a swinging tail and a proper meow. It genuinely gets between you and the board, which is the whole cost. Click to shoo it. |
-| 🦋 Moth | Blunders around the lamp on a wandering path. Click to wave it off. |
+| 🦋 Moth | Comes in past the lamp and settles on the board, sitting over one already-revealed letter and blurring it out. The only room event that actually costs you something — swat it to get the letter back. |
 | 📱 Phone | Buzzes face-up on the desk, screen lit. Click to silence it. |
 | 💡 Lamp flicker | The desk lamp stutters and the warm half of the room drops out with it. |
-| 🌧 Rain | Arrives at the window, streaks the glass and cools the room for a while. |
+| ⛈ Thunderstorm | Rain streaks the window, and every few seconds lightning strikes: the room flashes white, the lamp cuts out with it, and for a beat the monitor is the only light left. Thunder trails the flash the way it does outdoors. |
 
 There is no bonus attached to any of them, and that is deliberate: a
 client-rolled *bonus* would be trivially cheatable, whereas a client-rolled
 *distraction* has nothing worth cheating at. The cost is the interruption
-itself; clicking one just clears it early. All of it lives in
+itself; clicking one clears it early. All of it lives in
 `js/room-events.js`, and the models stand in the same 3D stage as the desk, so
 they sit in real perspective rather than floating flat over the scene.
 
@@ -189,10 +191,16 @@ Two things worth knowing before touching this:
   pair it silently swallows every click aimed at the monitor, and the UI
   looks perfect while being completely dead to the mouse.
   `wf-room-scene-test.mjs` hit-tests real controls to catch exactly this.
-- **Tiles size themselves from the row count.** The panel's height is fixed,
-  so `--rows` (set by `renderGrid`) drives a `min(60px, …)` calc. A Co-op
-  5-letter round is 8 rows and answering the phone buys a 9th; without this
-  the board runs off the bottom of the screen.
+- **Tiles size themselves from the row count.** `--rows` (set by
+  `renderGrid`) and `--panel-h` (published by `screen-fit.js`) drive a
+  `min(46px, …)` calc, so a 10-row 7-letter Co-op board shrinks to fit
+  rather than running off the bottom.
+- **`renderGrid` splits structural rebuilds from typing.** A rebuild throws
+  away every tile and so restarts every animation on the board. Folding the
+  in-progress word into the rebuild signature therefore made the entire
+  board re-play its flip on *every keystroke*. Structure changes rebuild;
+  typing updates the active row in place, and leaves tiles whose letter
+  hasn't changed completely alone.
 
 Lighting is baked per surface rather than computed: one warm source (the
 desk lamp, on the left) and one cool one (the monitor itself), with matching

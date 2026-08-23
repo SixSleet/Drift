@@ -81,13 +81,35 @@ html, body {
   perspective: 2400px;
   perspective-origin: 50% 41%;
   background: #0b0906;
+  z-index: 1;
+  pointer-events: none;   /* the stage re-enables it where it needs to */
 }
+
+/* The app, flat and unscaled, pinned to the monitor screen's rectangle by
+   js/screen-fit.js. Sits *under* the room so the bezel and the cat draw on
+   top, and shows through the transparent screen. Text here is rasterised at
+   1:1 -- that is the whole point of the arrangement. */
+.app-overlay {
+  position: fixed;
+  z-index: 2;                /* above the room, below .room-front */
+  overflow: hidden;
+  background: var(--bg);
+  box-shadow: inset 0 0 90px rgba(169, 196, 214, .06);
+  font-size: 15px;
+  /* Snap glyphs to the pixel grid rather than letting them land on halves. */
+  text-rendering: optimizeLegibility;
+}
+
+/* Stacked in front of the app overlay, sharing the back room's perspective
+   so rig coordinates mean the same thing in both. Only carries #room-3d-fx. */
+.room-front { z-index: 3; background: transparent; }
 
 .room-stage {
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
   transform: scale(var(--zoom, 1));
+  z-index: 2;   /* above .app-overlay, so bezel + glass + cat draw over it */
   /* The stage's own box sits at z = 0 and fills the viewport, so it is
      nearer the camera than everything it contains -- which means it eats
      every click aimed at the monitor behind it. Nothing about the stage is
@@ -501,8 +523,8 @@ html, body {
 }
 .monitor-bezel {
   position: absolute; left: 50%; top: 50%;
-  width: 1160px; height: 790px;
-  transform: translate(-50%, -50%) translateY(-80px);
+  width: 1300px; height: 880px;
+  transform: translate(-50%, -50%) translateY(-125px);
   border-radius: 16px;
   padding: 20px 30px 30px;
   background: linear-gradient(168deg, #37312b 0%, #201c18 62%, #15120f 100%);
@@ -526,7 +548,7 @@ html, body {
 }
 .monitor-foot {
   position: absolute; left: 50%; top: 50%;
-  width: 480px; height: 150px;
+  width: 520px; height: 160px;
   transform: translate(-50%, -50%) translateY(398px) rotateX(90deg);
   border-radius: 50%;
   background: linear-gradient(180deg, #3a332c, #16130f);
@@ -537,16 +559,18 @@ html, body {
    1180x716 units, never against the viewport. */
 .monitor-screen {
   position: relative;
-  width: 1100px;
-  height: 740px;
+  width: 1240px;
+  height: 830px;
   overflow: hidden;
   border-radius: 5px;
-  background: var(--bg);
+  /* Transparent on purpose: the app renders flat *behind* the 3D stage and
+     shows through this hole, so it never gets scaled down and blurred. See
+     js/screen-fit.js. */
+  background: transparent;
   font-size: 21px;
-  pointer-events: auto;   /* see .room-stage */
+  pointer-events: none;
   box-shadow:
     inset 0 0 0 1px #0a0806,
-    inset 0 0 90px rgba(169, 196, 214, .06),
     0 0 70px rgba(169, 196, 214, .18);
 }
 
@@ -738,47 +762,54 @@ html, body {
 .cat-whisker { stroke: rgba(232, 220, 198, .5); stroke-width: 2.5; stroke-linecap: round; fill: none; }
 
 /* ── The moth ──────────────────────────────────────────────────────────
-   Up by the lamp, on a wandering path rather than a straight line. */
+   Flat, in viewport coordinates, above everything -- it has to land on a
+   specific tile, and stage coordinates can't express "that tile". */
+
+.screen-fx {
+  position: fixed; inset: 0; z-index: 4;
+  pointer-events: none;
+}
+.screen-fx > * { pointer-events: auto; }
 
 .moth-rig {
-  position: absolute; left: 50%; top: 50%;
-  width: 54px; height: 40px;
-  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  position: absolute; left: 0; top: 0;
+  width: 42px; height: 34px;
+  margin: -17px 0 0 -21px;      /* centre on the coordinate, not corner-align */
+  appearance: none; border: 0; background: none; padding: 0;
   cursor: pointer;
-  transform-style: preserve-3d;
-  animation: moth-wander 9s ease-in-out forwards;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .5));
+  animation: moth-arrive 1.5s cubic-bezier(.35, .1, .35, 1) forwards;
 }
-@keyframes moth-wander {
-  0%   { transform: translate(-50%, -50%) translateZ(-1150px) translate(-820px, -40px); }
-  18%  { transform: translate(-50%, -50%) translateZ(-1150px) translate(-560px, -230px); }
-  34%  { transform: translate(-50%, -50%) translateZ(-1000px) translate(-680px, 60px); }
-  52%  { transform: translate(-50%, -50%) translateZ(-980px)  translate(-380px, -180px); }
-  70%  { transform: translate(-50%, -50%) translateZ(-1120px) translate(-620px, -300px); }
-  86%  { transform: translate(-50%, -50%) translateZ(-1150px) translate(-760px, -120px); }
-  100% { transform: translate(-50%, -50%) translateZ(-1200px) translate(-980px, -320px); }
+/* In past the lamp, overshooting once, then settling on the tile. */
+@keyframes moth-arrive {
+  0%   { transform: translate(var(--from-x), var(--from-y)) scale(.7); opacity: 0; }
+  12%  { opacity: 1; }
+  55%  { transform: translate(var(--mid-x), var(--mid-y)) scale(1.05); }
+  78%  { transform: translate(calc(var(--to-x) + 22px), calc(var(--to-y) - 16px)) scale(1); }
+  100% { transform: translate(var(--to-x), var(--to-y)) scale(1); opacity: 1; }
 }
-.moth-rig.is-gone { animation: moth-off .4s ease-in forwards; }
+.moth-rig.is-gone { animation: moth-off .45s ease-in forwards; }
 @keyframes moth-off {
-  to { opacity: 0; transform: translate(-50%, -50%) translateZ(-1300px) translate(-1100px, -420px); }
+  0%   { transform: translate(var(--to-x), var(--to-y)) scale(1); opacity: 1; }
+  100% { transform: translate(calc(var(--to-x) - 70px), calc(var(--to-y) - 120px)) scale(.6); opacity: 0; }
 }
-.moth-rig > i { position: absolute; }
-.moth-body {
-  left: 50%; top: 30%; width: 11px; height: 24px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: linear-gradient(180deg, #b9a488, #5c4c39);
-}
-.moth-wing {
-  top: 18%; width: 26px; height: 30px;
-  border-radius: 60% 40% 50% 50%;
-  background: linear-gradient(150deg, rgba(226, 210, 180, .92), rgba(150, 130, 100, .8));
-  box-shadow: 0 0 12px rgba(255, 216, 150, .4);
-}
-.moth-wing-l { left: -2px; transform-origin: 100% 50%; animation: moth-flap .11s ease-in-out infinite; }
-.moth-wing-r { right: -2px; transform-origin: 0% 50%; animation: moth-flap .11s ease-in-out infinite reverse; }
+.moth-rig svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.moth-wing { transform-box: fill-box; }
+.moth-wing path { fill: rgba(226, 212, 186, .93); }
+.moth-wing-l { transform-origin: 100% 50%; animation: moth-flap .1s ease-in-out infinite; }
+.moth-wing-r { transform-origin: 0% 50%; animation: moth-flap .1s ease-in-out infinite reverse; }
 @keyframes moth-flap {
-  0%, 100% { transform: rotateY(8deg); }
-  50%      { transform: rotateY(66deg); }
+  0%, 100% { transform: rotateY(10deg); }
+  50%      { transform: rotateY(62deg); }
+}
+.moth-body { fill: #5f4e3a; }
+.moth-antenna { stroke: #5f4e3a; stroke-width: 2; stroke-linecap: round; fill: none; }
+
+/* The letter it settles on. Blur plus a wash, so the tile is clearly still
+   there -- you just can't read it until the moth moves. */
+.tile.is-smudged {
+  filter: blur(5px) saturate(.65);
+  transition: filter .25s ease;
 }
 
 /* ── The phone ─────────────────────────────────────────────────────────
@@ -838,14 +869,14 @@ html, body {
   5%, 12%, 22%, 38%, 55%, 74%           { opacity: .12; }
 }
 
-/* Rain -- the window goes colder and streaked, and the whole room cools a
+/* Storm -- the window goes colder and streaked, and the whole room cools a
    shade with it, since the window is a real light source in this scene. */
-.room.is-raining .window-sky {
+.room.is-storm .window-sky {
   background:
     radial-gradient(180px 130px at 50% 106%, rgba(255, 183, 101, .12), transparent 72%),
     linear-gradient(180deg, #101a29 0%, #14202f 55%, #182430 100%);
 }
-.room.is-raining .window-sky::after {
+.room.is-storm .window-sky::after {
   content: ''; position: absolute; inset: 0;
   background: repeating-linear-gradient(74deg,
     rgba(190, 214, 236, .22) 0 1px, transparent 1px 9px);
@@ -855,8 +886,44 @@ html, body {
   from { background-position: 0 0; }
   to   { background-position: -26px 90px; }
 }
-.room.is-raining .window { box-shadow: 0 0 90px rgba(120, 160, 200, .2), inset 0 0 40px rgba(0, 0, 0, .7); }
-.room.is-raining .wall-wash { filter: brightness(.9) saturate(.9); }
+.room.is-storm .window { box-shadow: 0 0 90px rgba(120, 160, 200, .2), inset 0 0 40px rgba(0, 0, 0, .7); }
+.room.is-storm .wall-wash { filter: brightness(.9) saturate(.9); }
+
+/* A strike. The window goes white for a beat, the flash washes the room, and
+   the lamp cuts out with it -- so for that beat the monitor is the only light
+   left. Sits below the app overlay, so the screen never flashes. */
+.storm-flash {
+  position: absolute; inset: 0; z-index: 7;
+  pointer-events: none; opacity: 0;
+  background:
+    radial-gradient(120% 90% at 12% 22%, rgba(214, 230, 255, .92), transparent 62%),
+    linear-gradient(180deg, rgba(190, 212, 245, .5), transparent 70%);
+}
+.room.is-lightning .storm-flash { animation: lightning .7s steps(1, end); }
+@keyframes lightning {
+  0%, 100%     { opacity: 0; }
+  2%           { opacity: .95; }
+  7%           { opacity: .12; }
+  11%          { opacity: .8; }
+  17%          { opacity: 0; }
+  24%          { opacity: .55; }
+  31%          { opacity: 0; }
+}
+.room.is-lightning .window-sky { filter: brightness(3.4) saturate(.4); }
+
+/* The lamp (and the warm half of the room) drops out during a strike. */
+.room.is-lightning .lamp-shade,
+.room.is-lightning .lamp-bulb,
+.room.is-lightning .lamp-cone,
+.room.is-lightning .lamp-halo,
+.room.is-lightning .desk-pool-lamp,
+.room.is-lightning .floor-light-lamp {
+  animation: lamp-cut .7s steps(1, end);
+}
+@keyframes lamp-cut {
+  0%, 100%   { opacity: 1; }
+  2%, 31%    { opacity: .06; }
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    THE APPLICATION — everything below renders on the monitor's panel.
@@ -865,6 +932,7 @@ html, body {
 
 #app {
   position: absolute; inset: 0;
+  pointer-events: auto;
   display: flex; flex-direction: column;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -874,7 +942,7 @@ html, body {
 #app::-webkit-scrollbar-thumb { background: var(--line-hi); border-radius: 5px; }
 #app::-webkit-scrollbar-track { background: transparent; }
 
-.screen { display: none; flex: 1; padding: 40px; }
+.screen { display: none; flex: 1; padding: 20px 22px; }
 .screen[data-active] { display: flex; flex-direction: column; align-items: center; }
 .screen-game[data-active] { padding: 0; position: relative; }
 
@@ -883,40 +951,40 @@ html, body {
    reach, so the first controls become unclickable. Auto margins centre the
    same way but yield correctly once the content overflows. */
 .stack {
-  width: 100%; max-width: 560px; margin: auto;
-  display: flex; flex-direction: column; gap: 18px; align-items: stretch;
+  width: 100%; max-width: 440px; margin: auto;
+  display: flex; flex-direction: column; gap: 12px; align-items: stretch;
 }
 
 .wordmark {
   margin: 0;
-  font-size: 74px; font-weight: 800; letter-spacing: -.03em; line-height: .95;
+  font-size: 40px; font-weight: 800; letter-spacing: -.03em; line-height: .95;
   text-align: center;
   background: linear-gradient(96deg, var(--accent), var(--accent-2) 78%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .wordmark span { font-size: .62em; font-weight: 700; letter-spacing: .01em; }
 
-.tagline { margin: -4px 0 6px; text-align: center; color: var(--ink-dim); font-size: 18px; }
-.heading { margin: 0; font-size: 32px; font-weight: 750; letter-spacing: -.015em; text-align: center; }
+.tagline { margin: -6px 0 0; text-align: center; color: var(--ink-dim); font-size: 13px; line-height: 1.35; }
+.heading { margin: 0; font-size: 26px; font-weight: 750; letter-spacing: -.015em; text-align: center; }
 
 .panel {
   background: linear-gradient(180deg, var(--panel), var(--bg-2));
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 22px;
-  display: flex; flex-direction: column; gap: 14px;
+  padding: 15px;
+  display: flex; flex-direction: column; gap: 10px;
   box-shadow: 0 2px 0 rgba(255, 225, 180, .04) inset;
 }
 
 .label {
-  margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .14em;
+  margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-faint);
 }
 .muted { color: var(--ink-faint); font-weight: 600; letter-spacing: 0; text-transform: none; }
-.note { margin: 0; text-align: center; color: var(--ink-dim); font-size: 17px; line-height: 1.5; min-height: 1.2em; }
+.note { margin: 0; text-align: center; color: var(--ink-dim); font-size: 14px; line-height: 1.5; min-height: 1.2em; }
 .note b { color: var(--ink); }
-.hint { margin: -4px 0 0; text-align: center; color: var(--ink-faint); font-size: 15px; }
-.hint-inline { margin: -8px 0 0; text-align: left; font-size: 14px; min-height: 1.2em; }
+.hint { margin: -4px 0 0; text-align: center; color: var(--ink-faint); font-size: 12.5px; }
+.hint-inline { margin: -6px 0 0; text-align: left; font-size: 11.5px; min-height: 1.1em; }
 
 /* ── Buttons ───────────────────────────────────────────────────────── */
 
@@ -925,33 +993,33 @@ html, body {
   border: 1px solid var(--line);
   background: var(--panel-2);
   color: var(--ink);
-  font: inherit; font-weight: 650; font-size: 18px;
-  padding: 15px 22px; border-radius: 11px; cursor: pointer;
+  font: inherit; font-weight: 650; font-size: 15px;
+  padding: 13px 18px; border-radius: 11px; cursor: pointer;
   transition: transform .08s ease, filter .15s ease, opacity .15s ease;
 }
 .btn:hover { filter: brightness(1.16); }
 .btn:active { transform: translateY(1px) scale(.99); }
 .btn:disabled { opacity: .38; cursor: not-allowed; filter: none; }
-.btn-lg { padding: 18px 24px; font-size: 20px; }
+.btn-lg { padding: 13px 20px; font-size: 16px; }
 .btn-primary {
   border-color: transparent;
   background: linear-gradient(96deg, var(--accent), #d08d55 62%, var(--accent-2));
   color: #1b1108; font-weight: 800;
 }
 .btn-ghost { background: transparent; }
-.row { display: flex; gap: 12px; }
+.row { display: flex; gap: 10px; }
 .row .btn { flex: 1; }
 
 /* ── Chips ─────────────────────────────────────────────────────────── */
 
-.chips { display: flex; gap: 10px; flex-wrap: wrap; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip {
   appearance: none;
   border: 1px solid var(--line);
   background: var(--panel-2);
   color: var(--ink-dim);
-  font: inherit; font-weight: 700; font-size: 18px;
-  min-width: 62px; padding: 13px 17px; border-radius: 10px; cursor: pointer;
+  font: inherit; font-weight: 700; font-size: 14px;
+  min-width: 46px; padding: 9px 13px; border-radius: 10px; cursor: pointer;
   transition: all .13s ease;
 }
 .chip:hover:not(:disabled) { border-color: var(--ink-faint); color: var(--ink); }
@@ -963,46 +1031,46 @@ html, body {
 }
 .chip:disabled { opacity: .35; cursor: not-allowed; }
 
-.mode-picker { display: flex; flex-direction: column; gap: 10px; }
+.mode-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
 .mode-chip {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
-  min-width: 0; width: 100%; text-align: left; padding: 15px 19px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-width: 0; width: 100%; text-align: left; padding: 9px 11px;
 }
 .mode-chip.is-on {
   border-color: var(--tint, var(--accent));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--tint, var(--accent)) 45%, transparent),
               0 0 20px -8px var(--tint, var(--accent));
 }
-.mode-name { font-size: 19px; font-weight: 800; color: var(--tint, var(--ink)); }
-.mode-blurb { font-size: 15px; font-weight: 500; color: var(--ink-dim); line-height: 1.4; }
+.mode-name { font-size: 15px; font-weight: 800; color: var(--tint, var(--ink)); }
+.mode-blurb { font-size: 11px; font-weight: 500; color: var(--ink-dim); line-height: 1.28; }
 
 /* ── How it works ──────────────────────────────────────────────────── */
 
 .how { border: 1px solid var(--line); border-radius: var(--radius); background: rgba(34, 29, 23, .55); }
 .how summary {
-  cursor: pointer; padding: 15px 19px; font-weight: 650; font-size: 17px;
+  cursor: pointer; padding: 11px 15px; font-weight: 650; font-size: 13.5px;
   color: var(--ink-dim); list-style: none;
 }
 .how summary::-webkit-details-marker { display: none; }
 .how summary::after { content: " ▾"; }
 .how[open] summary::after { content: " ▴"; }
-.how ol { margin: 0; padding: 0 24px 18px 40px; color: var(--ink-dim); font-size: 16px; line-height: 1.65; }
+.how ol { margin: 0; padding: 0 20px 16px 34px; color: var(--ink-dim); font-size: 13.5px; line-height: 1.65; }
 .how b { color: var(--ink); }
 
 /* ── Code entry ────────────────────────────────────────────────────── */
 
 .code-display {
   font-family: var(--mono);
-  font-size: 60px; font-weight: 700; letter-spacing: .22em;
+  font-size: 46px; font-weight: 700; letter-spacing: .22em;
   text-align: center; padding: 16px 0 16px .22em; min-height: 1.5em;
   border-bottom: 2px solid var(--line);
   color: var(--accent);
 }
-.keypad { display: flex; flex-direction: column; gap: 8px; }
-.key-row { display: flex; gap: 8px; justify-content: center; }
+.keypad { display: flex; flex-direction: column; gap: 6px; }
+.key-row { display: flex; gap: 6px; justify-content: center; }
 .key-row:nth-child(2) { padding-inline: 18px; }
 .key-row:nth-child(3) { padding-inline: 38px; }
-.keypad .chip { flex: 1; min-width: 0; padding: 14px 0; font-family: var(--mono); font-size: 18px; }
+.keypad .chip { flex: 1; min-width: 0; padding: 11px 0; font-family: var(--mono); font-size: 14px; }
 .keypad .chip.is-pressed {
   background: linear-gradient(180deg, #3d3327, #2b241b);
   border-color: var(--accent);
@@ -1011,7 +1079,7 @@ html, body {
 
 .code-big {
   font-family: var(--mono);
-  font-size: 88px; font-weight: 800; letter-spacing: .18em;
+  font-size: 66px; font-weight: 800; letter-spacing: .18em;
   text-align: center; padding-left: .18em;
   background: linear-gradient(96deg, var(--accent), var(--accent-2));
   -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -1022,43 +1090,43 @@ html, body {
 .players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .players li {
   display: flex; align-items: center; gap: 12px;
-  padding: 11px 15px; border-radius: 10px; background: var(--panel-2);
-  font-size: 18px; font-weight: 600;
+  padding: 9px 12px; border-radius: 10px; background: var(--panel-2);
+  font-size: 15px; font-weight: 600;
 }
-.players i { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; }
-.players .tag { margin-left: auto; font-size: 13px; font-weight: 700; letter-spacing: .1em; color: var(--gold); }
+.players i { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+.players .tag { margin-left: auto; font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--gold); }
 
 .board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; counter-reset: rank; }
 .board li {
   display: flex; align-items: center; gap: 13px;
-  padding: 14px 17px; border-radius: 11px;
+  padding: 12px 14px; border-radius: 11px;
   background: var(--panel-2); border: 1px solid transparent;
-  font-size: 18px; font-weight: 650;
+  font-size: 15px; font-weight: 650;
 }
 .board li.is-me { border-color: var(--accent); background: linear-gradient(180deg, #352c21, #241e17); }
 .board li::before {
   counter-increment: rank; content: counter(rank);
-  font-family: var(--mono); font-size: 16px; color: var(--ink-faint); min-width: 1.4em;
+  font-family: var(--mono); font-size: 13px; color: var(--ink-faint); min-width: 1.4em;
 }
-.board i { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; }
-.board .pts { margin-left: auto; font-family: var(--mono); font-size: 21px; font-weight: 700; color: var(--accent); }
-.board .delta { font-family: var(--mono); font-size: 16px; color: var(--sage); }
+.board i { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+.board .pts { margin-left: auto; font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--accent); }
+.board .delta { font-family: var(--mono); font-size: 13px; color: var(--sage); }
 
 /* ── HUD ───────────────────────────────────────────────────────────── */
 
 .hud {
   width: 100%; flex: 0 0 auto;
-  padding: 13px 24px;
+  padding: 9px 16px;
   display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
   background: linear-gradient(180deg, rgba(42, 36, 29, .85), rgba(34, 29, 23, .4));
   border-bottom: 1px solid rgba(226, 162, 89, .16);
 }
-.hud-left, .hud-right { display: flex; gap: 10px; align-items: center; }
+.hud-left, .hud-right { display: flex; gap: 8px; align-items: center; }
 .pill {
-  padding: 6px 13px; border-radius: 999px;
+  padding: 4px 10px; border-radius: 999px;
   background: rgba(255, 240, 220, .04);
   border: 1px solid rgba(255, 240, 220, .08);
-  font-size: 15px; font-weight: 700; white-space: nowrap;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
 }
 .pill-phase { color: var(--accent); border-color: rgba(226, 162, 89, .38); }
 .pill-phase[data-tone="warn"] { color: var(--gold); border-color: rgba(223, 174, 82, .45); }
@@ -1101,8 +1169,8 @@ html, body {
 
 .btn-icon {
   appearance: none; border: 1px solid var(--line); background: var(--panel-2);
-  color: var(--ink); font-size: 18px; line-height: 1; cursor: pointer;
-  width: 42px; height: 42px; border-radius: 999px;
+  color: var(--ink); font-size: 15px; line-height: 1; cursor: pointer;
+  width: 34px; height: 34px; border-radius: 999px;
   display: flex; align-items: center; justify-content: center;
   transition: filter .15s ease, transform .08s ease;
 }
@@ -1117,34 +1185,35 @@ html, body {
 .play-area {
   flex: 1; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 11px; padding: 14px 24px 14px;
+  gap: 10px; padding: 12px 16px 12px;
   min-height: 0;
 }
 
 .ghost-bar { display: flex; gap: 8px; justify-content: center; flex: 0 0 auto; }
 .ghost-bar i {
-  width: 20px; height: 20px; border-radius: 6px;
+  width: 16px; height: 16px; border-radius: 5px;
   background: var(--panel-2); border: 1px solid var(--line);
 }
 .ghost-bar i[data-tier="hit"] { background: var(--sage); border-color: var(--sage); }
 .ghost-bar i[data-tier="present"] { background: var(--gold); border-color: var(--gold); }
 
 .board-wrap { display: flex; justify-content: center; flex: 0 1 auto; min-height: 0; }
-/* Tiles size themselves to fit the row count in the panel's fixed height.
-   557px is what's left of the 740px screen after the HUD, status line,
-   legend, padding and gaps -- so a 9-row board (Co-op plus a phone bonus)
-   shrinks to fit instead of running off the bottom. Capped at 60px so a
-   short board doesn't blow the tiles up. */
+/* Tiles size themselves to fit the row count in whatever height the panel
+   actually has. `--panel-h` is published by js/screen-fit.js (the overlay is
+   sized to the monitor's on-screen rectangle, which changes with the
+   viewport); ~178px of it goes to the HUD, status line, legend, padding and
+   gaps. Capped at 46px so a short board doesn't blow the tiles up, and a
+   10-row 7-letter Co-op board shrinks to fit rather than running off. */
 .tile-grid {
   --word-length: 5;
   --rows: 7;
-  --tile: min(60px, calc((557px - (var(--rows) - 1) * 7px) / var(--rows)));
-  display: flex; flex-direction: column; gap: 7px;
+  --tile: min(46px, calc((var(--panel-h, 495px) - 178px - (var(--rows) - 1) * 6px) / var(--rows)));
+  display: flex; flex-direction: column; gap: 6px;
 }
 .tile-row {
   display: grid;
   grid-template-columns: repeat(var(--word-length), var(--tile));
-  gap: 7px;
+  gap: 6px;
 }
 .tile-row.has-owner { box-shadow: inset 4px 0 0 var(--row-owner); border-radius: 4px; }
 .tile-row.shake { animation: tile-shake .4s ease; }
@@ -1192,12 +1261,12 @@ html, body {
 
 .status-line {
   text-align: center; min-height: 1.4em; flex: 0 0 auto;
-  color: var(--ink-dim); font-size: 17px; font-weight: 600;
+  color: var(--ink-dim); font-size: 14px; font-weight: 600;
 }
-.status-line .big { font-size: 56px; font-weight: 800; color: var(--accent); font-family: var(--mono); }
-.status-line .small { font-size: 17px; color: var(--ink-dim); }
+.status-line .big { font-size: 40px; font-weight: 800; color: var(--accent); font-family: var(--mono); }
+.status-line .small { font-size: 14px; color: var(--ink-dim); }
 .status-line .reveal-word {
-  font-size: 44px; font-weight: 800; letter-spacing: .06em;
+  font-size: 32px; font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; font-family: var(--mono);
   background: linear-gradient(96deg, var(--accent), var(--accent-2));
   -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -1215,9 +1284,9 @@ html, body {
 .letter-legend.is-blackout { filter: brightness(.5) saturate(.4); }
 .legend-key {
   display: flex; align-items: center; justify-content: center;
-  width: 28px; height: 32px; border-radius: 5px;
+  width: 22px; height: 26px; border-radius: 5px;
   background: var(--panel-2); border: 1px solid var(--line);
-  color: var(--ink-dim); font-size: 15px; font-weight: 700;
+  color: var(--ink-dim); font-size: 11px; font-weight: 700;
   font-style: normal; transition: all .13s ease;
 }
 .legend-key[data-tier="hit"]     { background: var(--sage); border-color: var(--sage); color: #121c0b; }
@@ -1281,15 +1350,15 @@ html, body {
   90%  { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.05); }
 }
-.event-card-inner { text-align: center; padding: 30px; max-width: 640px; }
-.event-card-emoji { font-size: 132px; line-height: 1; filter: drop-shadow(0 0 28px var(--tint, transparent)); }
+.event-card-inner { text-align: center; padding: 24px; max-width: 480px; }
+.event-card-emoji { font-size: 104px; line-height: 1; filter: drop-shadow(0 0 28px var(--tint, transparent)); }
 .event-card-label {
-  font-size: 56px; font-weight: 900; letter-spacing: .02em;
+  font-size: 42px; font-weight: 900; letter-spacing: .02em;
   color: var(--tint, var(--ink)); text-transform: uppercase; margin-top: 10px;
 }
-.event-card-blurb { font-size: 22px; color: var(--ink-dim); margin-top: 12px; font-weight: 600; }
+.event-card-blurb { font-size: 17px; color: var(--ink-dim); margin-top: 12px; font-weight: 600; }
 .event-card-count {
-  margin-top: 26px; font-family: var(--mono); font-size: 18px; font-weight: 700;
+  margin-top: 22px; font-family: var(--mono); font-size: 14px; font-weight: 700;
   color: var(--ink-faint); letter-spacing: .04em;
 }
 
@@ -1304,7 +1373,7 @@ html, body {
 .confetti-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
 .confetti-piece {
   position: absolute; top: -10px; left: var(--x, 50%);
-  width: 10px; height: 17px;
+  width: 8px; height: 14px;
   background: var(--c, var(--gold)); opacity: .95; border-radius: 2px;
   transform: rotate(var(--rot, 0deg));
   animation: confetti-fall var(--dur, 1.4s) linear var(--delay, 0s) forwards;
@@ -1320,11 +1389,11 @@ html, body {
    across the top of the panel, under the HUD. */
 
 .mid-banner {
-  position: absolute; left: 50%; top: 62px;
+  position: absolute; left: 50%; top: 48px;
   transform: translateX(-50%);
   z-index: 70; pointer-events: none;
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 22px; border-radius: 999px;
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 16px; border-radius: 999px;
   background: linear-gradient(100deg,
     color-mix(in srgb, var(--tint, var(--accent)) 26%, var(--panel)), var(--panel));
   border: 1px solid color-mix(in srgb, var(--tint, var(--accent)) 55%, transparent);
@@ -1339,21 +1408,21 @@ html, body {
   88%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
   100% { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(.97); }
 }
-.mid-banner-emoji { font-size: 30px; line-height: 1; }
+.mid-banner-emoji { font-size: 22px; line-height: 1; }
 .mid-banner-label {
-  font-size: 20px; font-weight: 850; letter-spacing: .01em;
+  font-size: 15px; font-weight: 850; letter-spacing: .01em;
   color: var(--tint, var(--ink)); text-transform: uppercase;
 }
-.mid-banner-blurb { font-size: 16px; font-weight: 600; color: var(--ink-dim); }
+.mid-banner-blurb { font-size: 12.5px; font-weight: 600; color: var(--ink-dim); }
 
 /* ── Toast ─────────────────────────────────────────────────────────── */
 
 .toast {
   position: absolute; left: 50%; bottom: 26px; transform: translate(-50%, 14px);
   background: var(--panel); border: 1px solid var(--line); color: var(--ink);
-  padding: 13px 20px; border-radius: 11px; font-size: 17px; font-weight: 600;
+  padding: 11px 17px; border-radius: 11px; font-size: 14px; font-weight: 600;
   opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
-  max-width: 620px; text-align: center; z-index: 85;
+  max-width: 460px; text-align: center; z-index: 85;
 }
 .toast[data-show] { opacity: 1; transform: translate(-50%, 0); }
 
@@ -1390,8 +1459,11 @@ html, body {
     width: 100%; height: 100%;
     padding: 0; border-radius: 0; box-shadow: none; background: none;
   }
-  .monitor-screen {
-    width: 100%; height: 100%;
+  .monitor-screen { display: none; }
+  .room-front { display: none; }
+  .app-overlay {
+    position: fixed; inset: 0;
+    width: auto; height: auto;
     font-size: 16px; border-radius: 0; box-shadow: none;
   }
 
@@ -1408,7 +1480,7 @@ html, body {
   .btn { font-size: 15px; padding: 13px 18px; }
   .btn-lg { font-size: 17px; padding: 16px 20px; }
   .chip { font-size: 15px; padding: 11px 14px; min-width: 52px; }
-  .mode-name { font-size: 16px; }
+  .mode-name { font-size: 15px; }
   .mode-blurb { font-size: 12.5px; }
   .how summary { font-size: 14px; padding: 13px 16px; }
   .how ol { font-size: 14px; padding: 0 20px 16px 34px; }
@@ -1422,8 +1494,7 @@ html, body {
   .pill { font-size: 12px; padding: 4px 10px; }
   .btn-icon { width: 34px; height: 34px; font-size: 15px; }
   .play-area { padding: 16px 14px 20px; gap: 14px; }
-  .tile-grid { --tile: min(52px, calc((58vh - (var(--rows) - 1) * 6px) / var(--rows))); gap: 6px; }
-  .tile-row { gap: 6px; }
+  .tile-grid { --tile: min(46px, calc((58vh - (var(--rows) - 1) * 6px) / var(--rows))); }
   .ghost-bar i { width: 16px; height: 16px; }
   .status-line { font-size: 14px; }
   .status-line .big { font-size: 40px; }

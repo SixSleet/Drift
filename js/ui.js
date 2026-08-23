@@ -149,14 +149,17 @@ export function renderBoard(rows) {
 }
 
 /**
- * Rebuilds the tile grid from scratch. Cheap enough for a text game (at most
- * ~10 rows x 7 tiles) that a full rebuild beats diffing -- but a rebuild
- * also restarts every CSS entrance animation on every tile it touches, so
- * this bails out early when nothing the grid actually shows has changed
- * (the game loop calls this every animation frame). Without that guard, a
- * freshly-revealed tile's flip never gets more than ~16ms of its own
- * animation before the next frame tears it down and builds an identical
- * replacement at frame zero again -- so the flip visually never plays.
+ * Draws the tile grid.
+ *
+ * Split deliberately into two paths. A full rebuild throws away every tile,
+ * which restarts every CSS animation on every tile it touches -- so it only
+ * happens when the grid's *structure* changes (a guess landed, the row count
+ * changed, the round changed). Typing a letter changes no structure, so it
+ * updates the active row's tiles in place.
+ *
+ * Getting that wrong is very visible: fold `active` into the rebuild
+ * signature and every keystroke re-creates all the revealed tiles, so the
+ * whole board re-plays its flip animation on each letter you type.
  *
  * opts: {
  *   wordLength, maxGuesses,
@@ -168,59 +171,90 @@ export function renderBoard(rows) {
  * }
  */
 let _gridSig = null;
+
+/**
+ * Updates the row being typed into, without touching any other row. Tiles
+ * whose letter has not changed are left completely alone -- re-setting an
+ * identical letter would restart its pop animation on every frame.
+ */
+function paintActiveRow(row, wordLength, active, shake) {
+  if (!row) return;
+  row.classList.toggle('shake', shake);
+  for (let j = 0; j < wordLength; j++) {
+    const tile = row.children[j];
+    if (!tile) continue;
+    const ch = active[j] ? active[j].toUpperCase() : '';
+    if (tile.textContent === ch) continue;
+    tile.textContent = ch;
+    if (ch) {
+      // Re-add rather than toggle, so this one tile replays its pop while
+      // its neighbours stay untouched.
+      tile.classList.remove('is-filled');
+      void tile.offsetWidth;
+      tile.classList.add('is-filled');
+    } else {
+      tile.classList.remove('is-filled');
+    }
+  }
+}
+
 export function renderGrid(opts) {
   const { wordLength, maxGuesses, guesses, active, canType, playerColor } = opts;
   const shake = !!opts.shake;
-  const sig = JSON.stringify([wordLength, maxGuesses, active, canType, shake,
-    guesses.map((g) => `${g.player_id}:${g.attempt_no}`)]);
-  if (sig === _gridSig) return;
-  _gridSig = sig;
-
   const board = $('#board');
-  board.innerHTML = '';
-  board.style.setProperty('--word-length', wordLength);
-  // The panel is a fixed height, so the tiles have to size themselves to the
-  // row count -- a Co-op 5-letter round is 8 rows, and answering the phone
-  // buys a 9th. Without this the board grows past the bottom of the screen.
-  board.style.setProperty('--rows', maxGuesses);
 
-  for (let i = 0; i < maxGuesses; i++) {
-    const row = document.createElement('div');
-    row.className = 'tile-row';
+  // Structure only -- `active` and `shake` are deliberately absent.
+  const sig = JSON.stringify([wordLength, maxGuesses, canType,
+    guesses.map((g) => `${g.player_id}:${g.attempt_no}`)]);
+  const activeIndex = guesses.length;
 
-    const g = guesses[i];
-    const isActive = !g && i === guesses.length && canType;
-    if (isActive && shake) row.classList.add('shake');
+  if (sig !== _gridSig) {
+    _gridSig = sig;
+    board.innerHTML = '';
+    board.style.setProperty('--word-length', wordLength);
+    // The panel is a fixed height, so the tiles have to size themselves to
+    // the row count -- a Co-op 5-letter round is 8 rows, and a 7-letter one
+    // is 10. Without this the board grows past the bottom of the screen.
+    board.style.setProperty('--rows', maxGuesses);
 
-    if (playerColor && g) {
-      row.style.setProperty('--row-owner', playerColor.get(g.player_id) ?? 'transparent');
-      row.classList.add('has-owner');
-    }
+    for (let i = 0; i < maxGuesses; i++) {
+      const row = document.createElement('div');
+      row.className = 'tile-row';
 
-    if (g && !g._rendered) {
-      g._rendered = true;
-      // "Not even one" -- a guess with zero hits gets its own droop/shake,
-      // played exactly once (right here, on the render pass where it first
-      // appears) rather than replaying every time the grid is rebuilt later.
-      if (g.feedback.every((f) => f !== 'hit')) row.classList.add('is-whiff');
-    }
-
-    for (let j = 0; j < wordLength; j++) {
-      const tile = document.createElement('div');
-      tile.className = 'tile';
-      if (g) {
-        tile.textContent = g.word[j]?.toUpperCase() ?? '';
-        tile.dataset.tier = g.feedback[j];
-        tile.style.setProperty('--flip-delay', `${j * 90}ms`);
-        tile.classList.add('is-revealed');
-      } else if (isActive && active[j]) {
-        tile.textContent = active[j].toUpperCase();
-        tile.classList.add('is-filled');
+      const g = guesses[i];
+      const fresh = g && !g._rendered;
+      if (fresh) {
+        g._rendered = true;
+        // "Not even one" -- a guess with zero hits gets its own droop/shake,
+        // played exactly once, on the pass where it first appears.
+        if (g.feedback.every((f) => f !== 'hit')) row.classList.add('is-whiff');
       }
-      row.appendChild(tile);
+
+      if (playerColor && g) {
+        row.style.setProperty('--row-owner', playerColor.get(g.player_id) ?? 'transparent');
+        row.classList.add('has-owner');
+      }
+
+      for (let j = 0; j < wordLength; j++) {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        if (g) {
+          tile.textContent = g.word[j]?.toUpperCase() ?? '';
+          tile.dataset.tier = g.feedback[j];
+          // Only a guess appearing for the first time flips. A rebuild for
+          // some later reason must not re-flip guesses already on the board.
+          if (fresh) {
+            tile.style.setProperty('--flip-delay', `${j * 90}ms`);
+            tile.classList.add('is-revealed');
+          }
+        }
+        row.appendChild(tile);
+      }
+      board.appendChild(row);
     }
-    board.appendChild(row);
   }
+
+  if (canType) paintActiveRow(board.children[activeIndex], wordLength, active, shake);
 }
 
 export function setPhase(text, tone) {

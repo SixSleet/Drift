@@ -101,6 +101,43 @@ function meowVoice({ dur = 0.5, base = 480, peak = 760, gain = 0.14, delay = 0 }
   osc.stop(t0 + dur + 0.05); vib.stop(t0 + dur + 0.05);
 }
 
+
+function tone({ freq = 440, to = null, dur = 0.24, type = 'sine', gain = 0.12,
+                delay = 0, cutoff = 2600, attack = 0.02 } = {}) {
+  const c = ensure();
+  if (!c) return;
+  const t0 = c.currentTime + delay;
+  const osc = c.createOscillator();
+  const lp = c.createBiquadFilter();
+  const env = c.createGain();
+
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  if (to) osc.frequency.exponentialRampToValueAtTime(Math.max(1, to), t0 + dur * 0.9);
+
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(cutoff, t0);
+  lp.Q.setValueAtTime(0.6, t0);
+
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(gain, t0 + attack);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+  osc.connect(lp).connect(env).connect(master);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.04);
+}
+
+/** A note plus a quiet octave above -- reads as a bell rather than a tone. */
+function chime({ freq, dur = 0.5, gain = 0.11, delay = 0 }) {
+  tone({ freq, dur, type: 'sine', gain, delay, cutoff: 3400, attack: 0.012 });
+  tone({ freq: freq * 2, dur: dur * 0.6, type: 'sine', gain: gain * 0.32, delay, cutoff: 5200 });
+  tone({ freq: freq * 3.01, dur: dur * 0.3, type: 'sine', gain: gain * 0.12, delay, cutoff: 6000 });
+}
+
+// C major pentatonic -- no semitone clashes, so overlapping cues never sour.
+const PENTA = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51];
+
 export const sfx = {
   get muted() { return muted; },
 
@@ -111,59 +148,62 @@ export const sfx = {
     return muted;
   },
 
-  /** A single key tap — physical or on-screen, letter or Backspace. */
+  /** A single keystroke. Soft and short -- this fires dozens of times a
+      round, so it has to sit under the music rather than on top of it. */
   type() {
-    blip({ freq: 720, dur: 0.035, type: 'square', gain: 0.06 });
+    tone({ freq: 1050, dur: 0.055, type: 'sine', gain: 0.035, cutoff: 1800, attack: 0.004 });
   },
 
-  /** A tile flipping to reveal its colour, pitched by tier. */
+  /** A tile flipping. Pitched by tier, and all three sit in the same
+      pentatonic set so a row of mixed results still sounds like a phrase. */
   reveal(tier) {
-    if (tier === 'hit') blip({ freq: 660, to: 880, dur: 0.09, type: 'square', gain: 0.13 });
-    else if (tier === 'present') blip({ freq: 520, to: 600, dur: 0.08, type: 'triangle', gain: 0.11 });
-    else blip({ freq: 260, to: 180, dur: 0.07, type: 'sine', gain: 0.07 });
+    if (tier === 'hit') chime({ freq: 1046.50, dur: 0.42, gain: 0.1 });
+    else if (tier === 'present') chime({ freq: 783.99, dur: 0.36, gain: 0.085 });
+    else tone({ freq: 330, to: 262, dur: 0.16, type: 'sine', gain: 0.05, cutoff: 900 });
   },
 
-  /** Guess rejected: wrong length, or not in the dictionary. */
+  /** Guess rejected. A soft muted thud, not a buzzer. */
   invalid() {
-    blip({ freq: 180, dur: 0.12, type: 'sawtooth', gain: 0.1 });
+    tone({ freq: 196, to: 147, dur: 0.2, type: 'triangle', gain: 0.09, cutoff: 700, attack: 0.01 });
   },
 
   /** Someone else's guess landing (co-op shared board). */
   teammateGuess() {
-    blip({ freq: 440, dur: 0.05, type: 'triangle', gain: 0.07 });
+    chime({ freq: 587.33, dur: 0.28, gain: 0.055 });
   },
 
   countdown() {
-    blip({ freq: 700, dur: 0.06, type: 'square', gain: 0.1 });
+    chime({ freq: 659.25, dur: 0.3, gain: 0.075 });
   },
 
   go() {
-    blip({ freq: 520, to: 900, dur: 0.16, type: 'square', gain: 0.13 });
+    chime({ freq: 880, dur: 0.5, gain: 0.11 });
+    chime({ freq: 1318.51, dur: 0.42, gain: 0.06, delay: 0.07 });
   },
 
   solved() {
-    [660, 880, 1320].forEach((f, i) =>
-      blip({ freq: f, dur: 0.18, type: 'square', gain: 0.15, delay: i * 0.08 }));
+    [659.25, 880, 1318.51].forEach((f, i) => chime({ freq: f, dur: 0.6, gain: 0.11, delay: i * 0.09 }));
   },
 
+  /** Falls rather than buzzes -- disappointment, not an error. */
   lost() {
-    [400, 300, 200].forEach((f, i) =>
-      blip({ freq: f, dur: 0.22, type: 'sawtooth', gain: 0.12, delay: i * 0.1 }));
+    [587.33, 493.88, 392].forEach((f, i) =>
+      tone({ freq: f, dur: 0.42, type: 'sine', gain: 0.085, delay: i * 0.13, cutoff: 1300, attack: 0.03 }));
   },
 
   win() {
-    [523, 659, 784, 1047].forEach((f, i) =>
-      blip({ freq: f, dur: 0.3, type: 'triangle', gain: 0.16, delay: i * 0.11 }));
+    PENTA.slice(0, 5).forEach((f, i) => chime({ freq: f, dur: 0.75, gain: 0.115, delay: i * 0.1 }));
+    chime({ freq: PENTA[5], dur: 1.1, gain: 0.13, delay: 0.55 });
   },
 
   /** A round's random event, announced at round start. One stinger per kind. */
   event(kind) {
     if (kind === 'double_points') {
-      [660, 880, 1100, 1320].forEach((f, i) =>
-        blip({ freq: f, dur: 0.14, type: 'triangle', gain: 0.14, delay: i * 0.06 }));
+      [659.25, 880, 1046.50, 1318.51].forEach((f, i) =>
+        chime({ freq: f, dur: 0.45, gain: 0.1, delay: i * 0.07 }));
     } else if (kind === 'blitz') {
-      [900, 700, 900, 700, 900].forEach((f, i) =>
-        blip({ freq: f, dur: 0.06, type: 'square', gain: 0.15, delay: i * 0.07 }));
+      [1046.50, 880, 1046.50, 880, 1174.66].forEach((f, i) =>
+        tone({ freq: f, dur: 0.11, type: 'triangle', gain: 0.1, delay: i * 0.075, cutoff: 2400 }));
     } else if (kind === 'blackout') {
       // Lights going out: a slow, muffled descent into near-silence.
       blip({ freq: 480, to: 90, dur: 0.6, type: 'sine', gain: 0.16 });
@@ -175,18 +215,17 @@ export const sfx = {
     } else if (kind === 'jackpot') {
       // Slot-machine reel spin-up, an ascending fanfare, then a shimmer tail.
       for (let i = 0; i < 10; i++) {
-        blip({ freq: 300 + Math.random() * 500, dur: 0.03, type: 'square', gain: 0.08, delay: i * 0.035 });
+        tone({ freq: PENTA[i % PENTA.length], dur: 0.06, type: 'triangle',
+               gain: 0.06, delay: i * 0.035, cutoff: 2600 });
       }
-      [523, 659, 784, 1047, 1319, 1568].forEach((f, i) =>
-        blip({ freq: f, dur: 0.22, type: 'triangle', gain: 0.17, delay: 0.4 + i * 0.07 }));
-      [1568, 1976, 2637].forEach((f, i) =>
-        blip({ freq: f, to: f * 1.15, dur: 0.5, type: 'sine', gain: 0.1, delay: 0.82 + i * 0.04 }));
+      PENTA.forEach((f, i) => chime({ freq: f, dur: 0.5, gain: 0.12, delay: 0.4 + i * 0.065 }));
+      chime({ freq: PENTA[7] * 2, dur: 1.4, gain: 0.1, delay: 0.95 });
     }
   },
 
   /** A guess that landed zero hits -- a dud, "not even one." */
   whiff() {
-    blip({ freq: 220, to: 90, dur: 0.22, type: 'sawtooth', gain: 0.13 });
+    tone({ freq: 262, to: 131, dur: 0.34, type: 'triangle', gain: 0.1, cutoff: 800, attack: 0.015 });
   },
 
   /** The cat announces itself. A real rising-falling meow, not a beep. */
@@ -281,6 +320,40 @@ export const sfx = {
   },
 
   /**
+   * A lightning strike. A short bright crack, then a low rumble that rolls
+   * off over a couple of seconds -- distance is mostly the delay between
+   * the two and how much top end survives.
+   */
+  thunder() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+
+    const crack = noise(c);
+    const cf = c.createBiquadFilter();
+    const ce = c.createGain();
+    cf.type = 'highpass';
+    cf.frequency.setValueAtTime(900, t0);
+    ce.gain.setValueAtTime(0.0001, t0);
+    ce.gain.exponentialRampToValueAtTime(0.1, t0 + 0.012);
+    ce.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+    crack.connect(cf).connect(ce).connect(master);
+    crack.start(t0); crack.stop(t0 + 0.45);
+
+    const rumble = noise(c);
+    const rf = c.createBiquadFilter();
+    const re = c.createGain();
+    rf.type = 'lowpass';
+    rf.frequency.setValueAtTime(320, t0);
+    rf.frequency.exponentialRampToValueAtTime(70, t0 + 2.8);
+    re.gain.setValueAtTime(0.0001, t0 + 0.05);
+    re.gain.exponentialRampToValueAtTime(0.14, t0 + 0.3);
+    re.gain.exponentialRampToValueAtTime(0.0001, t0 + 3.2);
+    rumble.connect(rf).connect(re).connect(master);
+    rumble.start(t0); rumble.stop(t0 + 3.3);
+  },
+
+  /**
    * Rain against the window. Sustained, so this hands back a stop() the
    * caller owns -- unlike every other cue here, which is fire-and-forget.
    */
@@ -314,7 +387,10 @@ export const sfx = {
 
   /** The last few seconds of a round's clock. Pitch climbs as it nears zero. */
   tick(secondsLeft) {
-    const freq = 500 + (10 - Math.min(10, Math.max(0, secondsLeft))) * 40;
-    blip({ freq, dur: 0.05, type: 'square', gain: secondsLeft <= 3 ? 0.16 : 0.1 });
+    // Climbs the pentatonic set as it runs out, so the last ten seconds are
+    // a rising phrase rather than an increasingly shrill beep.
+    const step = Math.min(PENTA.length - 1, Math.max(0, 10 - Math.round(secondsLeft)));
+    tone({ freq: PENTA[step], dur: 0.13, type: 'sine',
+           gain: secondsLeft <= 3 ? 0.11 : 0.07, cutoff: 2200, attack: 0.008 });
   },
 };

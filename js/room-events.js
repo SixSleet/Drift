@@ -130,29 +130,74 @@ function cat(done) {
 }
 
 /* ── The moth ─────────────────────────────────────────────────────────────
-   Blunders around the lamp on a wandering path. Harmless, brief, and the
-   only event that lives up near the lamp rather than on the desk. */
+   Comes in past the lamp and settles on the board, sitting over one already
+   revealed letter and blurring it. That is the point: the other room events
+   are scenery, this one actually costs you something -- a letter you'd
+   already earned goes unreadable until you swat it.
+
+   It lives in a flat layer in viewport coordinates rather than the 3D stage,
+   because it has to land on a specific tile, and converting a tile's screen
+   rectangle back into stage coordinates would be guesswork. */
 function moth(done) {
+  const fx = $('#screen-fx');
+  if (!fx) return done();
+
+  // Only revealed tiles carry a letter worth hiding.
+  const tiles = [...document.querySelectorAll('#board .tile[data-tier]')]
+    .filter((t) => t.textContent.trim());
+  const target = tiles.length ? tiles[Math.floor(Math.random() * tiles.length)] : null;
+
   const el = document.createElement('button');
   el.type = 'button';
   el.className = 'moth-rig';
-  el.setAttribute('aria-label', 'Wave the moth away');
-  el.innerHTML = `<i class="moth-wing moth-wing-l"></i><i class="moth-wing moth-wing-r"></i><i class="moth-body"></i>`;
-  layer().appendChild(el);
+  el.setAttribute('aria-label', 'Swat the moth off the screen');
+  el.innerHTML = `
+    <svg viewBox="0 0 60 48" aria-hidden="true">
+      <g class="moth-wing moth-wing-l">
+        <path d="M29 24 C 14 4, 2 8, 4 22 C 5 34, 18 34, 29 26 Z"/>
+      </g>
+      <g class="moth-wing moth-wing-r">
+        <path d="M31 24 C 46 4, 58 8, 56 22 C 55 34, 42 34, 31 26 Z"/>
+      </g>
+      <ellipse class="moth-body" cx="30" cy="26" rx="4.5" ry="12"/>
+      <path class="moth-antenna" d="M28 15 L22 6 M32 15 L38 6"/>
+    </svg>`;
+  fx.appendChild(el);
+
+  // Fly in from the lamp's corner, then settle on the tile.
+  const lamp = $('.lamp')?.getBoundingClientRect();
+  const from = lamp ? { x: lamp.left + lamp.width / 2, y: lamp.top } : { x: 40, y: 80 };
+  const to = target
+    ? (() => { const r = target.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()
+    : { x: from.x + 160, y: from.y + 60 };
+
+  el.style.setProperty('--from-x', `${Math.round(from.x)}px`);
+  el.style.setProperty('--from-y', `${Math.round(from.y)}px`);
+  el.style.setProperty('--to-x', `${Math.round(to.x)}px`);
+  el.style.setProperty('--to-y', `${Math.round(to.y)}px`);
+  el.style.setProperty('--mid-x', `${Math.round((from.x + to.x) / 2 + 90)}px`);
+  el.style.setProperty('--mid-y', `${Math.round(Math.min(from.y, to.y) - 70)}px`);
+
   sfx.mothFlutter();
-  const again = setInterval(() => sfx.mothFlutter(), 1500);
+  const again = setInterval(() => sfx.mothFlutter(), 1800);
+  // Smudge only once it has actually arrived.
+  const land = setTimeout(() => { if (target) target.classList.add('is-smudged'); }, 1500);
 
   let over = false;
+  const clear = () => {
+    clearInterval(again); clearTimeout(land); clearTimeout(timer);
+    if (target) target.classList.remove('is-smudged');
+  };
   const finish = () => {
     if (over) return;
     over = true;
-    clearInterval(again); clearTimeout(timer);
+    clear();
     el.classList.add('is-gone');
     el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
   };
-  const timer = setTimeout(finish, 9000);
+  const timer = setTimeout(finish, 11000);
   el.addEventListener('click', finish);
-  return () => { clearInterval(again); clearTimeout(timer); over = true; el.remove(); };
+  return () => { over = true; clear(); el.remove(); };
 }
 
 /* ── The phone ────────────────────────────────────────────────────────────
@@ -193,19 +238,45 @@ function lampFlicker(done) {
   return () => { clearTimeout(t); room.classList.remove('is-flickering'); };
 }
 
-/** Rain arrives at the window and runs for a while. */
-function rain(done) {
+/**
+ * A thunderstorm. Rain at the window, and every few seconds a strike: the
+ * room flashes white and the lamp cuts out with it, so for a beat the only
+ * light in the room is the monitor. Ambient -- nothing to click, and it
+ * never touches the board.
+ */
+function storm(done) {
   const room = $('#room-scene');
   if (!room) return done();
-  const seconds = 18 + Math.random() * 14;
-  room.classList.add('is-raining');
-  const stopSound = sfx.rain(seconds);
-  const t = setTimeout(() => {
-    room.classList.remove('is-raining');
-    stopSound();
+
+  const seconds = 20 + Math.random() * 12;
+  room.classList.add('is-storm');
+  const stopRain = sfx.rain(seconds);
+  const strikes = [];
+
+  // 3-5 strikes, spread across the storm but never in the first second.
+  const count = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < count; i++) {
+    const at = 2000 + Math.random() * (seconds * 1000 - 4000);
+    strikes.push(setTimeout(() => {
+      room.classList.add('is-lightning');
+      // The thunder trails the flash, the way it does outdoors.
+      setTimeout(() => sfx.thunder(), 120 + Math.random() * 400);
+      setTimeout(() => room.classList.remove('is-lightning'), 700);
+    }, at));
+  }
+
+  const end = setTimeout(() => {
+    room.classList.remove('is-storm', 'is-lightning');
+    stopRain();
     done();
   }, seconds * 1000);
-  return () => { clearTimeout(t); room.classList.remove('is-raining'); stopSound(); };
+
+  return () => {
+    strikes.forEach(clearTimeout);
+    clearTimeout(end);
+    room.classList.remove('is-storm', 'is-lightning');
+    stopRain();
+  };
 }
 
 // Weights, not equal odds: the cat is the headline act, ambience is filler.
@@ -214,7 +285,7 @@ const KINDS = [
   { run: moth,         weight: 18 },
   { run: phone,        weight: 18 },
   { run: lampFlicker,  weight: 20 },
-  { run: rain,         weight: 14 },
+  { run: storm,        weight: 16 },
 ];
 const TOTAL_WEIGHT = KINDS.reduce((n, k) => n + k.weight, 0);
 
@@ -232,7 +303,7 @@ const between = ([lo, hi]) => lo + Math.random() * (hi - lo);
 // Exposed for the browser test harness (same spirit as window.__wordforge in
 // main.js): the scheduler's gaps are tens of seconds, so a test that wants to
 // see a specific event runs it directly rather than waiting one out.
-export const __events = { cat, moth, phone, lampFlicker, rain };
+export const __events = { cat, moth, phone, lampFlicker, storm };
 
 /**
  * Starts the room running for one round. Returns a stop() that cancels the
@@ -267,6 +338,9 @@ export function startRoomEvents() {
     const l = layer();
     if (l) l.innerHTML = '';
     const room = $('#room-scene');
-    if (room) room.classList.remove('is-flickering', 'is-raining');
+    if (room) room.classList.remove('is-flickering', 'is-storm', 'is-lightning');
+    const fx = $('#screen-fx');
+    if (fx) fx.innerHTML = '';
+    document.querySelectorAll('.tile.is-smudged').forEach((t) => t.classList.remove('is-smudged'));
   };
 }
