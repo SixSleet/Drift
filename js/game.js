@@ -12,7 +12,7 @@ import { loadDictionary, isValidWord } from './words.js';
 import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
-  setPhase, setStatusLine, selectChip, buildLetterKeyboard, paintKeyboard,
+  setPhase, setStatusLine, selectChip, buildLetterLegend, paintLetterLegend,
   spawnCat, spawnPhone,
 } from './ui.js';
 
@@ -35,7 +35,7 @@ export class Game {
     this.host = { advancing: false };
     this.settling = false;
     this.frame = this.frame.bind(this);
-    buildLetterKeyboard((k) => this.handleKey(k));
+    buildLetterLegend();
   }
 
   #freshLocal() {
@@ -188,8 +188,8 @@ export class Game {
     // how it looks -- read directly off EVENTS elsewhere in the render loop
     // instead of re-deriving it from row.event each time.
     this.roundRule = EVENTS[row.event]?.rule ?? null;
-    $('#keyboard').classList.toggle('is-blackout', this.roundRule === 'blackout');
-    paintKeyboard(new Map());
+    $('#letter-legend').classList.toggle('is-blackout', this.roundRule === 'blackout');
+    paintLetterLegend(new Map());
 
     this.#applyEvent(row.event);
   }
@@ -622,19 +622,18 @@ export class Game {
     });
 
     if (this.roundRule === 'blackout') {
-      paintKeyboard(new Map());
+      paintLetterLegend(new Map());
     } else {
       const tiers = new Map();
       for (const g of visible) {
-        // g.word comes back lowercase from the server; the on-screen keyboard's
-        // keys are uppercase, so this has to match case or every key stays
-        // unpainted.
+        // g.word comes back lowercase from the server; the legend's letters
+        // are uppercase, so this has to match case or nothing gets painted.
         g.word.toUpperCase().split('').forEach((ch, i) => {
           const t = g.feedback[i];
           if (!tiers.has(ch) || TIER_RANK[t] > TIER_RANK[tiers.get(ch)]) tiers.set(ch, t);
         });
       }
-      paintKeyboard(tiers);
+      paintLetterLegend(tiers);
     }
 
     if (phase === 'live') {

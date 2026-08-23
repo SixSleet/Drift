@@ -106,9 +106,9 @@ $('#btn-copy').addEventListener('click', async () => {
 setMuteButton(sfx.muted);
 $('#btn-mute').addEventListener('click', () => setMuteButton(sfx.toggleMute()));
 
-// A physical keyboard drives guesses the same way the on-screen keyboard
-// does, but only while the game screen is showing (so it never fights the
-// code-entry listener above, and never fires during lobby/board screens).
+// Guesses are physical-keyboard only -- there's no on-screen keyboard to
+// tap. This listener only fires while the game screen is showing, so it
+// never fights the code-entry listener above or fires during lobby/board.
 document.addEventListener('keydown', (e) => {
   if (!$('#screen-game[data-active]')) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;

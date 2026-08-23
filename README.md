@@ -24,8 +24,10 @@ Three modes:
   has to coordinate rather than just brute-force it). Anyone can drop the
   next guess at any time.
 
-No login, no chat, and no typing required to join a room — though the room
-code and every guess can be typed on a physical keyboard as well as tapped.
+No login, no chat needed to join a room — the code and keypad can be tapped.
+Guesses, though, are physical-keyboard only: there's no on-screen keyboard to
+tap, since the whole point of the room is that you're watching someone type
+at a monitor, not poking a touchscreen.
 
 **Play: <https://sixsleet.github.io/Drift/>**
 
@@ -40,7 +42,7 @@ and realtime signalling. GitHub Pages for hosting. The one dependency
 | Phase | What happens |
 | --- | --- |
 | Countdown | 5s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained. If this round rolled a start-of-round event, a full-screen card takes over for the whole 5 seconds — emoji, name, and what it does — so nobody starts guessing before they've actually read what changed. |
-| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. Type guesses on the on-screen keyboard or your own — each letter pops as you type it, tiles flip in as each guess is scored (hit / present / miss), and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out on the keyboard so you don't waste a guess retyping it — unless this round is Blackout (see below). Partway through, about half of all rounds also spring a mid-round event — see below. |
+| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. There's no on-screen keyboard — type guesses on your own physical keyboard, watching the monitor the way the character in the room does. Each letter pops as you type it, tiles flip in as each guess is scored (hit / present / miss), and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out in the compact legend below the board so you don't waste a guess retyping it — unless this round is Blackout (see below). Partway through, about half of all rounds also spring a mid-round event — see below. |
 | Settling | Brief. Any client — not just the host — can ask the server "is this round actually over," and the server independently re-checks before agreeing. |
 | Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed, plus who won the round. |
 | Board | ~5.5s. Running standings, then the next round. |
@@ -89,7 +91,7 @@ effect at all — baked straight into that round's `max_guesses` /
 | --- | --- | --- |
 | 💰 Double Points | 20% | Score doubled. |
 | ⚡ Blitz | 20% | Clock cut to 90 seconds. |
-| 🙈 Blackout | 20% | The keyboard stops greying out letters you already know — no more free memory aid. |
+| 🙈 Blackout | 20% | The legend stops greying out letters you already know — no more free memory aid. |
 | 🎰 **Jackpot** | 5% | Extra guess **and** double points, at once — the rare one worth stopping for. |
 | *(none)* | 35% | A normal round. |
 
@@ -125,12 +127,18 @@ flaky connection can't double-apply an event or hand out two bonuses.
 
 ## The room
 
-The game screen is staged as a small room instead of bare UI: a desk, a
-chair, someone typing (seen from behind, over-the-shoulder), and a monitor
-whose screen *is* the actual game — the HUD, tile grid and keyboard render
-exactly as before, just inside `.monitor-screen` now. It's all hand-drawn
-CSS (gradients, shapes, a couple of emoji) — no image assets, no build
-step, same as everything else here.
+The game screen is staged as a small room instead of bare UI, shot from
+behind the player's chair like a camera looking over their shoulder: a
+warm desk lamp, a window glowing cool blue behind the monitor's own light,
+someone typing (seen from behind), and a monitor — tilted slightly toward
+camera — whose screen *is* the actual game. The HUD, tile grid, status
+line and letter legend all render strictly inside `.monitor-screen`;
+nothing game-related is allowed to sit loose in the room around it. There's
+no on-screen keyboard anywhere in the scene — every guess comes from the
+player's own physical keyboard, same as someone actually typing at a desk.
+It's all hand-drawn CSS (gradients, shapes, a couple of emoji, a 3D
+`rotateY` tilt on the monitor bezel) — no image assets, no build step,
+same as everything else here.
 
 The character's head and shoulders idle-bob while a round is actually live,
 so the room reads as occupied rather than a static diorama.
@@ -266,16 +274,16 @@ Supabase project.
 ## Layout
 
 ```
-index.html          screens; guesses go in on the on-screen keyboard or a
-                    physical one
+index.html          screens; guesses go in on the player's physical keyboard,
+                    no on-screen keyboard to tap
 css/app.css
 js/config.js         connection details and every tunable
 js/net.js            token identity, clock sync, RPCs, realtime channel
 js/words.js           client-side "is this a real word" check (UX only)
 js/sfx.js             synthesised WebAudio sound; no audio files
 js/game.js            phase clock, round settlement, input, scoring display
-js/ui.js               DOM rendering: tile grid, on-screen keyboard, boards
-js/main.js            wires the buttons (and the keyboard) up
+js/ui.js               DOM rendering: tile grid, letter legend, boards
+js/main.js            wires the buttons up and listens for physical keydown
 vendor/               supabase-js 2.58.0, unmodified
 data/answers-*.json    the exact seed for wf_words — dev/repo only, never
                        deployed (see Known limits)

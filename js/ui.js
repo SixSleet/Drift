@@ -1,6 +1,6 @@
 // DOM plumbing. Every control is a button or a keypress — the game never
-// requires a mouse, and the on-screen keyboard and a physical one do exactly
-// the same thing.
+// requires a mouse. Guesses are physical-keyboard only, by design: there's
+// no on-screen keyboard to tap.
 
 export const $ = (sel) => document.querySelector(sel);
 export const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -16,11 +16,7 @@ const CODE_KEYPAD_ROWS = [
   ['2', '3', '4', '5', '6', '7', '8', '9'],
 ];
 
-const LETTER_KEYBOARD_ROWS = [
-  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-  ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'BACK'],
-];
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 export function showScreen(id) {
   $$('.screen').forEach((s) => s.removeAttribute('data-active'));
@@ -63,38 +59,30 @@ export function flashKey(ch) {
   setTimeout(() => btn.classList.remove('is-pressed'), 120);
 }
 
-/** Renders the A-Z on-screen keyboard once. Tiers are applied afterward. */
-export function buildLetterKeyboard(onKey) {
-  const kb = $('#keyboard');
-  kb.innerHTML = '';
-  for (const row of LETTER_KEYBOARD_ROWS) {
-    const rowEl = document.createElement('div');
-    rowEl.className = 'kb-row';
-    for (const key of row) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.key = key;
-      if (key === 'ENTER' || key === 'BACK') {
-        b.className = 'kb-key kb-wide';
-        b.textContent = key === 'ENTER' ? '⏎' : '⌫';
-      } else {
-        b.className = 'kb-key';
-        b.textContent = key;
-      }
-      b.addEventListener('click', () => onKey(key));
-      rowEl.appendChild(b);
-    }
-    kb.appendChild(rowEl);
+/**
+ * Renders the A-Z letter legend once -- a compact, non-interactive strip
+ * showing which letters are known hit/present/miss so far this round.
+ * There's no on-screen keyboard to tap: input is the physical keyboard
+ * only, since the whole point of the room is that you're looking at a
+ * monitor someone's actually typing at.
+ */
+export function buildLetterLegend() {
+  const legend = $('#letter-legend');
+  legend.innerHTML = '';
+  for (const ch of ALPHABET) {
+    const cell = document.createElement('i');
+    cell.className = 'legend-key';
+    cell.dataset.key = ch;
+    cell.textContent = ch;
+    legend.appendChild(cell);
   }
 }
 
 /** tiers: Map<letter, 'hit'|'present'|'miss'> — the best status seen so far. */
-export function paintKeyboard(tiers) {
-  for (const btn of $$('#keyboard .kb-key')) {
-    const k = btn.dataset.key;
-    if (k === 'ENTER' || k === 'BACK') continue;
-    const tier = tiers.get(k);
-    btn.dataset.tier = tier ?? '';
+export function paintLetterLegend(tiers) {
+  for (const cell of $$('#letter-legend .legend-key')) {
+    const tier = tiers.get(cell.dataset.key);
+    cell.dataset.tier = tier ?? '';
   }
 }
 

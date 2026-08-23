@@ -249,18 +249,20 @@ body {
 .board .pts { margin-left: auto; font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--cyan); }
 .board .delta { font-family: var(--mono); font-size: 13px; color: var(--lime); }
 
-/* ── Room scene: a desk, a chair, someone typing, and their monitor ──── */
-/* The game screen frames itself as furniture in a little room instead of
-   floating UI -- the HUD/board/keyboard below all live inside
-   .monitor-screen, unchanged; this is purely the room dressed around it. */
+/* ── Room scene: camera behind someone at a desk, looking at their monitor ── */
+/* Depth order back-to-front: room wall/window, desk, monitor, then the
+   character -- closest to the viewer, overlapping the monitor's base and
+   stand (never its screen). The HUD/board/keyboard below all live inside
+   .monitor-screen, unchanged; this is purely the scene built around it. */
 
 .room-scene {
   width: 100%; max-width: 640px; margin: 0 auto;
   position: relative; overflow: hidden;
   border-radius: 22px; border: 1px solid var(--line);
-  padding: 40px clamp(12px, 4vw, 30px) 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding: 34px clamp(10px, 4vw, 26px) 132px;
+  display: flex; flex-direction: column; align-items: center;
   background:
+    radial-gradient(160px 140px at 9% 8%, rgba(255, 189, 107, .16) 0%, transparent 70%),
     radial-gradient(360px 240px at 18% 4%, #1b2454 0%, transparent 62%),
     radial-gradient(320px 220px at 90% 74%, #201338 0%, transparent 60%),
     linear-gradient(180deg, #0c1026 0%, #070910 70%, #050710 100%);
@@ -281,19 +283,133 @@ body {
   background: radial-gradient(circle at 32% 28%, rgba(155, 178, 255, .4), transparent 68%);
 }
 
-.room-character { position: relative; z-index: 1; margin-bottom: -10px; }
-.character-head {
-  display: block; width: 32px; height: 32px; border-radius: 50%; margin: 0 auto 2px;
-  background: linear-gradient(180deg, #2a3160, #171b38); box-shadow: 0 0 0 3px #0a0d1c;
+/* A warm desk lamp, mostly to give the cool monitor glow something to
+   contrast against -- that warm/cool split is most of what reads as
+   "comfy" rather than a bare, cold arcade cabinet. */
+.desk-lamp {
+  position: absolute; z-index: 1; left: 6%; top: 2px;
+  width: 40px; height: 44px;
+  transform: rotate(-9deg); transform-origin: bottom center;
+  pointer-events: none;
 }
-.character-body {
-  display: block; width: 76px; height: 42px; margin: 0 auto;
-  border-radius: 38px 38px 0 0;
-  background: linear-gradient(180deg, #232a54, #12162e); box-shadow: 0 0 0 3px #0a0d1c;
+.lamp-neck {
+  position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  width: 4px; height: 32px; border-radius: 2px;
+  background: linear-gradient(180deg, #40331f, #1c1710);
+}
+.lamp-shade {
+  position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+  width: 26px; height: 15px;
+  clip-path: polygon(28% 0, 72% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, #ffcf8a, #e8a34f);
+  box-shadow: 0 3px 10px rgba(255, 180, 90, .5);
+}
+.lamp-glow {
+  position: absolute; left: 50%; top: 6px; transform: translateX(-50%);
+  width: 110px; height: 100px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 189, 107, .28) 0%, transparent 70%);
+}
+
+.room-desk {
+  width: min(100%, 560px); height: 18px; margin-top: -2px;
+  position: relative; z-index: 1;
+  border-radius: 7px 7px 0 0; border: 1px solid #262c54; border-bottom: none;
+  background: linear-gradient(180deg, #1c2246, #0a0d1c);
+  box-shadow: 0 -10px 26px -16px rgba(75, 208, 255, .22), inset 0 1px 0 rgba(160, 190, 255, .18);
+}
+
+.monitor {
+  position: relative; z-index: 2; width: 94%; display: flex; flex-direction: column; align-items: center;
+  perspective: 1400px;
+}
+.monitor-bezel, .monitor-stand { transform: rotateY(6deg); transform-style: preserve-3d; }
+.monitor-bezel {
+  width: 100%; border-radius: 16px; padding: 10px 8px 68px;
+  background: linear-gradient(155deg, #1c2246, #0c0f22);
+  border: 1px solid #2e3568;
+  box-shadow: 0 24px 60px -22px rgba(0, 0, 0, .65), 0 0 46px -18px rgba(75, 208, 255, .3);
+  position: relative;
+}
+/* The 68px of bottom padding above is a fixed dead zone -- room for the
+   character to overlap into below, regardless of how tall the screen's
+   actual content is this round (word length, coop's ghost bar, etc). */
+.monitor-cam {
+  position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #05070f; box-shadow: 0 0 0 1px #2e3568, 0 0 4px rgba(75, 208, 255, .5);
+}
+.monitor-screen {
+  position: relative; overflow: hidden;
+  border-radius: 8px; background: var(--bg);
+  padding: 0 clamp(10px, 2.4vw, 20px) 18px;
+  display: flex; flex-direction: column;
+  box-shadow: inset 0 0 0 1px #1c2140, inset 0 0 50px rgba(75, 208, 255, .06);
+}
+.monitor-screen::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 40;
+  background: repeating-linear-gradient(180deg,
+    rgba(255, 255, 255, .015) 0px, rgba(255, 255, 255, .015) 1px, transparent 1px, transparent 3px);
+}
+.monitor-stand {
+  width: 22px; height: 16px; margin-top: -1px; position: relative; z-index: 1;
+  background: linear-gradient(180deg, #1c2246, #0c0f22);
+}
+.monitor-stand::after {
+  content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 70px; height: 6px; border-radius: 3px;
+  background: linear-gradient(180deg, #1c2246, #0c0f22);
+}
+
+/* The character: chair, shoulders and the back of a head, seen from behind
+   -- a fixed-size stage anchored to the very bottom of the room, each part
+   placed with an explicit offset so it reliably overlaps the monitor's
+   base (never its screen) instead of drifting via stacked margins. Camera
+   is behind them: this is the closest thing in the scene to the viewer. */
+.room-character {
+  position: absolute; z-index: 3; left: 50%; bottom: 0;
+  transform: translateX(-50%);
+  width: 300px; height: 190px;
+  pointer-events: none;
+}
+.chair-back {
+  position: absolute; z-index: 1; left: 50%; top: 0;
+  transform: translateX(-50%);
+  width: 260px; height: 130px;
+  border-radius: 130px 130px 24px 24px;
+  background: linear-gradient(200deg, #262e5c 0%, #12162e 78%);
+  box-shadow: 0 0 0 1px #0a0d1c, 0 -2px 0 rgba(130, 180, 255, .18) inset, 0 14px 30px -12px rgba(0, 0, 0, .55);
+}
+.chair-arm {
+  position: absolute; z-index: 1; bottom: 8px;
+  width: 18px; height: 46px; border-radius: 6px;
+  background: linear-gradient(180deg, #202755, #10142c);
+  box-shadow: 0 0 0 1px #0a0d1c;
+}
+.chair-arm-left { left: calc(50% - 118px); }
+.chair-arm-right { right: calc(50% - 118px); }
+.character-shoulders {
+  position: absolute; z-index: 2; left: 50%; bottom: 0;
+  transform: translateX(-50%);
+  width: 196px; height: 78px;
+  clip-path: polygon(4% 100%, 0% 40%, 24% 4%, 76% 4%, 100% 40%, 96% 100%);
+  background: linear-gradient(185deg, #2c3566 0%, #14183a 85%);
+  box-shadow: 0 -1px 0 rgba(140, 190, 255, .2) inset;
+}
+.character-head {
+  position: absolute; z-index: 3; left: 50%; bottom: 62px;
+  transform: translateX(-50%);
+  width: 64px; height: 68px;
+  border-radius: 50% 50% 46% 46%;
+  background: linear-gradient(200deg, #313a70 0%, #14183a 80%);
+  box-shadow: -2px -3px 0 rgba(150, 195, 255, .24) inset, 0 6px 14px -6px rgba(0, 0, 0, .5);
+}
+.character-hair {
+  position: absolute; inset: -2px -2px 40% -2px; border-radius: 50% 50% 0 0;
+  background: linear-gradient(200deg, #262e5c 0%, #10132c 90%);
 }
 /* A little life while a round is actually live -- someone's typing. */
 .room-character.is-typing .character-head { animation: typing-nod 1.1s ease-in-out infinite; }
-.room-character.is-typing .character-body { animation: typing-sway 1.1s ease-in-out infinite; }
+.room-character.is-typing .character-shoulders { animation: typing-sway 1.1s ease-in-out infinite; }
 @keyframes typing-nod {
   0%, 100% { translate: 0 0; rotate: 0deg; }
   50% { translate: 0 -2px; rotate: -2deg; }
@@ -303,43 +419,10 @@ body {
   50% { translate: 1px 0; }
 }
 
-.room-desk {
-  width: 100%; max-width: 520px; height: 20px; margin-top: -2px;
-  position: relative; z-index: 2;
-  border-radius: 8px 8px 0 0; border: 1px solid #262c54; border-bottom: none;
-  background: linear-gradient(180deg, #1a2040, #0a0d1c);
-  box-shadow: 0 -10px 26px -16px rgba(75, 208, 255, .22);
-}
-
-.monitor { position: relative; z-index: 3; width: 100%; display: flex; flex-direction: column; align-items: center; }
-.monitor-bezel {
-  width: 100%; border-radius: 16px; padding: 11px;
-  background: linear-gradient(155deg, #1b2040, #0c0f22);
-  border: 1px solid #2a3060;
-  box-shadow: 0 24px 60px -22px rgba(0, 0, 0, .65);
-}
-.monitor-screen {
-  position: relative; overflow: hidden;
-  border-radius: 9px; background: var(--bg);
-  padding: 14px clamp(10px, 2.4vw, 20px) 18px;
-  display: flex; flex-direction: column; gap: 14px;
-  box-shadow: inset 0 0 0 1px #1c2140, inset 0 0 40px rgba(75, 208, 255, .05);
-}
-.monitor-screen::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 40;
-  background: repeating-linear-gradient(180deg,
-    rgba(255, 255, 255, .015) 0px, rgba(255, 255, 255, .015) 1px, transparent 1px, transparent 3px);
-}
-.monitor-stand {
-  width: 60px; height: 24px; margin-top: -2px;
-  background: linear-gradient(180deg, #1b2040, #0c0f22);
-  clip-path: polygon(32% 0, 68% 0, 100% 100%, 0 100%);
-}
-
 /* ── The cat: a mid-round distraction in the room, never on the screen ── */
 
 .cat-sprite {
-  position: absolute; bottom: 4px; left: -10%;
+  position: absolute; bottom: 128px; left: -10%;
   appearance: none; border: none; background: none; padding: 0; margin: 0;
   font-size: 28px; line-height: 1; cursor: pointer; z-index: 6;
   filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .5));
@@ -393,15 +476,21 @@ body {
 }
 
 /* ── Game HUD ────────────────────────────────────────────────────────── */
+/* A slim status bar bled to the screen's edges, not floating chips -- reads
+   as something rendered on the monitor rather than a web app header. */
 
 .hud {
-  width: 100%; max-width: 620px; margin: 0 auto;
+  width: 100%; margin: 0 0 14px;
+  padding: 9px clamp(10px, 2.4vw, 20px);
   display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: linear-gradient(180deg, rgba(23, 28, 51, .8), rgba(23, 28, 51, .35));
+  border-bottom: 1px solid rgba(75, 208, 255, .14);
 }
 .hud-left, .hud-right { display: flex; gap: 8px; align-items: center; }
 .pill {
-  padding: 7px 12px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line);
-  font-size: 13px; font-weight: 700; letter-spacing: .01em; white-space: nowrap;
+  padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .07);
+  font-size: 12px; font-weight: 700; letter-spacing: .01em; white-space: nowrap;
 }
 .pill-phase { color: var(--cyan); border-color: rgba(75, 208, 255, .35); }
 .pill-phase[data-tone="warn"] { color: var(--amber); border-color: rgba(255, 209, 102, .4); }
@@ -455,7 +544,7 @@ body {
 /* ── Ghost bar (PvP only) ────────────────────────────────────────────── */
 
 .ghost-bar {
-  width: 100%; max-width: 620px; margin: 0 auto;
+  width: 100%; max-width: 620px; margin: 0 auto 14px;
   display: flex; gap: 6px; justify-content: center;
 }
 .ghost-bar i {
@@ -567,7 +656,7 @@ body {
 /* ── Tile grid ───────────────────────────────────────────────────────── */
 
 .board-wrap {
-  width: 100%; max-width: 480px; margin: 0 auto;
+  width: 100%; max-width: 480px; margin: 0 auto 14px;
   display: flex; justify-content: center;
 }
 .tile-grid {
@@ -637,7 +726,7 @@ body {
 /* ── Status line ─────────────────────────────────────────────────────── */
 
 .status-line {
-  width: 100%; max-width: 480px; margin: 0 auto;
+  width: 100%; max-width: 480px; margin: 0 auto 14px;
   text-align: center; min-height: 1.4em;
   color: var(--ink-dim); font-size: 14px; font-weight: 600;
 }
@@ -653,28 +742,27 @@ body {
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 
-/* ── On-screen keyboard ──────────────────────────────────────────────── */
+/* ── Letter legend ─────────────────────────────────────────────────────
+   Not a keyboard -- nothing here is clickable. Guesses are typed on your
+   own physical keyboard; this is just a compact "what do I already know"
+   reference, small enough to sit under the board without dominating it. */
 
-.keyboard {
-  width: 100%; max-width: 560px; margin: 0 auto;
-  display: flex; flex-direction: column; gap: 7px;
+.letter-legend {
+  width: 100%; max-width: 480px; margin: 0 auto;
+  display: flex; flex-wrap: wrap; gap: 4px; justify-content: center;
+  transition: filter .3s ease;
 }
-.kb-row { display: flex; gap: 6px; justify-content: center; }
-.kb-key {
-  appearance: none; border: 1px solid var(--line); background: var(--panel-2);
-  color: var(--ink); font: inherit; font-weight: 700; font-size: 13px;
-  flex: 1; min-width: 0; padding: 15px 0;
-  border-radius: 8px; cursor: pointer; transition: all .13s ease;
-  touch-action: manipulation; text-transform: uppercase;
+.letter-legend.is-blackout { filter: brightness(.55) saturate(.5); }
+.legend-key {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 26px; border-radius: 5px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  color: var(--ink-faint); font-size: 11px; font-weight: 700;
+  font-style: normal; transition: all .13s ease;
 }
-.kb-key:hover { filter: brightness(1.16); }
-.kb-key:active { transform: translateY(1px); }
-.kb-wide { flex: 1.6; font-size: 16px; }
-.kb-key[data-tier="hit"] { background: var(--lime); border-color: var(--lime); color: #05170c; }
-.kb-key[data-tier="present"] { background: var(--amber); border-color: var(--amber); color: #221800; }
-.kb-key[data-tier="miss"] { background: var(--bg-2); border-color: var(--line); color: var(--ink-faint); }
-
-.keyboard.is-blackout { filter: brightness(.6) saturate(.5); transition: filter .3s ease; }
+.legend-key[data-tier="hit"] { background: var(--lime); border-color: var(--lime); color: #05170c; }
+.legend-key[data-tier="present"] { background: var(--amber); border-color: var(--amber); color: #221800; }
+.legend-key[data-tier="miss"] { background: var(--bg-2); border-color: var(--line); color: #3a3f5c; }
 
 /* ── Toast ───────────────────────────────────────────────────────────── */
 
@@ -691,7 +779,6 @@ body {
   .key-row:nth-child(2) { padding-left: 6px; padding-right: 6px; }
   .key-row:nth-child(3) { padding-left: 14px; padding-right: 14px; }
   .keypad .chip { padding: 10px 0; font-size: 13px; }
-  .kb-key { padding: 13px 0; font-size: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

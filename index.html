@@ -56,7 +56,7 @@
         <ol>
           <li>Every round picks a secret word — 4 or 5 letters, so don't assume it's always five.</li>
           <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
-          <li>Type guesses on the on-screen keyboard or your own — each letter pops in as you type it. Tiles flip to show hit (right spot), present (wrong spot) or miss, and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out on the keyboard, so you never waste a guess retyping it.</li>
+          <li>Type guesses on your own physical keyboard — there's no on-screen keyboard to tap, only a monitor to watch. Each letter pops in as you type it. Tiles flip to show hit (right spot), present (wrong spot) or miss, and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out in the legend below the board, so you never waste a guess retyping it.</li>
           <li>Every round has a 5-minute clock, ticking audibly in the last 10 seconds. Run out, and the round ends there — revealed, unsolved, for whoever hadn't gotten it yet.</li>
           <li><b>Round-start events:</b> about 2 rounds in 3 draw one, announced full-screen for the whole 5-second countdown so nobody misses it — 💰 double points, ⚡ a 90-second blitz, 🙈 blackout (the keyboard stops greying out known letters), and a rare (1 in 20) 🎰 <b>Jackpot</b>: extra guess AND double points, with confetti, a screen shake and a slot-machine fanfare.</li>
           <li><b>Mid-round events:</b> about half of all rounds also spring something on you partway through, out in the room around your monitor rather than on it — 🐈 a cat wanders in (click within 4 seconds for 20 bonus seconds on the clock), or 📱 the phone rings on the desk (answer within 4 seconds for one extra guess). Either way, missing it costs nothing. In Co-op only, a 🔀 <b>Letter Swap</b> can also strike: two guesses (never a winning one) suddenly have their tiles mixed up.</li>
@@ -110,14 +110,12 @@
   <section class="screen screen-wide" id="screen-game">
     <div class="room-scene" id="room-scene">
       <div class="room-window" aria-hidden="true"><i class="room-window-glow"></i></div>
+      <div class="desk-lamp" aria-hidden="true"><i class="lamp-glow"></i><i class="lamp-shade"></i><i class="lamp-neck"></i></div>
       <div class="room-desk" aria-hidden="true"></div>
-      <div class="room-character" aria-hidden="true">
-        <i class="character-head"></i>
-        <i class="character-body"></i>
-      </div>
 
       <div class="monitor">
         <div class="monitor-bezel">
+          <i class="monitor-cam" aria-hidden="true"></i>
           <div class="monitor-screen" id="monitor-screen">
             <div class="event-flash" id="event-flash" aria-hidden="true"></div>
             <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
@@ -144,10 +142,24 @@
 
             <div class="status-line" id="status-line"></div>
 
-            <div class="keyboard" id="keyboard"></div>
+            <!-- No on-screen keys to tap -- guesses are typed on your own
+                 physical keyboard. This is just a compact reference for
+                 which letters you already know (hit/present/miss). -->
+            <div class="letter-legend" id="letter-legend"></div>
           </div>
         </div>
         <div class="monitor-stand" aria-hidden="true"></div>
+      </div>
+
+      <!-- The camera sits behind them: chair, shoulders and the back of a
+           head, closest to the viewer, overlapping the monitor's base --
+           never its screen. -->
+      <div class="room-character" aria-hidden="true">
+        <i class="chair-back"></i>
+        <i class="chair-arm chair-arm-left"></i>
+        <i class="chair-arm chair-arm-right"></i>
+        <i class="character-shoulders"></i>
+        <i class="character-head"><i class="character-hair"></i></i>
       </div>
     </div>
   </section>
