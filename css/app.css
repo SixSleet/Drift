@@ -7,11 +7,13 @@
  *      in shared 3D units (1 unit = 1px at z = 0). Walls converge because
  *      they are actually angled, not because a gradient fakes it.
  *
- *   2. The SCREEN, a flat 1180x716 panel standing in that 3D space at
- *      z = -520. Perspective scales it to roughly 81%, so type inside it is
- *      authored ~1.25x larger than usual to land at a normal reading size.
- *      Nothing in there uses `vw`/`vh`: the panel is a fixed box, not the
- *      viewport, so viewport units would be measuring the wrong thing.
+ *   2. The SCREEN, which is NOT in that 3D space. `.monitor-screen` is a
+ *      bare measuring rectangle; js/screen-fit.js pins the flat
+ *      `#app-overlay` onto its on-screen pixels at exactly 1:1. Rendering
+ *      the app inside the stage meant perspective scaled it down, and a
+ *      downscaled layer rasterises soft -- every letter came out blurry.
+ *      Nothing in there uses `vw`/`vh`: the panel is sized to the monitor,
+ *      not the viewport, so viewport units would measure the wrong thing.
  *
  * Lighting is baked per surface. One warm source (the lamp, left, ~2700K)
  * and one cool source (the monitor itself, centre). Everything that reads
@@ -57,6 +59,16 @@
 }
 
 * { box-sizing: border-box; }
+
+/* `hidden` must actually hide. The UA sheet's `[hidden] { display: none }`
+   is a *user-agent* rule, so any author rule setting `display` on the same
+   element wins outright regardless of specificity -- which meant every
+   `el.hidden = true` in the JS was silently doing nothing for anything
+   styled `display: flex`. #mid-banner was the visible symptom: an empty
+   34x20 pill parked at the top of the panel on every screen, on every
+   round, whether or not a mid-round modifier had ever fired. Keep this
+   above everything so a later `display:` can't quietly resurrect it. */
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
