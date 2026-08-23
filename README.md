@@ -179,7 +179,11 @@ distractions at different moments, and neither can see the other's.
 | 🐈 Cat | Walks the desk in front of the screen — a real SVG model with four animated legs, a swinging tail and a proper meow. It genuinely gets between you and the board, which is the whole cost. Click to shoo it. |
 | 🦋 Moth | Comes in past the lamp and settles on the board, sitting over one already-revealed letter and blurring it out. The only room event that actually costs you something — swat it to get the letter back. |
 | 📱 Phone | Buzzes face-up on the desk, screen lit. Click to silence it. |
+| 🐁 Mouse | Darts along the front edge of the desk. Deliberately the *small* one — it never crosses the screen, so what it costs you is movement in the corner of your eye. Click to scare it off. |
+| ✈️ Paper plane | Sails across the front of the room on an arc. The only room event with a window on it: catch it in flight, or it glides on and lands off-screen. |
+| 🔊 Neighbour | Someone through the wall puts music on, and the soundtrack swaps to a muffled four-on-the-floor with the top end gone — what actually makes it through plasterboard. Bang on the wall to stop it. One bang is rude, not effective; the second one works. |
 | 💡 Lamp flicker | The desk lamp stutters and the warm half of the room drops out with it. |
+| 🔌 Power flicker | The monitor, not the lamp: the board dims and stutters for a beat. The most intrusive thing in here, so also the shortest and the rarest — and never dark enough to actually hide a letter, because room events do not carry penalties. |
 | ⛈ Thunderstorm | Rain streaks the window, and every few seconds lightning strikes: the room flashes white, the lamp cuts out with it, and for a beat the monitor is the only light left. Thunder trails the flash the way it does outdoors. |
 
 There is no bonus attached to any of them, and that is deliberate: a
@@ -191,7 +195,8 @@ they sit in real perspective rather than floating flat over the scene.
 
 **Sound is synthesised, and the shape of the synthesis is the point.** There
 are no audio files anywhere in the repo — every cue in `js/sfx.js` is a few
-oscillators and an envelope. Which means each one has to be built out of
+oscillators and an envelope, and the soundtrack in `js/music.js` is
+generated a note at a time. Which means each one has to be built out of
 whatever the real thing actually *is*, not out of a pitch that vaguely
 gestures at it:
 
@@ -211,6 +216,90 @@ gestures at it:
 - The **UI cues** all sit on one C-major pentatonic set with rounded attacks
   and a lowpass, so nothing in the game can produce a dissonant interval
   against anything else.
+
+## The soundtrack
+
+`js/music.js`. Generative, not a loop — there is a scheduler and a THEME
+describing what to build: a tempo, a scale, a chord progression, and which
+of pad / bass / arp / percussion are switched on.
+
+Generative rather than a written loop because of what this has to do. The
+track sits under someone concentrating on a word for five minutes at a
+stretch, and a short loop announces itself the third time round. A
+progression walking through its chords with a little controlled randomness
+in the arp stops being something you notice and turns into room tone, which
+is the entire job.
+
+**Twelve themes, and the game picks between them.**
+
+| Theme | When | What it is |
+| --- | --- | --- |
+| `title` / `lobby` | Menus | Slow, open, almost still |
+| `live` | Playing | The one that has to disappear — **no arp at all**, because a moving line is exactly what pulls attention off a word |
+| `blitz` | ⚡ | 138bpm, minor, hats closed up |
+| `double_points` | 💰 | Warm major with a bell arp |
+| `blackout` | 🙈 | Everything shuts down to a low murmur, the way the legend has |
+| `jackpot` | 🎰 | The only theme allowed to be loud |
+| `letter_swap` | 🔀 | Whole-tone: nothing resolves, which is the joke |
+| `storm` / `neighbour` | Room events | Player-sided, so only you hear them |
+| `reveal` / `standings` | Between rounds | Held and resolved, out of the way of the reveal cue |
+
+`game.js` has a single `musicTheme()` rather than a `music.set()` at every
+transition. The answer depends on three things at once — the phase, the
+round's opening event, and any modifier that landed mid-round — and working
+that out in each caller is how they drift apart.
+
+Two things worth knowing before touching this:
+
+- **Scheduling uses the lookahead pattern.** A `setInterval` wakes every
+  25ms and queues every note falling in the next 140ms, at sample-accurate
+  times, on the audio clock. Note timing never touches `setTimeout`, so a
+  board full of flipping tiles cannot make the music stutter.
+- **Themes have two levels.** `base` is the game: shared, server-driven.
+  `override` is a room event, which is player-sided and has to be able to
+  borrow the music and hand it straight back — a storm ending mid-round
+  cannot be allowed to clobber whatever the round was playing. A theme
+  change waits for the top of a bar and ducks across the seam; cutting
+  mid-bar is audible as a mistake. The scheduler's own clock never stops,
+  which is why moving between phases sounds continuous rather than like a
+  playlist skipping tracks.
+
+**Volume.** `js/audio.js` owns the one AudioContext and splits it into two
+buses, so music and effects carry independent volumes — the bed plays
+continuously and the cues land on top of it, and "quieter music, keep the
+tile flips" is not something one slider can say. Mute is a third control
+over the top and does not destroy either setting. All three persist.
+
+The settings panel is the only form control in the app, which is a real
+hazard here: guesses are typed on a physical keyboard with no on-screen
+alternative, and a focused `input[type=range]` eats arrow keys *and* would
+let a letter through to the board at the same time. So the panel stops
+keydown propagation while it is open, closing it returns focus to whatever
+opened it, and both key listeners ignore anything aimed at a form control.
+
+## The arcade
+
+Waiting in a lobby for someone to join is the deadest moment in the app, and
+the title screen is not far behind. Both get something to do — reachable
+from the lobby and the title screen, and interrupted automatically the
+moment a round starts.
+
+- **Word Hunt.** Six letters; find every 4- and 5-letter word hiding in
+  them. Fours score 1, fives score 3, `Tab` rerolls for 5 seconds off the
+  clock. Racks are drawn best-of-eight by solution count, because the
+  shipped word list is a broad one and a rack picked at random can clear a
+  minimum while every word in it is obscure — a rack you cannot get into is
+  the one thing that makes this feel unfair. (A straight "unscramble this
+  word" version was tried first and is a bad game on this dictionary for
+  exactly that reason.)
+- **Moth Swat.** Reflex rather than vocabulary. They arrive faster as you
+  go; three get past you and it's over.
+
+**These award nothing.** No points, no bonuses, no effect on any round —
+the only thing kept is a personal best in `localStorage`. That is the same
+reasoning as the room events: a client-side thing that hands out a reward is
+a client-side thing worth cheating at, and a leaderboard nobody else can see
+is not a leaderboard. It is something to do while you wait.
 
 ## The room
 
@@ -428,9 +517,13 @@ css/app.css          two coordinate systems: the 3D room, and the flat
 js/config.js         connection details and every tunable
 js/net.js            token identity, clock sync, RPCs, realtime channel
 js/words.js           client-side "is this a real word" check (UX only)
-js/sfx.js             synthesised WebAudio sound; no audio files
+js/audio.js           the one AudioContext, split into music/effects buses
+js/sfx.js             synthesised WebAudio cues; no audio files
+js/music.js           the generative soundtrack, one theme per situation
+js/arcade.js          Word Hunt and Moth Swat, for the dead time
 js/screen-fit.js      pins the flat overlay to the monitor's measured rect
-js/room-events.js     the player-sided room: cat, moth, phone, lamp, storm
+js/room-events.js     the player-sided room: cat, moth, mouse, plane, phone,
+                      lamp, neighbour, storm, power cut
 js/game.js            phase clock, round settlement, input, scoring display
 js/ui.js               DOM rendering: tile grid, legend, rails, standings
 js/main.js            wires the buttons up and listens for physical keydown

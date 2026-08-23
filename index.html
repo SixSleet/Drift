@@ -77,6 +77,7 @@
 
           <button class="btn btn-primary btn-lg" id="btn-create">Play solo</button>
           <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
+          <button class="btn btn-quiet" id="btn-arcade-title" type="button">Warm up first</button>
           <button class="btn btn-quiet" id="btn-settings-title" type="button" aria-expanded="false" aria-controls="settings-panel">Sound settings</button>
         </div>
 
@@ -128,6 +129,7 @@
 
         <button class="btn btn-primary btn-lg" id="btn-start" hidden>Start game</button>
         <p class="note" id="lobby-note"></p>
+        <button class="btn btn-quiet" id="btn-arcade-lobby" type="button">Play something while you wait</button>
       </div>
     </section>
 
@@ -214,6 +216,30 @@
 
       <button class="btn btn-ghost" id="btn-mute-all" type="button" aria-pressed="false">Mute everything</button>
     </div>
+
+    <!-- ── Arcade ────────────────────────────────────────────────
+         Something to do in the dead time -- waiting in a lobby, or on the
+         title screen before you commit to a match. Nothing here touches
+         the game: no points, no bonuses, just a personal best in this
+         browser. A client-side thing that awarded anything would be a
+         client-side thing worth cheating at. -->
+    <section class="screen" id="screen-arcade">
+      <div class="stack stack-wide">
+        <div class="arcade-bar">
+          <button class="btn-icon" id="btn-arcade-back" type="button" aria-label="Back">←</button>
+          <p class="arcade-name" id="arcade-title">Warm up</p>
+          <span class="pill pill-timer" id="arcade-time" hidden>0:60</span>
+          <span class="arcade-stat"><b id="arcade-score">0</b></span>
+          <span class="arcade-stat arcade-best" id="arcade-best"></span>
+        </div>
+
+        <p class="arcade-lobby-note" id="arcade-lobby-note" hidden></p>
+        <p class="arcade-result" id="arcade-result" hidden></p>
+
+        <div class="arcade-picker" id="arcade-picker"></div>
+        <div class="arcade-stage" id="arcade-stage"></div>
+      </div>
+    </section>
 
     <!-- ── Errors / setup ────────────────────────────────────── -->
     <section class="screen" id="screen-error">

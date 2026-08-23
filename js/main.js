@@ -10,6 +10,7 @@ import {
   chipGroup, showError, CODE_ALPHABET, buildSettings,
 } from './ui.js';
 import { volume } from './audio.js';
+import { GAMES, startArcade, stopArcade, bestScore } from './arcade.js';
 
 const game = new Game();
 // Exposed so the browser test harness can inspect the live simulation.
@@ -175,6 +176,95 @@ document.addEventListener('keydown', (e) => {
   const ch = e.key.length === 1 ? e.key.toUpperCase() : '';
   if (ch && /^[A-Z]$/.test(ch)) { e.preventDefault(); game.handleKey(ch); }
 });
+
+// ── Arcade ─────────────────────────────────────────────────────────────
+//
+// The two entry points are the two places you wait: the title screen, and
+// the lobby with a room code up and nobody in it yet. `cameFrom` is where
+// Back goes, so leaving the arcade from a lobby returns to that lobby
+// rather than dumping you at the title with a room still open.
+
+let cameFrom = 'screen-title';
+
+(function buildArcadePicker() {
+  const box = $('#arcade-picker');
+  if (!box) return;
+  for (const [id, g] of Object.entries(GAMES)) {
+    const b = document.createElement('button');
+    b.className = 'chip mode-chip';
+    b.type = 'button';
+    b.dataset.arcade = id;
+    b.innerHTML = `<span class="mode-name"></span><span class="mode-blurb"></span><span class="arcade-chip-best"></span>`;
+    b.querySelector('.mode-name').textContent = g.name;
+    b.querySelector('.mode-blurb').textContent = g.blurb;
+    b.addEventListener('click', () => play(id));
+    box.appendChild(b);
+  }
+})();
+
+function paintArcadeBests() {
+  for (const [id] of Object.entries(GAMES)) {
+    const chip = $(`#arcade-picker .chip[data-arcade="${id}"] .arcade-chip-best`);
+    if (!chip) continue;
+    const best = bestScore(id);
+    chip.textContent = best ? `Best ${best} ${GAMES[id].unit}` : 'Not played yet';
+  }
+}
+
+function showPicker() {
+  stopArcade();
+  $('#arcade-picker').hidden = false;
+  $('#arcade-stage').hidden = true;
+  $('#arcade-time').hidden = true;
+  $('#arcade-score').parentElement.hidden = true;
+  $('#arcade-title').textContent = 'Warm up';
+  paintArcadeBests();
+}
+
+async function play(id) {
+  $('#arcade-picker').hidden = true;
+  $('#arcade-stage').hidden = false;
+  $('#arcade-time').hidden = false;
+  $('#arcade-score').parentElement.hidden = false;
+  await startArcade(id, () => {
+    // When a run ends, drop back to the picker so the score sits next to
+    // the option to go again.
+    $('#arcade-picker').hidden = false;
+    $('#arcade-stage').hidden = true;
+    $('#arcade-time').hidden = true;
+    paintArcadeBests();
+  });
+}
+
+function openArcade(from) {
+  cameFrom = from;
+  const note = $('#arcade-lobby-note');
+  if (note) {
+    // In a lobby the one thing you must not miss is people arriving, so the
+    // count comes with you.
+    note.hidden = from !== 'screen-lobby';
+    if (from === 'screen-lobby') note.textContent = 'Still in the lobby — the game starts without warning when the host is ready.';
+  }
+  $('#arcade-result').hidden = true;
+  showScreen('screen-arcade');
+  showPicker();
+}
+
+$('#btn-arcade-title')?.addEventListener('click', () => openArcade('screen-title'));
+$('#btn-arcade-lobby')?.addEventListener('click', () => openArcade('screen-lobby'));
+$('#btn-arcade-back')?.addEventListener('click', () => {
+  stopArcade();
+  showScreen(cameFrom);
+});
+
+// A round starting has to win over whatever is on the arcade stage: game.js
+// switches to the game screen by itself, but the arcade's key listener and
+// its spawn timers would carry on underneath. Watching the screen rather
+// than hooking the phase keeps this true for every route into the game.
+new MutationObserver(() => {
+  if ($('#screen-arcade[data-active]')) return;
+  stopArcade();
+}).observe($('#app'), { attributes: true, attributeFilter: ['data-active'], subtree: true });
 
 $('#btn-again').addEventListener('click', () => { location.href = location.pathname; });
 $('#btn-error-back').addEventListener('click', () => { location.href = location.pathname; });

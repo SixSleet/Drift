@@ -43,7 +43,8 @@ export class Game {
   #freshLocal() {
     return {
       active: '', shake: false, revealAt: 0, boardAt: 0, lastSettleTry: 0, lastTickSecond: null,
-      midModifierShown: false, // this round's global mid-round modifier has been applied client-side
+      midModifierShown: false,     // we have applied this round's modifier client-side
+      midModifierAnnounced: false, // ...and the banner/sound have been shown for it
     };
   }
 
@@ -166,7 +167,19 @@ export class Game {
   #onRound(row) {
     if (!row || row.room_id !== this.roomId) return;
     if (this.round && row.id === this.round.id) {
+      const wasFired = this.round.mid_modifier_fired;
       this.round = { ...this.round, ...row };
+      // A modifier is global, so its announcement has to be global too.
+      // Only one client's clock actually applies it, and #checkMidModifier
+      // bails out early on anyone whose refresh brought back
+      // mid_modifier_fired before their own clock crossed the mark -- which
+      // left them with a halved clock, a dark legend or doubled points and
+      // nothing on screen to explain why. Announce off the row changing,
+      // not off being the one who changed it.
+      if (this.round.mid_modifier_fired && !wasFired && !this.local.midModifierAnnounced) {
+        this.local.midModifierShown = true;
+        this.#showMidModifier(this.round.mid_modifier);
+      }
       return;
     }
     if (this.round && row.round_no <= this.round.round_no) return;
@@ -295,9 +308,29 @@ export class Game {
     else this.#applyMidModifier(r.mid_modifier);
   }
 
+  /**
+   * Everything a mid-round modifier does to *this* screen: the sting, the
+   * banner, the soundtrack, and the one rule that is client-side.
+   * Idempotent, because two paths reach it -- our own clock crossing the
+   * mark, and the round row coming back already fired from someone else's.
+   */
+  #showMidModifier(kind) {
+    if (!kind || kind === 'none') return;
+    if (this.local.midModifierAnnounced) return;
+    const info = EVENTS[kind];
+    if (!info) return;
+    this.local.midModifierAnnounced = true;
+    sfx.event(kind);
+    this.#announceMidModifier(kind);
+    music.set(this.musicTheme());
+    if (info.rule) {
+      this.roundRule = info.rule;
+      $('#letter-legend').classList.toggle('is-blackout', this.roundRule === 'blackout');
+    }
+  }
+
   /** Blitz / Double Points / Blackout / Jackpot, landing mid-round. */
   async #applyMidModifier(kind) {
-    const info = EVENTS[kind];
     try {
       await api.applyMidModifier(this.round.id);
     } catch {
@@ -305,13 +338,7 @@ export class Game {
       // refresh broadcasts the same result to everyone, so there is nothing
       // to do here -- but still show the banner, since the modifier is real.
     }
-    sfx.event(kind);
-    this.#announceMidModifier(kind);
-    music.set(this.musicTheme());
-    if (info?.rule) {
-      this.roundRule = info.rule;
-      $('#letter-legend').classList.toggle('is-blackout', this.roundRule === 'blackout');
-    }
+    this.#showMidModifier(kind);
     this.channel?.poke();
     await this.refreshState();
   }
@@ -326,9 +353,7 @@ export class Game {
       // Another teammate's client already resolved it (or the window
       // closed) -- their refresh will show the same result to everyone.
     }
-    sfx.event('letter_swap');
-    this.#announceMidModifier('letter_swap');
-    music.set(this.musicTheme());
+    this.#showMidModifier('letter_swap');
     this.channel?.poke();
     await this.refreshState();
   }
