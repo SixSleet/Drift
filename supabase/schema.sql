@@ -108,6 +108,10 @@ create table public.wf_rooms (
   mode             text not null check (mode in ('pvp', 'coop', 'solo')),
   status           text not null default 'lobby' check (status in ('lobby', 'playing', 'finished')),
   total_rounds     int  not null default 6 check (total_rounds between 1 and 20),
+  -- Chosen on the title screen, before the room exists, and fixed for the
+  -- whole match -- joiners inherit it. NULL means "mixed", which re-rolls
+  -- 4-or-5 each round (the original behaviour, and still the default).
+  word_length      int  check (word_length is null or (word_length between 4 and 7)),
   current_round    int  not null default 0,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
@@ -139,7 +143,7 @@ create table public.wf_rounds (
   id                 uuid primary key default gen_random_uuid(),
   room_id            uuid not null references public.wf_rooms(id) on delete cascade,
   round_no           int  not null check (round_no >= 1),
-  word_length        int  not null check (word_length between 4 and 5),
+  word_length        int  not null check (word_length between 4 and 7),
   max_guesses        int  not null check (max_guesses between 4 and 12),
   chain_letter       char(1),
   chain_broken       boolean not null default false,
@@ -155,9 +159,15 @@ create table public.wf_rounds (
                                         'extra_guess', 'sudden_death', 'shuffle', 'bullseye')), -- last four
                                         -- retired (in roll order), kept legal so an old row stays valid
   time_limit_ms      int  not null default 300000 check (time_limit_ms > 0), -- blitz shortens this
-  mid_event          text not null default 'none' check (mid_event in ('none', 'cat', 'letter_swap', 'phone')),
-  mid_event_at_ms    int  not null default 0 check (mid_event_at_ms >= 0), -- ms into the round it fires
-  mid_event_fired    boolean not null default false,
+  -- A *second*, global modifier that strikes partway through live play
+  -- instead of being announced before the round. 'cat'/'phone' are retired
+  -- here (room events are client-side and player-sided now), kept legal so
+  -- an old row stays valid.
+  mid_modifier       text not null default 'none'
+                       check (mid_modifier in ('none', 'double_points', 'blitz', 'blackout',
+                                               'jackpot', 'letter_swap', 'cat', 'phone')),
+  mid_modifier_at_ms int  not null default 0 check (mid_modifier_at_ms >= 0), -- ms into the round it fires
+  mid_modifier_fired boolean not null default false,
   created_at         timestamptz not null default now(),
   unique (room_id, round_no)
 );
@@ -442,7 +452,9 @@ $$;
 
 -- ── Room lifecycle ───────────────────────────────────────────────────────
 
-create or replace function public.wf_create_room(p_token text, p_mode text, p_total_rounds integer default 6)
+create or replace function public.wf_create_room(
+  p_token text, p_mode text, p_total_rounds integer default 6,
+  p_word_length integer default null)
 returns jsonb
 language plpgsql
 security definer
@@ -454,6 +466,7 @@ declare
   v_room  public.wf_rooms;
   v_alpha text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   v_try   int  := 0;
+  v_len   int;
 begin
   if v_hash is null then
     raise exception 'wordforge: a 64-character hex token is required' using errcode = '28000';
@@ -461,6 +474,9 @@ begin
   if p_mode not in ('pvp', 'coop', 'solo') then
     raise exception 'wordforge: mode must be pvp, coop or solo' using errcode = 'P0001';
   end if;
+  -- Anything outside 4-7 (including a hostile value) falls back to mixed
+  -- rather than erroring: this is a preference, not a security boundary.
+  v_len := case when p_word_length between 4 and 7 then p_word_length else null end;
 
   loop
     v_try := v_try + 1;
@@ -469,8 +485,8 @@ begin
       v_code := v_code || substr(v_alpha, 1 + floor(random() * length(v_alpha))::int, 1);
     end loop;
     begin
-      insert into public.wf_rooms (code, host_token_hash, mode, total_rounds)
-      values (v_code, v_hash, p_mode, greatest(1, least(20, coalesce(p_total_rounds, 6))))
+      insert into public.wf_rooms (code, host_token_hash, mode, total_rounds, word_length)
+      values (v_code, v_hash, p_mode, greatest(1, least(20, coalesce(p_total_rounds, 6))), v_len)
       returning * into v_room;
       exit;
     exception when unique_violation then
@@ -481,7 +497,8 @@ begin
   insert into public.wf_players (room_id, token_hash, seat, name, color, is_host)
   values (v_room.id, v_hash, 0, public.wf_nickname(0, v_hash), public.wf_palette(0), true);
 
-  return jsonb_build_object('room_id', v_room.id, 'code', v_room.code, 'mode', v_room.mode);
+  return jsonb_build_object('room_id', v_room.id, 'code', v_room.code,
+                            'mode', v_room.mode, 'word_length', v_room.word_length);
 end;
 $$;
 
@@ -605,9 +622,10 @@ declare
   v_event text;
   v_roll  double precision;
   v_time_limit_ms int;
-  v_mid_event text;
+  v_mid_modifier text;
   v_mid_roll double precision;
   v_mid_at_ms int;
+  v_pool text[];
 begin
   if v_room.current_round >= 1 then
     select * into v_round from public.wf_rounds
@@ -622,7 +640,9 @@ begin
     raise exception 'wordforge: game is over' using errcode = 'P0006';
   end if;
 
-  v_len := 4 + floor(random() * 2)::int; -- 4 or 5 only
+  -- Room setting wins; NULL means "mixed", which still rolls 4 or 5 so the
+  -- default match plays exactly as it always did.
+  v_len := coalesce(v_room.word_length, 4 + floor(random() * 2)::int);
 
   if v_no > 1 then
     select revealed_secret into v_prev_secret
@@ -662,7 +682,7 @@ begin
   v_max_guesses := v_len + case when v_room.mode = 'coop' then 3 else 2 end;
   v_time_limit_ms := 300000;
 
-  -- Round-start event, announced full-screen before the round begins: 35%
+  -- Round-start modifier, announced full-screen before the round begins: 35%
   -- nothing, 20% each of double_points/blitz/blackout, 5% jackpot (extra
   -- guess + double points). One shared roll against cumulative thresholds
   -- (NOT one random() per WHEN -- that silently skews the odds, since each
@@ -682,38 +702,41 @@ begin
     v_max_guesses := v_max_guesses + 1;
   end if;
 
-  -- Mid-round event: fires partway through *live* play instead of being
-  -- announced up front, via wf_catch_cat / wf_trigger_letter_swap /
-  -- wf_answer_phone once the round's own clock crosses mid_event_at_ms.
-  -- 50% none, the remaining 50% split evenly between whatever's eligible:
-  -- letter_swap only ever rolls in coop (it needs another player's guess
-  -- to swap with, and PvP guesses are invisible to each other until
-  -- settle) -- coop splits the 50% three ways (letter_swap/cat/phone),
-  -- everyone else splits it two ways (cat/phone). mid_event_at_ms lands
-  -- 45s-60s in by default, always leaving at least 30s of clock after it.
-  v_mid_roll := random();
-  if v_mid_roll < 0.5 then
-    v_mid_event := 'none';
-  elsif v_room.mode = 'coop' then
-    v_mid_event := case
-      when v_mid_roll < 0.667 then 'letter_swap'
-      when v_mid_roll < 0.833 then 'cat'
-      else 'phone'
-    end;
-  else
-    v_mid_event := case when v_mid_roll < 0.75 then 'cat' else 'phone' end;
+  -- Mid-round modifier: a *second*, independent global roll that lands
+  -- partway through live play instead of being announced up front. 55%
+  -- nothing. Whatever the round already opened with is excluded from the
+  -- pool, so a round never announces Blitz and then "surprises" you with
+  -- Blitz again. letter_swap is coop-only: it needs another player's guess
+  -- to swap with, and PvP guesses stay invisible to each other until settle.
+  --
+  -- array_append, not `|| 'letter_swap'` -- the operator form makes Postgres
+  -- parse the string as an array literal and throws at runtime.
+  v_pool := array['double_points', 'blitz', 'blackout'];
+  if v_room.mode = 'coop' then
+    v_pool := array_append(v_pool, 'letter_swap');
   end if;
-  v_mid_at_ms := 45000 + floor(random() * greatest(1, v_time_limit_ms - 75000))::int;
+  v_pool := array_remove(v_pool, v_event);
+
+  v_mid_roll := random();
+  if v_mid_roll < 0.55 or array_length(v_pool, 1) is null then
+    v_mid_modifier := 'none';
+  else
+    v_mid_modifier := v_pool[1 + floor(((v_mid_roll - 0.55) / 0.45) * array_length(v_pool, 1))::int];
+    v_mid_modifier := coalesce(v_mid_modifier, v_pool[array_length(v_pool, 1)]);
+  end if;
+
+  -- Lands 40-60s in, always leaving at least 30s of clock to react to it.
+  v_mid_at_ms := 40000 + floor(random() * greatest(1, v_time_limit_ms - 70000))::int;
 
   insert into public.wf_rounds
     (room_id, round_no, word_length, max_guesses, chain_letter, chain_broken, starts_at,
-     event, time_limit_ms, mid_event, mid_event_at_ms)
+     event, time_limit_ms, mid_modifier, mid_modifier_at_ms)
   values (
     p_room, v_no, v_len, v_max_guesses,
     case when v_chain_broken then null else v_chain_letter end,
     v_chain_broken,
     now() + interval '5 seconds',
-    v_event, v_time_limit_ms, v_mid_event, v_mid_at_ms
+    v_event, v_time_limit_ms, v_mid_modifier, v_mid_at_ms
   )
   returning * into v_round;
 
@@ -830,7 +853,10 @@ begin
 
   v_all_hit := array_fill('hit'::text, array[v_round.word_length]);
   v_time_up := now() >= v_round.starts_at + make_interval(secs => v_round.time_limit_ms / 1000.0);
-  v_mult := case when v_round.event in ('double_points', 'jackpot') then 2 else 1 end;
+  v_mult := case when v_round.event in ('double_points', 'jackpot')
+                   or (v_round.mid_modifier_fired
+                       and v_round.mid_modifier in ('double_points', 'jackpot'))
+                 then 2 else 1 end;
 
   if v_mode = 'coop' then
     v_done := v_time_up
@@ -911,12 +937,13 @@ begin
 end;
 $$;
 
--- Resolves this round's cat: callable by any member, only inside a 4s
--- window starting at mid_event_at_ms. A catch adds 20s to time_limit_ms
--- (shared, so it benefits everyone still playing, not just the clicker).
--- Idempotent via mid_event_fired -- the first catch wins, everyone else's
--- click just misses.
-create or replace function public.wf_catch_cat(p_token text, p_round uuid)
+-- Applies this round's mid-round modifier once the round's own clock crosses
+-- mid_modifier_at_ms. Global, and idempotent via mid_modifier_fired: whichever
+-- client's clock gets here first wins and every other call is a harmless
+-- no-op, so racing players can never double-apply a bonus. Letter Swap keeps
+-- its own RPC below (it has to reach into the guess rows); this covers the
+-- modifiers with a numeric effect.
+create or replace function public.wf_apply_mid_modifier(p_token text, p_round uuid)
 returns public.wf_rounds
 language plpgsql
 security definer
@@ -926,33 +953,50 @@ declare
   v_player public.wf_players := public.wf_player_in_round(p_token, p_round);
   v_round  public.wf_rounds;
   v_elapsed_ms int;
+  v_remaining_ms int;
 begin
   select * into v_round from public.wf_rounds where id = p_round for update;
-
-  if v_round.status <> 'active' then
-    raise exception 'wordforge: round is not live' using errcode = 'P0022';
+  if not found or v_round.status <> 'active' then
+    raise exception 'round is not active';
   end if;
-  if v_round.mid_event <> 'cat' then
-    raise exception 'wordforge: no cat this round' using errcode = 'P0023';
+  if v_round.mid_modifier not in ('double_points', 'blitz', 'blackout', 'jackpot') then
+    raise exception 'no numeric mid-round modifier on this round';
   end if;
-  if v_round.mid_event_fired then
-    raise exception 'wordforge: already resolved' using errcode = 'P0024';
-  end if;
-
-  v_elapsed_ms := extract(epoch from (now() - v_round.starts_at)) * 1000;
-  if v_elapsed_ms < v_round.mid_event_at_ms or v_elapsed_ms > v_round.mid_event_at_ms + 4000 then
-    raise exception 'wordforge: too slow, the cat is gone' using errcode = 'P0025';
+  if v_round.mid_modifier_fired then
+    return v_round;   -- someone else's clock got here first
   end if;
 
-  update public.wf_rounds
-     set mid_event_fired = true, time_limit_ms = time_limit_ms + 20000
-   where id = p_round
-   returning * into v_round;
+  v_elapsed_ms := floor(extract(epoch from (now() - v_round.starts_at)) * 1000)::int;
+  if v_elapsed_ms < v_round.mid_modifier_at_ms then
+    raise exception 'too early';
+  end if;
+
+  -- Blitz mid-round halves whatever clock is left rather than resetting to a
+  -- flat 90s -- 90s could otherwise *extend* a round with less than that
+  -- remaining. Never cuts below 15s, so it stays playable.
+  if v_round.mid_modifier = 'blitz' then
+    v_remaining_ms := greatest(0, v_round.time_limit_ms - v_elapsed_ms);
+    update public.wf_rounds
+       set mid_modifier_fired = true,
+           time_limit_ms = v_elapsed_ms + greatest(15000, v_remaining_ms / 2)
+     where id = p_round returning * into v_round;
+  elsif v_round.mid_modifier = 'jackpot' then
+    update public.wf_rounds
+       set mid_modifier_fired = true, max_guesses = least(12, max_guesses + 1)
+     where id = p_round returning * into v_round;
+  else
+    -- double_points and blackout carry no numeric effect: scoring reads
+    -- mid_modifier directly, and blackout is a pure client-side rule.
+    update public.wf_rounds
+       set mid_modifier_fired = true
+     where id = p_round returning * into v_round;
+  end if;
+
   return v_round;
 end;
 $$;
 
--- Resolves this round's letter swap (coop only -- PvP guesses are invisible
+-- Resolves this round's Letter Swap modifier (coop only -- PvP guesses are invisible
 -- to the other player until settle, so a swap there would either leak a
 -- guess or silently do nothing visible). Picks two different players' most
 -- recent non-winning guesses at random and swaps their feedback arrays --
@@ -978,10 +1022,10 @@ begin
   if v_round.status <> 'active' then
     raise exception 'wordforge: round is not live' using errcode = 'P0022';
   end if;
-  if v_round.mid_event <> 'letter_swap' then
+  if v_round.mid_modifier <> 'letter_swap' then
     raise exception 'wordforge: no swap this round' using errcode = 'P0023';
   end if;
-  if v_round.mid_event_fired then
+  if v_round.mid_modifier_fired then
     raise exception 'wordforge: already resolved' using errcode = 'P0024';
   end if;
   if v_mode <> 'coop' then
@@ -989,7 +1033,7 @@ begin
   end if;
 
   v_elapsed_ms := extract(epoch from (now() - v_round.starts_at)) * 1000;
-  if v_elapsed_ms < v_round.mid_event_at_ms then
+  if v_elapsed_ms < v_round.mid_modifier_at_ms then
     raise exception 'wordforge: not yet' using errcode = 'P0025';
   end if;
 
@@ -1003,7 +1047,7 @@ begin
    order by random() limit 1;
 
   if v_a.player_id is null then
-    update public.wf_rounds set mid_event_fired = true where id = p_round returning * into v_round;
+    update public.wf_rounds set mid_modifier_fired = true where id = p_round returning * into v_round;
     return v_round;
   end if;
 
@@ -1013,7 +1057,7 @@ begin
    order by random() limit 1;
 
   if v_b.player_id is null then
-    update public.wf_rounds set mid_event_fired = true where id = p_round returning * into v_round;
+    update public.wf_rounds set mid_modifier_fired = true where id = p_round returning * into v_round;
     return v_round;
   end if;
 
@@ -1022,47 +1066,7 @@ begin
   update public.wf_guesses set feedback = v_a.feedback
    where round_id = p_round and player_id = v_b.player_id and attempt_no = v_b.attempt_no;
 
-  update public.wf_rounds set mid_event_fired = true where id = p_round returning * into v_round;
-  return v_round;
-end;
-$$;
-
--- Resolves this round's phone: callable by any member, only inside a 4s
--- window starting at mid_event_at_ms. Answering adds one guess to
--- max_guesses (capped at the table's own max of 12), shared like the cat's
--- time bonus. Idempotent via mid_event_fired.
-create or replace function public.wf_answer_phone(p_token text, p_round uuid)
-returns public.wf_rounds
-language plpgsql
-security definer
-set search_path = public, pg_temp
-as $$
-declare
-  v_player public.wf_players := public.wf_player_in_round(p_token, p_round);
-  v_round  public.wf_rounds;
-  v_elapsed_ms int;
-begin
-  select * into v_round from public.wf_rounds where id = p_round for update;
-
-  if v_round.status <> 'active' then
-    raise exception 'wordforge: round is not live' using errcode = 'P0022';
-  end if;
-  if v_round.mid_event <> 'phone' then
-    raise exception 'wordforge: no phone this round' using errcode = 'P0023';
-  end if;
-  if v_round.mid_event_fired then
-    raise exception 'wordforge: already resolved' using errcode = 'P0024';
-  end if;
-
-  v_elapsed_ms := extract(epoch from (now() - v_round.starts_at)) * 1000;
-  if v_elapsed_ms < v_round.mid_event_at_ms or v_elapsed_ms > v_round.mid_event_at_ms + 4000 then
-    raise exception 'wordforge: too slow, it stopped ringing' using errcode = 'P0025';
-  end if;
-
-  update public.wf_rounds
-     set mid_event_fired = true, max_guesses = least(12, max_guesses + 1)
-   where id = p_round
-   returning * into v_round;
+  update public.wf_rounds set mid_modifier_fired = true where id = p_round returning * into v_round;
   return v_round;
 end;
 $$;
@@ -1135,7 +1139,7 @@ do $$
 declare fn text;
 begin
   foreach fn in array array[
-    'wf_create_room(text, text, integer)',
+    'wf_create_room(text, text, integer, integer)',
     'wf_join_room(text, text)',
     'wf_heartbeat(text, uuid)',
     'wf_start_game(text, uuid)',
@@ -1143,9 +1147,8 @@ begin
     'wf_next_round(text, uuid)',
     'wf_submit_guess(text, uuid, text)',
     'wf_check_settle(text, uuid)',
-    'wf_catch_cat(text, uuid)',
     'wf_trigger_letter_swap(text, uuid)',
-    'wf_answer_phone(text, uuid)',
+    'wf_apply_mid_modifier(text, uuid)',
     'wf_state(text, uuid)',
     'wf_server_time()'
   ] loop

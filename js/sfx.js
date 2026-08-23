@@ -44,6 +44,63 @@ function blip({ freq = 440, to = null, dur = 0.09, type = 'sine', gain = 0.2, de
   osc.stop(t0 + dur + 0.02);
 }
 
+
+let noiseBuf = null;
+function noise(c) {
+  if (!noiseBuf || noiseBuf.sampleRate !== c.sampleRate) {
+    noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const src = c.createBufferSource();
+  src.buffer = noiseBuf;
+  src.loop = true;
+  return src;
+}
+
+/**
+ * A cat's voice is a formant sweep, not a beep: a sawtooth glide through a
+ * resonant bandpass, with the filter tracking the pitch. `shape` bends the
+ * contour -- a short rising "mrrp", a full rising-then-falling "meow", or a
+ * long plaintive one.
+ */
+function meowVoice({ dur = 0.5, base = 480, peak = 760, gain = 0.14, delay = 0 } = {}) {
+  const c = ensure();
+  if (!c) return;
+  const t0 = c.currentTime + delay;
+  const osc = c.createOscillator();
+  const band = c.createBiquadFilter();
+  const env = c.createGain();
+  const vib = c.createOscillator();
+  const vibAmt = c.createGain();
+
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(base, t0);
+  osc.frequency.exponentialRampToValueAtTime(peak, t0 + dur * 0.35);
+  osc.frequency.exponentialRampToValueAtTime(base * 0.72, t0 + dur);
+
+  // A little wobble is most of what separates "cat" from "synth".
+  vib.type = 'sine';
+  vib.frequency.setValueAtTime(22, t0);
+  vibAmt.gain.setValueAtTime(peak * 0.035, t0);
+  vib.connect(vibAmt).connect(osc.frequency);
+
+  band.type = 'bandpass';
+  band.Q.setValueAtTime(6, t0);
+  band.frequency.setValueAtTime(base * 2.4, t0);
+  band.frequency.exponentialRampToValueAtTime(peak * 2.2, t0 + dur * 0.35);
+  band.frequency.exponentialRampToValueAtTime(base * 1.6, t0 + dur);
+
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(gain, t0 + 0.06);
+  env.gain.setValueAtTime(gain, t0 + dur * 0.55);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+  osc.connect(band).connect(env).connect(master);
+  osc.start(t0); vib.start(t0);
+  osc.stop(t0 + dur + 0.05); vib.stop(t0 + dur + 0.05);
+}
+
 export const sfx = {
   get muted() { return muted; },
 
@@ -132,29 +189,127 @@ export const sfx = {
     blip({ freq: 220, to: 90, dur: 0.22, type: 'sawtooth', gain: 0.13 });
   },
 
-  /** A cat just wandered into the room. A soft, playful "mrow." */
-  catAppear() {
-    blip({ freq: 500, to: 700, dur: 0.1, type: 'triangle', gain: 0.1 });
-    blip({ freq: 700, to: 550, dur: 0.14, type: 'triangle', gain: 0.09, delay: 0.1 });
+  /** The cat announces itself. A real rising-falling meow, not a beep. */
+  catMeow() {
+    meowVoice({ dur: 0.55, base: 460, peak: 780, gain: 0.15 });
   },
 
-  /** Caught it! A bright little chime. */
-  catCaught() {
-    [880, 1175, 1568].forEach((f, i) =>
-      blip({ freq: f, dur: 0.12, type: 'square', gain: 0.14, delay: i * 0.06 }));
+  /** A shorter, chirpier "mrrp" -- the one they do mid-stride. */
+  catChirp() {
+    meowVoice({ dur: 0.22, base: 560, peak: 880, gain: 0.11 });
   },
 
-  /** The phone starts ringing on the desk -- a classic two-tone burst. */
-  phoneRing() {
-    for (let i = 0; i < 3; i++) {
-      blip({ freq: 940, dur: 0.15, type: 'sine', gain: 0.12, delay: i * 0.35 });
-      blip({ freq: 760, dur: 0.15, type: 'sine', gain: 0.1, delay: 0.1 + i * 0.35 });
+  /** Shooed off the desk: an indignant meow plus scampering paws. */
+  catShoo() {
+    meowVoice({ dur: 0.34, base: 620, peak: 980, gain: 0.16 });
+    for (let i = 0; i < 6; i++) {
+      blip({ freq: 150 + Math.random() * 90, dur: 0.04, type: 'triangle', gain: 0.07, delay: 0.12 + i * 0.055 });
     }
   },
 
-  /** Picked up -- a quick affirmative double-beep. */
-  phoneAnswer() {
-    [660, 990].forEach((f, i) => blip({ freq: f, dur: 0.1, type: 'square', gain: 0.13, delay: i * 0.08 }));
+  /** A contented rumble -- amplitude-modulated low noise, ~25Hz purr rate. */
+  catPurr() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const dur = 1.4;
+    const src = noise(c);
+    const lp = c.createBiquadFilter();
+    const env = c.createGain();
+    const lfo = c.createOscillator();
+    const lfoAmt = c.createGain();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(220, t0);
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(25, t0);
+    lfoAmt.gain.setValueAtTime(0.05, t0);
+    lfo.connect(lfoAmt).connect(env.gain);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.07, t0 + 0.15);
+    env.gain.setValueAtTime(0.07, t0 + dur - 0.3);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(lp).connect(env).connect(master);
+    src.start(t0); lfo.start(t0);
+    src.stop(t0 + dur); lfo.stop(t0 + dur);
+  },
+
+  /** A moth blundering around the lamp -- soft, papery wingbeats. */
+  mothFlutter() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const dur = 1.1;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    const lfo = c.createOscillator();
+    const lfoAmt = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1700, t0);
+    bp.Q.setValueAtTime(1.2, t0);
+    lfo.type = 'square';
+    lfo.frequency.setValueAtTime(14, t0);   // wingbeat
+    lfoAmt.gain.setValueAtTime(0.022, t0);
+    lfo.connect(lfoAmt).connect(env.gain);
+    env.gain.setValueAtTime(0.024, t0);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(env).connect(master);
+    src.start(t0); lfo.start(t0);
+    src.stop(t0 + dur); lfo.stop(t0 + dur);
+  },
+
+  /** The phone buzzing face-down on the desk. */
+  phoneBuzz() {
+    for (let i = 0; i < 2; i++) {
+      const d = i * 0.62;
+      blip({ freq: 82, dur: 0.34, type: 'square', gain: 0.09, delay: d });
+      blip({ freq: 120, dur: 0.34, type: 'sawtooth', gain: 0.045, delay: d });
+    }
+  },
+
+  /** Silenced it. */
+  phoneSilence() {
+    blip({ freq: 420, to: 240, dur: 0.11, type: 'sine', gain: 0.1 });
+  },
+
+  /** The desk lamp stuttering -- a dry electrical tick. */
+  lampBuzz() {
+    for (let i = 0; i < 4; i++) {
+      blip({ freq: 60 + Math.random() * 40, dur: 0.03, type: 'square', gain: 0.06, delay: i * 0.09 });
+    }
+    blip({ freq: 120, dur: 0.5, type: 'sawtooth', gain: 0.02, delay: 0.36 });
+  },
+
+  /**
+   * Rain against the window. Sustained, so this hands back a stop() the
+   * caller owns -- unlike every other cue here, which is fire-and-forget.
+   */
+  rain(seconds = 20) {
+    const c = ensure();
+    if (!c) return () => {};
+    const t0 = c.currentTime;
+    const src = noise(c);
+    const lp = c.createBiquadFilter();
+    const hp = c.createBiquadFilter();
+    const env = c.createGain();
+    lp.type = 'lowpass'; lp.frequency.setValueAtTime(2600, t0);
+    hp.type = 'highpass'; hp.frequency.setValueAtTime(420, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.045, t0 + 2.5);
+    src.connect(hp).connect(lp).connect(env).connect(master);
+    src.start(t0);
+    let stopped = false;
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      const now = c.currentTime;
+      env.gain.cancelScheduledValues(now);
+      env.gain.setValueAtTime(env.gain.value, now);
+      env.gain.linearRampToValueAtTime(0.0001, now + 2);
+      src.stop(now + 2.1);
+    };
+    setTimeout(stop, seconds * 1000);
+    return stop;
   },
 
   /** The last few seconds of a round's clock. Pitch climbs as it nears zero. */

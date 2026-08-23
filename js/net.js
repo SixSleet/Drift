@@ -88,7 +88,8 @@ async function rpc(fn, args) {
 }
 
 export const api = {
-  createRoom: (mode, rounds) => rpc('wf_create_room', { p_mode: mode, p_total_rounds: rounds }),
+  createRoom: (mode, rounds, wordLength = null) =>
+    rpc('wf_create_room', { p_mode: mode, p_total_rounds: rounds, p_word_length: wordLength }),
   joinRoom: (code) => rpc('wf_join_room', { p_code: code }),
   state: (roomId) => rpc('wf_state', { p_room: roomId }),
   heartbeat: (roomId) => rpc('wf_heartbeat', { p_room: roomId }),
@@ -97,9 +98,8 @@ export const api = {
   nextRound: (roomId) => rpc('wf_next_round', { p_room: roomId }),
   submitGuess: (roundId, word) => rpc('wf_submit_guess', { p_round: roundId, p_word: word }),
   checkSettle: (roundId) => rpc('wf_check_settle', { p_round: roundId }),
-  catchCat: (roundId) => rpc('wf_catch_cat', { p_round: roundId }),
+  applyMidModifier: (roundId) => rpc('wf_apply_mid_modifier', { p_round: roundId }),
   triggerLetterSwap: (roundId) => rpc('wf_trigger_letter_swap', { p_round: roundId }),
-  answerPhone: (roundId) => rpc('wf_answer_phone', { p_round: roundId }),
 };
 
 // ── Realtime ───────────────────────────────────────────────────────────────

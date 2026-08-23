@@ -1,7 +1,7 @@
 // Bootstrap: wire the buttons to the game, and nothing else.
 
 import { Game } from './game.js';
-import { DEFAULT_ROUNDS } from './config.js';
+import { DEFAULT_ROUNDS, DEFAULT_WORD_LENGTH, WORD_LENGTH_CHOICES } from './config.js';
 import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, buildKeypad, setCodeDisplay, flashKey, setMuteButton,
@@ -13,6 +13,7 @@ const game = new Game();
 window.__wordforge = game;
 let chosenMode = 'solo';
 let chosenRounds = DEFAULT_ROUNDS;
+let chosenWordLength = DEFAULT_WORD_LENGTH;   // null = mixed
 let codeBuffer = '';
 
 function fail(err) {
@@ -33,9 +34,34 @@ setCreateLabel(chosenMode);
 chipGroup($('#mode-chips'), (v) => { chosenMode = v; setCreateLabel(v); }, 'mode');
 chipGroup($('#rounds-chips'), (v) => { chosenRounds = Number(v); }, 'rounds');
 
+// Word length is fixed for the whole match and has to be settled before the
+// room exists, since wf_create_room stores it on the room -- joiners inherit
+// it and never get a say.
+(function buildWordLengthChips() {
+  const box = $('#length-chips');
+  if (!box) return;
+  for (const c of WORD_LENGTH_CHOICES) {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.type = 'button';
+    b.dataset.length = c.value === null ? 'mixed' : String(c.value);
+    b.title = c.hint;
+    b.textContent = c.label;
+    if (c.value === DEFAULT_WORD_LENGTH) b.classList.add('is-on');
+    box.appendChild(b);
+  }
+  const hint = $('#length-hint');
+  const describe = (v) => WORD_LENGTH_CHOICES.find((c) => c.value === v)?.hint ?? '';
+  if (hint) hint.textContent = describe(DEFAULT_WORD_LENGTH);
+  chipGroup(box, (v) => {
+    chosenWordLength = v === 'mixed' ? null : Number(v);
+    if (hint) hint.textContent = describe(chosenWordLength);
+  }, 'length');
+})();
+
 $('#btn-create').addEventListener('click', async (e) => {
   e.target.disabled = true;
-  try { await game.createRoom(chosenMode, chosenRounds); }
+  try { await game.createRoom(chosenMode, chosenRounds, chosenWordLength); }
   catch (err) { fail(err); }
   finally { e.target.disabled = false; }
 });

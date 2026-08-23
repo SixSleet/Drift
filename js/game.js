@@ -4,8 +4,8 @@
 
 import {
   MODES, ROUND_LEAD_MS, ROUND_TIME_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
-  POLL_MS, DEFAULT_ROUNDS, TIER_RANK, EVENTS, TICK_START_MS, EVENT_CARD_MS,
-  MID_EVENTS, DISTRACTION_WINDOW_MS,
+  POLL_MS, DEFAULT_ROUNDS, DEFAULT_WORD_LENGTH, TIER_RANK, EVENTS,
+  TICK_START_MS, EVENT_CARD_MS,
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
@@ -13,8 +13,8 @@ import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
   setPhase, setStatusLine, selectChip, buildLetterLegend, paintLetterLegend,
-  spawnCat, spawnPhone,
 } from './ui.js';
+import { startRoomEvents } from './room-events.js';
 
 const CONFETTI_COLORS = ['#dfae52', '#cc6f56', '#94b073', '#e2a259', '#cf8465'];
 
@@ -41,7 +41,7 @@ export class Game {
   #freshLocal() {
     return {
       active: '', shake: false, revealAt: 0, boardAt: 0, lastSettleTry: 0, lastTickSecond: null,
-      midEventShown: false, // this round's mid-event has been spawned/triggered client-side
+      midModifierShown: false, // this round's global mid-round modifier has been applied client-side
     };
   }
 
@@ -56,8 +56,8 @@ export class Game {
     requestAnimationFrame(this.frame);
   }
 
-  async createRoom(mode, rounds = DEFAULT_ROUNDS) {
-    const res = await api.createRoom(mode, rounds);
+  async createRoom(mode, rounds = DEFAULT_ROUNDS, wordLength = DEFAULT_WORD_LENGTH) {
+    const res = await api.createRoom(mode, rounds, wordLength);
     await this.enterRoom(res.room_id);
     // Solo is a room of exactly one, forever — there is no one else to wait
     // for, so skip the lobby and go straight in.
@@ -269,79 +269,84 @@ export class Game {
   }
 
   /**
-   * A mid-round event doesn't get announced up front — it just happens,
-   * once the round's own clock crosses mid_event_at_ms. midEventShown
-   * guards against re-spawning the cat / re-firing the swap every frame
-   * once we're past that point; mid_event_fired (server-confirmed, arrives
-   * on the next refresh) is the real source of truth for "already resolved".
+   * The global mid-round modifier. Unlike the room events below it, this is
+   * server-authoritative and shared: everyone in the room gets it, at the
+   * same point on the round's own clock. midModifierShown only guards against
+   * re-firing every frame once we're past the mark; mid_modifier_fired
+   * (server-confirmed, arrives on the next refresh) is the real "already
+   * resolved". Whoever's clock crosses first applies it for everybody.
    */
-  #checkMidEvent() {
-    if (!this.round || this.round.mid_event === 'none' || this.round.mid_event_fired) return;
-    if (this.local.midEventShown) return;
-    const elapsed = serverNow() - Date.parse(this.round.starts_at);
-    if (elapsed < this.round.mid_event_at_ms) return;
-    this.local.midEventShown = true;
+  #checkMidModifier() {
+    const r = this.round;
+    if (!r || r.mid_modifier === 'none' || r.mid_modifier_fired) return;
+    if (this.local.midModifierShown) return;
+    const elapsed = serverNow() - Date.parse(r.starts_at);
+    if (elapsed < r.mid_modifier_at_ms) return;
+    this.local.midModifierShown = true;
 
-    if (this.round.mid_event === 'cat') {
-      this.#spawnCatEvent();
-    } else if (this.round.mid_event === 'phone') {
-      this.#spawnPhoneEvent();
-    } else if (this.round.mid_event === 'letter_swap') {
-      this.#triggerLetterSwap();
+    if (r.mid_modifier === 'letter_swap') this.#triggerLetterSwap();
+    else this.#applyMidModifier(r.mid_modifier);
+  }
+
+  /** Blitz / Double Points / Blackout / Jackpot, landing mid-round. */
+  async #applyMidModifier(kind) {
+    const info = EVENTS[kind];
+    try {
+      await api.applyMidModifier(this.round.id);
+    } catch {
+      // Another client's clock beat us to it, or we asked too early. Their
+      // refresh broadcasts the same result to everyone, so there is nothing
+      // to do here -- but still show the banner, since the modifier is real.
     }
-  }
-
-  /** The cat wanders across the room; catching it in time bends the clock. */
-  #spawnCatEvent() {
-    const roundId = this.round.id;
-    sfx.catAppear();
-    spawnCat(DISTRACTION_WINDOW_MS, async () => {
-      try {
-        await api.catchCat(roundId);
-        sfx.catCaught();
-        toast('🐈 Caught! +20 seconds on the clock.');
-        this.channel?.poke();
-        await this.refreshState();
-      } catch {
-        // Someone else caught it first, or the window had already closed —
-        // either way, nothing to show; the cat sprite already handles its
-        // own miss animation.
-      }
-    });
-  }
-
-  /** The phone rings on the desk; answering in time earns an extra guess. */
-  #spawnPhoneEvent() {
-    const roundId = this.round.id;
-    sfx.phoneRing();
-    spawnPhone(DISTRACTION_WINDOW_MS, async () => {
-      try {
-        await api.answerPhone(roundId);
-        sfx.phoneAnswer();
-        toast('📱 Answered! One extra guess this round.');
-        this.channel?.poke();
-        await this.refreshState();
-      } catch {
-        // Someone else answered first, or it had already stopped ringing —
-        // nothing to show; the phone sprite already handles its own miss.
-      }
-    });
+    sfx.event(kind);
+    this.#announceMidModifier(kind);
+    if (info?.rule) {
+      this.roundRule = info.rule;
+      $('#letter-legend').classList.toggle('is-blackout', this.roundRule === 'blackout');
+    }
+    this.channel?.poke();
+    await this.refreshState();
   }
 
   /** Coop only: swaps two players' guess feedback. Any member can trigger
-   * it; the server's mid_event_fired flag makes every call but the first a
+   * it; the server's mid_modifier_fired flag makes every call but the first a
    * harmless no-op, so racing coop teammates never double-apply it. */
   async #triggerLetterSwap() {
     try {
       await api.triggerLetterSwap(this.round.id);
-      sfx.event('letter_swap');
-      toast('🔀 Letter Swap! Two guesses got their tiles mixed up.');
-      this.channel?.poke();
-      await this.refreshState();
     } catch {
       // Another teammate's client already resolved it (or the window
       // closed) -- their refresh will show the same result to everyone.
     }
+    sfx.event('letter_swap');
+    this.#announceMidModifier('letter_swap');
+    this.channel?.poke();
+    await this.refreshState();
+  }
+
+  /**
+   * A banner rather than the countdown's full-screen card: play is already in
+   * progress, so this must not cover the board the way the round-start card
+   * legitimately can.
+   */
+  #announceMidModifier(kind) {
+    const info = EVENTS[kind];
+    if (!info) return;
+    const el = $('#mid-banner');
+    if (!el) return;
+    el.style.setProperty('--tint', info.tint || 'var(--accent)');
+    el.innerHTML = `<span class="mid-banner-emoji">${info.emoji}</span>` +
+                   `<span class="mid-banner-label">${info.label}</span>` +
+                   `<span class="mid-banner-blurb">${info.midBlurb || info.blurb}</span>`;
+    el.hidden = false;
+    el.classList.remove('is-live');
+    void el.offsetWidth;             // restart the animation on a repeat
+    el.classList.add('is-live');
+    clearTimeout(this.midBannerTimer);
+    this.midBannerTimer = setTimeout(() => {
+      el.classList.remove('is-live');
+      el.hidden = true;
+    }, 3600);
   }
 
   // ── Input ────────────────────────────────────────────────────────────
@@ -564,7 +569,7 @@ export class Game {
     if (changed) this.#onPhaseChange(phase);
     this.#hostTick(phase);
     if (phase === 'settling') this.#trySettle();
-    if (phase === 'live') this.#checkMidEvent();
+    if (phase === 'live') this.#checkMidModifier();
 
     if (!this.round) { $('#hud-timer').hidden = true; return; }
     if (phase === 'lobby' || phase === 'final' || phase === 'waiting') { $('#hud-timer').hidden = true; return; }
@@ -682,6 +687,17 @@ export class Game {
 
   #onPhaseChange(phase) {
     $('#room-scene')?.querySelector('.room-character')?.classList.toggle('is-typing', phase === 'live');
+
+    // The room only comes alive while a round is actually being played, and
+    // is torn down on the way out of every other phase -- otherwise a cat
+    // that spawned at the end of a round wanders across the standings.
+    if (phase === 'live') {
+      this.stopRoomEvents?.();
+      this.stopRoomEvents = startRoomEvents();
+    } else if (this.stopRoomEvents) {
+      this.stopRoomEvents();
+      this.stopRoomEvents = null;
+    }
 
     if (phase === 'countdown' || phase === 'live') {
       setPhase(phase === 'countdown' ? 'Get ready' : 'Live', null);

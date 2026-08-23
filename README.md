@@ -2,15 +2,17 @@
 
 A 1–10 player browser word game. Same idea as that word game you already know
 — guess the secret word, get colour-coded feedback — with a few twists that
-keep it from being a five-letter clone: the word length shifts every round
-(4 or 5 letters — longer proved too hard to be fun), most rounds have to
-start with the last letter of the previous round's word, a round can roll a
-start-of-round event that changes the stakes, and — partway through, when
-you're not expecting it — something can happen mid-round instead: a cat
-wanders into the room and is worth chasing down, or (Co-op) two guesses
-suddenly swap tiles. The whole thing is staged inside a room built in real
-CSS 3D — a desk, a warm lamp, someone in a chair with their back to you —
-and the puzzle runs on the monitor they're sitting at.
+keep it from being a five-letter clone: you pick the word length before the
+lobby exists (4, 5, 6, 7, or Mixed), most rounds have to start with the last
+letter of the previous round's word, a round can roll a modifier that changes
+the stakes — and a *second* one can strike partway through, when you're not
+expecting it.
+
+Around all of that the room gets on with its own life: a cat walks across the
+desk in front of your screen, a moth finds the lamp, the phone buzzes, the
+light stutters, rain starts at the window. The whole thing is staged inside a
+room built in real CSS 3D — a desk, a warm lamp, someone in a chair with their
+back to you — and the puzzle runs on the monitor they're sitting at.
 
 Three modes:
 
@@ -47,7 +49,7 @@ and realtime signalling. GitHub Pages for hosting. The one dependency
 | Phase | What happens |
 | --- | --- |
 | Countdown | 5s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained. If this round rolled a start-of-round event, a full-screen card takes over for the whole 5 seconds — emoji, name, and what it does — so nobody starts guessing before they've actually read what changed. |
-| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. There's no on-screen keyboard — type guesses on your own physical keyboard, watching the monitor the way the character in the room does. Each letter pops as you type it, tiles flip in as each guess is scored (hit / present / miss), and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out in the compact legend below the board so you don't waste a guess retyping it — unless this round is Blackout (see below). Partway through, about half of all rounds also spring a mid-round event — see below. |
+| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. There's no on-screen keyboard — type guesses on your own physical keyboard, watching the monitor the way the character in the room does. Each letter pops as you type it, tiles flip in as each guess is scored (hit / present / miss), and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out in the compact legend below the board so you don't waste a guess retyping it — unless this round is Blackout (see below). Partway through, a round may also spring a global mid-round modifier, and your own room may interrupt you at any time — see below. |
 | Settling | Brief. Any client — not just the host — can ask the server "is this round actually over," and the server independently re-checks before agreeing. |
 | Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed, plus who won the round. |
 | Board | ~5.5s. Running standings, then the next round. |
@@ -68,6 +70,13 @@ speed bonus in Solo and PvP (+20 for a near-instant solve, +10 for a
 reasonably fast one), doubled if the round rolled Double Points. Co-op scores
 the same base formula off the shared attempt count, split identically across
 the whole team, with no speed bonus (still doubled by Double Points).
+
+**Word length.** Chosen on the title screen before the room is created, stored
+on the room, and fixed for the whole match — joiners inherit it and never get a
+say. 4, 5, 6 or 7 (the dictionary is seeded for all four), or Mixed, which
+re-rolls 4-or-5 each round and is still the default. Longer words mean a bigger
+guess budget and more board rows, so the tiles size themselves down to fit the
+panel; a 7-letter Co-op round is 10 rows.
 
 **Guess budgets.** `word length + 2` in Solo and PvP — a solo run is exactly
 as hard as your half of a duel. `word length + 3` in Co-op, since that pool
@@ -109,26 +118,47 @@ Blackout is a pure client-side rule change — same secret, same scoring,
 just a harder way to find it — so it carries no `max_guesses`/`time_limit_ms`
 effect at all.
 
-**Mid-round events.** A second, independent roll (also decided at mint time,
-in the same `wf_next_round` call) picks something that happens *partway
-through* live play instead of being announced up front — a surprise, not a
-warning. `mid_event_at_ms` lands 45-60 seconds into the round (always
-leaving at least 30 seconds of clock to react), and the event only actually
-resolves once a client calls the matching RPC after that point:
+**Mid-round modifiers.** A *second*, independent global roll made in the same
+`wf_next_round` call picks a modifier that lands partway through live play
+instead of being announced up front — a surprise, not a warning. Whatever the
+round already opened with is excluded from that pool, so a round never
+announces Blitz and then "surprises" you with Blitz again. `mid_modifier_at_ms`
+lands 40-60 seconds in, always leaving at least 30 seconds of clock to react.
 
-| Event | Odds | What happens |
-| --- | --- | --- |
-| 🐈 Cat | up to ~25%, ~17% in Co-op | A cat wanders across the room (never onto the monitor screen — see below). Click it within 4 seconds for 20 bonus seconds on the clock (`wf_catch_cat`); miss it and it just wanders off, no penalty. |
-| 📱 Phone | up to ~25%, ~17% in Co-op | The phone rings on the desk, stationary and shaking rather than walking. Answer it within 4 seconds for one extra guess this round (`wf_answer_phone`, capped at the table's own 12-guess ceiling); miss it and it just stops ringing. |
-| 🔀 Letter Swap | ~17%, **Co-op only** | Two players' most recent guesses (never a winning one) suddenly swap tiles with each other (`wf_trigger_letter_swap`) — the words stay put, but the colours briefly tell the wrong story. PvP/Solo never roll this: PvP guesses are invisible to the other player until settle, so a swap there would either leak a guess or land silently invisible. |
-| *(none)* | 50% | Nothing happens. |
+| Modifier | What happens mid-round |
+| --- | --- |
+| 💰 Double Points | Points doubled. Scoring counts it the same as a round-start Double Points, and only doubles once however many landed. |
+| ⚡ Blitz | Whatever clock is *left* is halved (never below 15s) — a flat 90s reset could otherwise *extend* a round that had less than that remaining. |
+| 🙈 Blackout | The legend goes dark from here on. Pure client-side rule. |
+| 🔀 Letter Swap | **Co-op only.** Two different players' guesses, picked at random, trade feedback — never a winning guess, so it can never fake a solve. |
+| *(none)* | 55% of rounds. |
 
-Letter Swap only ever touches guesses that aren't the actual solve — the
-server excludes any all-hit guess from the swap pool, so this can never
-accidentally hand a team a false win. All three RPCs are idempotent
-(`mid_event_fired`): whichever client's call reaches the server first wins,
-everyone else's just quietly does nothing, so racing Co-op teammates or a
-flaky connection can't double-apply an event or hand out two bonuses.
+These are **global**: server-decided, shared by everyone in the room, and
+applied by whichever client's clock crosses the mark first via
+`wf_apply_mid_modifier` / `wf_trigger_letter_swap`. Both are idempotent on
+`mid_modifier_fired`, so racing players can never double-apply a bonus. A
+banner announces it across the top of the screen rather than the countdown's
+full-screen card — play is already in progress, so it must not cover the board.
+
+**Room events.** Everything that happens *around* the monitor is the opposite:
+rolled on each client, seen by nobody else, and it mutates no game state at
+all. Your cat is your cat — two people in the same duel get different
+distractions at different moments, and neither can see the other's.
+
+| Event | What it does |
+| --- | --- |
+| 🐈 Cat | Walks the desk in front of the screen — a real SVG model with four animated legs, a swinging tail and a proper meow. It genuinely gets between you and the board, which is the whole cost. Click to shoo it. |
+| 🦋 Moth | Blunders around the lamp on a wandering path. Click to wave it off. |
+| 📱 Phone | Buzzes face-up on the desk, screen lit. Click to silence it. |
+| 💡 Lamp flicker | The desk lamp stutters and the warm half of the room drops out with it. |
+| 🌧 Rain | Arrives at the window, streaks the glass and cools the room for a while. |
+
+There is no bonus attached to any of them, and that is deliberate: a
+client-rolled *bonus* would be trivially cheatable, whereas a client-rolled
+*distraction* has nothing worth cheating at. The cost is the interruption
+itself; clicking one just clears it early. All of it lives in
+`js/room-events.js`, and the models stand in the same 3D stage as the desk, so
+they sit in real perspective rather than floating flat over the scene.
 
 ## The room
 

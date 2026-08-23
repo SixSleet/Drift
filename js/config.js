@@ -29,7 +29,22 @@ export const MODES = Object.freeze({
 });
 
 // ── Round shape ──────────────────────────────────────────────────────────
-export const WORD_LENGTHS = [4, 5]; // 6-7 proved too hard to be fun
+// Every length the dictionary is seeded for. A room pins one of these before
+// it exists (see WORD_LENGTH_CHOICES); `null` keeps the original behaviour of
+// re-rolling 4-or-5 each round.
+export const WORD_LENGTHS = [4, 5, 6, 7];
+
+// Offered on the title screen, before a lobby is created. Mixed stays 4-5:
+// it's the default match, and 6-7 change the feel enough to be a deliberate
+// choice rather than something a default should spring on you.
+export const WORD_LENGTH_CHOICES = Object.freeze([
+  { value: null, label: 'Mixed', hint: '4 or 5, re-rolled every round' },
+  { value: 4,    label: '4',     hint: 'Short and sharp' },
+  { value: 5,    label: '5',     hint: 'The classic' },
+  { value: 6,    label: '6',     hint: 'Getting roomy' },
+  { value: 7,    label: '7',     hint: 'Properly hard' },
+]);
+export const DEFAULT_WORD_LENGTH = null;
 export const ROUND_LEAD_MS = 5000;  // matches wf_next_round's starts_at offset —
                                      // long enough to read a full-screen event card
 export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
@@ -47,31 +62,25 @@ export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
 // game.js to change how a round is actually played, not just how it looks.
 export const EVENTS = Object.freeze({
   none: null,
-  double_points: { label: 'Double Points', emoji: '💰', tint: '#dfae52', blurb: 'This round pays double.', fx: 'coins' },
-  blitz:         { label: 'Blitz',         emoji: '⚡', tint: '#d98b5c', blurb: 'Only 90 seconds on the clock.', fx: 'siren' },
-  blackout:      { label: 'Blackout',      emoji: '🙈', tint: '#9c8f7a', blurb: 'The legend stops showing you which letters you know.', fx: 'eclipse', rule: 'blackout' },
-  jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#dfae52', blurb: 'Extra guess AND double points!', fx: 'jackpot', rare: true },
+  double_points: { label: 'Double Points', emoji: '💰', tint: '#dfae52', blurb: 'This round pays double.',                                       midBlurb: 'Points doubled, from here on.',      fx: 'coins' },
+  blitz:         { label: 'Blitz',         emoji: '⚡', tint: '#d98b5c', blurb: 'Only 90 seconds on the clock.',                                   midBlurb: 'The clock just got cut in half.',    fx: 'siren' },
+  blackout:      { label: 'Blackout',      emoji: '🙈', tint: '#9c8f7a', blurb: 'The legend stops showing you which letters you know.',            midBlurb: 'The legend just went dark.',        fx: 'eclipse', rule: 'blackout' },
+  jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#dfae52', blurb: 'Extra guess AND double points!',                                  midBlurb: 'Extra guess AND double points!',    fx: 'jackpot', rare: true },
+  // Coop-only, and mid-round only -- it needs guesses on the board to swap.
+  letter_swap:   { label: 'Letter Swap',   emoji: '🔀', tint: '#cf8465', blurb: 'Two guesses just got their tiles mixed up.',                      midBlurb: 'Two guesses just traded tiles.',    fx: 'siren' },
 });
 
-// ── Mid-round events ─────────────────────────────────────────────────────
-// Also decided at mint time (wf_next_round: 50% none, the rest split three
-// ways in coop / two ways elsewhere, letter_swap coop-only), but *applied*
-// partway through live play once the round's own clock crosses
-// `mid_event_at_ms` — a surprise mid-guess, not a card you read at the
-// start. The cat and the phone are both distractions in the room around
-// the monitor, not on it: react within DISTRACTION_WINDOW_MS for a bonus
-// (the cat adds CAT_BONUS_MS to the clock, the phone adds one guess); miss
-// either and nothing happens, they just go away. Letter Swap needs a real
-// server round-trip (it mutates two players' actual guesses), so it isn't
-// purely cosmetic like the other two.
-export const MID_EVENTS = Object.freeze({
-  none: null,
-  cat:         { label: 'A cat wandered in',    emoji: '🐈', blurb: 'Catch it before it wanders off!' },
-  phone:       { label: 'The phone is ringing', emoji: '📱', blurb: 'Answer it before it stops!' },
-  letter_swap: { label: 'Letter Swap!',         emoji: '🔀', blurb: 'Two guesses just got their tiles mixed up.' },
-});
-export const DISTRACTION_WINDOW_MS = 4000; // matches the RPCs' server-side reaction window
-export const CAT_BONUS_MS = 20000;         // matches wf_catch_cat's time_limit_ms bump
+// ── Mid-round modifiers ──────────────────────────────────────────────────
+// A second, independent global roll made at mint time (wf_next_round: 55%
+// nothing, the rest split across whatever the round did NOT already open
+// with; letter_swap coop-only). Applied partway through live play once the
+// round's clock crosses `mid_modifier_at_ms`, via wf_apply_mid_modifier /
+// wf_trigger_letter_swap. Unlike room events these are global and shared:
+// everyone in the room gets the same one at the same moment.
+//
+// Room events -- the cat, the moth, the phone, the lamp, the rain -- are the
+// opposite: rolled per client in room-events.js, seen only by that player,
+// and they mutate no game state at all.
 
 export const TICK_START_MS = 10000; // audible tick begins this far from zero
 export const EVENT_CARD_MS = 5000;  // full-screen event card, minimum readable time

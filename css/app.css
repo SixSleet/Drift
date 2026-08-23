@@ -635,69 +635,228 @@ html, body {
   background: radial-gradient(140% 118% at 50% 44%, transparent 58%, rgba(0, 0, 0, .52) 100%);
 }
 
-/* Flat layer above the room where mid-round distractions live. Never over
-   the screen: the cat walks the desk, the phone rings on it. */
-.room-fx {
-  position: absolute; inset: 0; z-index: 9;
-  pointer-events: none;
-}
-.room-fx > * { pointer-events: auto; }
-
 /* ═══════════════════════════════════════════════════════════════════════
-   MID-ROUND DISTRACTIONS
+   ROOM EVENTS -- real models in the 3D stage
+
+   Player-sided: each client rolls its own, and they change no game state.
+   They're built in the same preserve-3d space as the desk, so they stand on
+   it in real perspective rather than floating flat over the scene.
    ═══════════════════════════════════════════════════════════════════════ */
 
-.cat-sprite {
-  position: absolute; bottom: 21%; left: -8%;
-  appearance: none; border: none; background: none; padding: 0; margin: 0;
-  font-size: 62px; line-height: 1; cursor: pointer;
-  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, .6));
-  animation: cat-walk var(--walk-dur, 4000ms) linear forwards, cat-bob .42s ease-in-out infinite;
+/* `inset: 0` is load-bearing, not tidiness: `transform-style: preserve-3d`
+   makes this a containing block for its absolutely-positioned children, so
+   without an explicit box it collapses to zero height and every rig's
+   `top: 50%` resolves to 0 -- the cat then floats at the top of the room
+   instead of standing on the desk. */
+.room-3d-fx {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
 }
-@keyframes cat-walk {
-  0%   { left: -8%;  transform: scaleX(1); }
-  48%  { transform: scaleX(1); }
-  50%  { transform: scaleX(-1); }
-  100% { left: 102%; transform: scaleX(-1); }
+.room-3d-fx > * { pointer-events: auto; }
+
+/* ── The cat ───────────────────────────────────────────────────────────
+   Roughly life-sized for this room: the desk is ~2200 units for ~1.4m, so a
+   600-unit cat is about 40cm nose to rump. It walks the desk at z = -700,
+   which puts it between the camera and the monitor -- it genuinely gets in
+   the way, which is the entire cost of the event. Click to shoo it. */
+
+.cat-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 600px; height: 340px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: cat-cross 13s linear forwards;
 }
-@keyframes cat-bob {
-  0%, 100% { margin-top: 0; }
-  50%      { margin-top: -7px; }
+/* Feet on the desk (y = 400) with the rig centred, so 400 - 340/2 = 230. */
+@keyframes cat-cross {
+  0%   { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(calc(-1500px * var(--dir))) scaleX(var(--dir)); }
+  46%  { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(calc(-120px * var(--dir))) scaleX(var(--dir)); }
+  62%  { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(calc(-120px * var(--dir))) scaleX(var(--dir)); }
+  100% { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(calc(1500px * var(--dir))) scaleX(var(--dir)); }
 }
-.cat-sprite.is-caught { animation: cat-caught .4s ease forwards; }
-@keyframes cat-caught {
-  0%   { transform: scale(1) rotate(0); opacity: 1; }
-  60%  { transform: scale(1.4) rotate(12deg); }
-  100% { transform: scale(0) rotate(30deg); opacity: 0; }
+/* Shooed: freeze where it actually is, then bolt. Without the freeze the
+   exit restarts from the walk's first keyframe and the cat teleports. */
+.cat-rig.is-shooed {
+  animation: cat-bolt .5s cubic-bezier(.3, 0, .7, 1) forwards;
 }
-.cat-sprite.is-fleeing { animation: cat-flee .3s ease-in forwards; }
-@keyframes cat-flee {
-  0%   { transform: translateY(0) scale(1); opacity: 1; }
-  100% { transform: translateY(-26px) scale(.5); opacity: 0; }
+@keyframes cat-bolt {
+  0%   { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(var(--frozen-x, 0px)) scaleX(var(--dir)); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translateY(520px) translateZ(-300px) translateX(calc(var(--frozen-x, 0px) + 700px * var(--dir))) scaleX(var(--dir)); opacity: 0; }
 }
 
-.phone-sprite {
-  position: absolute; bottom: 24%; left: 30%;
-  appearance: none; border: none; background: none; padding: 0; margin: 0;
-  font-size: 54px; line-height: 1; cursor: pointer;
-  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .6));
-  animation: phone-ring .13s ease-in-out infinite;
+.cat-rig svg { width: 100%; height: 100%; overflow: visible; display: block; }
+
+/* Everything below animates SVG groups. `transform-box: fill-box` is
+   required: without it a CSS transform-origin on an SVG child resolves
+   against the whole viewport-sized user space, and a leg swings from
+   somewhere off-screen instead of from its own hip. */
+.cat-rig .cat-leg,
+.cat-rig .cat-tail,
+.cat-rig .cat-head,
+.cat-rig .cat-eyes { transform-box: fill-box; }
+
+.cat-torso { fill: url(#catFur); }
+.cat-torso path:last-of-type { fill: url(#catFurDim); }   /* neck, set back a shade */
+
+.cat-leg rect { fill: url(#catFurDim); }
+.cat-leg-near-b rect, .cat-leg-near-f rect { fill: url(#catFur); }
+.cat-leg { transform-origin: 50% 6%; }
+.cat-leg-far-b, .cat-leg-far-f { opacity: .72; }
+.cat-leg-near-b, .cat-leg-far-f { animation: cat-step 1.05s ease-in-out infinite; }
+.cat-leg-near-f, .cat-leg-far-b { animation: cat-step 1.05s ease-in-out infinite .52s; }
+@keyframes cat-step {
+  0%, 100% { transform: rotate(13deg); }
+  50%      { transform: rotate(-13deg); }
 }
-@keyframes phone-ring {
-  0%, 100% { rotate: 0deg; }
-  25%      { rotate: -10deg; }
-  75%      { rotate: 10deg; }
+
+.cat-tail { transform-origin: 92% 88%; animation: cat-tail-sway 2.3s ease-in-out infinite; }
+@keyframes cat-tail-sway {
+  0%, 100% { transform: rotate(-13deg); }
+  50%      { transform: rotate(14deg); }
 }
-.phone-sprite.is-caught { animation: phone-answered .35s ease forwards; }
-@keyframes phone-answered {
-  0%   { scale: 1; opacity: 1; }
-  100% { scale: 0; translate: 0 -22px; opacity: 0; }
+
+.cat-head { transform-origin: 68% 92%; animation: cat-head-bob 1.05s ease-in-out infinite; }
+@keyframes cat-head-bob {
+  0%, 100% { transform: rotate(-2.2deg) translateY(0); }
+  50%      { transform: rotate(1.6deg) translateY(-5px); }
 }
-.phone-sprite.is-fleeing { animation: phone-hangup .3s ease-in forwards; }
-@keyframes phone-hangup {
-  0%   { opacity: 1; rotate: 0deg; }
-  100% { opacity: 0; rotate: -20deg; }
+.cat-skull { fill: url(#catFur); }
+.cat-cheek { fill: rgba(206, 176, 142, .22); }
+.cat-ear { fill: #4b3a2c; }
+.cat-ear-in { fill: #9a6a58; }
+.cat-eyes ellipse { fill: url(#catEye); filter: drop-shadow(0 0 7px rgba(214, 238, 130, .55)); }
+.cat-eyes { animation: cat-blink 5.2s linear infinite; transform-origin: 50% 50%; }
+@keyframes cat-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(.08); }
 }
+.cat-pupil { fill: #14180a; }
+.cat-muzzle { fill: rgba(176, 146, 112, .55); }
+.cat-nose { fill: #bd7a6d; }
+.cat-whisker { stroke: rgba(232, 220, 198, .5); stroke-width: 2.5; stroke-linecap: round; fill: none; }
+
+/* ── The moth ──────────────────────────────────────────────────────────
+   Up by the lamp, on a wandering path rather than a straight line. */
+
+.moth-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 54px; height: 40px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: moth-wander 9s ease-in-out forwards;
+}
+@keyframes moth-wander {
+  0%   { transform: translate(-50%, -50%) translateZ(-1150px) translate(-820px, -40px); }
+  18%  { transform: translate(-50%, -50%) translateZ(-1150px) translate(-560px, -230px); }
+  34%  { transform: translate(-50%, -50%) translateZ(-1000px) translate(-680px, 60px); }
+  52%  { transform: translate(-50%, -50%) translateZ(-980px)  translate(-380px, -180px); }
+  70%  { transform: translate(-50%, -50%) translateZ(-1120px) translate(-620px, -300px); }
+  86%  { transform: translate(-50%, -50%) translateZ(-1150px) translate(-760px, -120px); }
+  100% { transform: translate(-50%, -50%) translateZ(-1200px) translate(-980px, -320px); }
+}
+.moth-rig.is-gone { animation: moth-off .4s ease-in forwards; }
+@keyframes moth-off {
+  to { opacity: 0; transform: translate(-50%, -50%) translateZ(-1300px) translate(-1100px, -420px); }
+}
+.moth-rig > i { position: absolute; }
+.moth-body {
+  left: 50%; top: 30%; width: 11px; height: 24px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #b9a488, #5c4c39);
+}
+.moth-wing {
+  top: 18%; width: 26px; height: 30px;
+  border-radius: 60% 40% 50% 50%;
+  background: linear-gradient(150deg, rgba(226, 210, 180, .92), rgba(150, 130, 100, .8));
+  box-shadow: 0 0 12px rgba(255, 216, 150, .4);
+}
+.moth-wing-l { left: -2px; transform-origin: 100% 50%; animation: moth-flap .11s ease-in-out infinite; }
+.moth-wing-r { right: -2px; transform-origin: 0% 50%; animation: moth-flap .11s ease-in-out infinite reverse; }
+@keyframes moth-flap {
+  0%, 100% { transform: rotateY(8deg); }
+  50%      { transform: rotateY(66deg); }
+}
+
+/* ── The phone ─────────────────────────────────────────────────────────
+   Lying flat on the desk beside the keyboard, buzzing itself sideways. */
+
+.phone-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 112px; height: 218px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  /* Clear of the notebook (-760) and the keyboard, so it reads as its own
+     object rather than something lying on the pad. */
+  transform: translate(-50%, -50%) translateY(396px) translateZ(-620px) rotateX(90deg) translateX(-400px) rotate(-8deg);
+  animation: phone-buzz .09s linear infinite;
+}
+@keyframes phone-buzz {
+  0%, 100% { margin-left: 0; margin-top: 0; }
+  25%      { margin-left: 2px; margin-top: -1px; }
+  75%      { margin-left: -2px; margin-top: 1px; }
+}
+.phone-rig.is-done { animation: phone-off .3s ease forwards; }
+@keyframes phone-off { to { opacity: 0; } }
+.phone-rig > i { position: absolute; }
+.phone-body {
+  inset: 0; border-radius: 14px;
+  background: linear-gradient(160deg, #2b2724, #14110f);
+  box-shadow: 0 -6px 16px rgba(0, 0, 0, .5);
+}
+.phone-screen {
+  inset: 7px; border-radius: 9px;
+  background: linear-gradient(170deg, #9fc2d8, #4d7891);
+  animation: phone-screen-pulse .7s ease-in-out infinite alternate;
+}
+@keyframes phone-screen-pulse { from { filter: brightness(.72); } to { filter: brightness(1.15); } }
+.phone-glow {
+  left: 50%; top: 50%; width: 300px; height: 300px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(150, 195, 225, .3), transparent 70%);
+  pointer-events: none;
+}
+
+/* ── Ambient events: the room itself reacting ─────────────────────────── */
+
+/* Lamp stutter -- the warm half of the lighting cuts out with it. */
+.room.is-flickering .lamp-shade,
+.room.is-flickering .lamp-bulb,
+.room.is-flickering .lamp-cone,
+.room.is-flickering .lamp-halo,
+.room.is-flickering .desk-pool-lamp,
+.room.is-flickering .floor-light-lamp,
+.room.is-flickering .wall-wash {
+  animation: lamp-stutter 2.2s steps(1, end);
+}
+@keyframes lamp-stutter {
+  0%, 8%, 15%, 27%, 44%, 61%, 80%, 100% { opacity: 1; }
+  5%, 12%, 22%, 38%, 55%, 74%           { opacity: .12; }
+}
+
+/* Rain -- the window goes colder and streaked, and the whole room cools a
+   shade with it, since the window is a real light source in this scene. */
+.room.is-raining .window-sky {
+  background:
+    radial-gradient(180px 130px at 50% 106%, rgba(255, 183, 101, .12), transparent 72%),
+    linear-gradient(180deg, #101a29 0%, #14202f 55%, #182430 100%);
+}
+.room.is-raining .window-sky::after {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(74deg,
+    rgba(190, 214, 236, .22) 0 1px, transparent 1px 9px);
+  animation: rain-fall .5s linear infinite;
+}
+@keyframes rain-fall {
+  from { background-position: 0 0; }
+  to   { background-position: -26px 90px; }
+}
+.room.is-raining .window { box-shadow: 0 0 90px rgba(120, 160, 200, .2), inset 0 0 40px rgba(0, 0, 0, .7); }
+.room.is-raining .wall-wash { filter: brightness(.9) saturate(.9); }
 
 /* ═══════════════════════════════════════════════════════════════════════
    THE APPLICATION — everything below renders on the monitor's panel.
@@ -757,6 +916,7 @@ html, body {
 .note { margin: 0; text-align: center; color: var(--ink-dim); font-size: 17px; line-height: 1.5; min-height: 1.2em; }
 .note b { color: var(--ink); }
 .hint { margin: -4px 0 0; text-align: center; color: var(--ink-faint); font-size: 15px; }
+.hint-inline { margin: -8px 0 0; text-align: left; font-size: 14px; min-height: 1.2em; }
 
 /* ── Buttons ───────────────────────────────────────────────────────── */
 
@@ -1154,6 +1314,38 @@ html, body {
   100% { transform: translateY(760px) rotate(calc(var(--rot, 0deg) + 360deg)); opacity: 0; }
 }
 
+/* ── Mid-round modifier banner ──────────────────────────────────────────
+   Not the countdown's full-screen card: play is already in progress, so this
+   has to announce a global rule change without covering the board. Sits
+   across the top of the panel, under the HUD. */
+
+.mid-banner {
+  position: absolute; left: 50%; top: 62px;
+  transform: translateX(-50%);
+  z-index: 70; pointer-events: none;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 22px; border-radius: 999px;
+  background: linear-gradient(100deg,
+    color-mix(in srgb, var(--tint, var(--accent)) 26%, var(--panel)), var(--panel));
+  border: 1px solid color-mix(in srgb, var(--tint, var(--accent)) 55%, transparent);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .55),
+              0 0 34px color-mix(in srgb, var(--tint, var(--accent)) 28%, transparent);
+  white-space: nowrap;
+}
+.mid-banner.is-live { animation: mid-banner-life 3.6s cubic-bezier(.2, 1, .3, 1) both; }
+@keyframes mid-banner-life {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-22px) scale(.9); }
+  9%   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  88%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(.97); }
+}
+.mid-banner-emoji { font-size: 30px; line-height: 1; }
+.mid-banner-label {
+  font-size: 20px; font-weight: 850; letter-spacing: .01em;
+  color: var(--tint, var(--ink)); text-transform: uppercase;
+}
+.mid-banner-blurb { font-size: 16px; font-weight: 600; color: var(--ink-dim); }
+
 /* ── Toast ─────────────────────────────────────────────────────────── */
 
 .toast {
@@ -1241,6 +1433,11 @@ html, body {
   .event-card-label { font-size: clamp(28px, 8vw, 44px); }
   .event-card-blurb { font-size: 16px; }
   .toast { font-size: 14px; padding: 11px 17px; }
+  .mid-banner { top: 48px; padding: 9px 15px; gap: 8px; }
+  .mid-banner-emoji { font-size: 22px; }
+  .mid-banner-label { font-size: 15px; }
+  .mid-banner-blurb { font-size: 12.5px; }
+  .hint-inline { font-size: 12px; }
 
   .small-screen-note {
     display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
