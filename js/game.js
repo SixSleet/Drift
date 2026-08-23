@@ -13,6 +13,7 @@ import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
   setPhase, setStatusLine, selectChip, buildLetterLegend, paintLetterLegend,
+  renderRailLeft, renderRailRight, resetRails, setRoundRecap,
 } from './ui.js';
 import { startRoomEvents } from './room-events.js';
 
@@ -137,9 +138,14 @@ export class Game {
     const enough = this.mode === 'solo' || this.players.length >= 2;
     btn.hidden = !this.isHost;
     btn.disabled = !enough;
+    // Everyone in the room plays the host's word length, so everyone needs
+    // to be told what it is -- a joiner had no way of knowing before.
+    const wl = this.room.word_length
+      ? `${this.room.word_length}-letter words` : 'mixed 4- and 5-letter words';
+    const setup = `${this.room.total_rounds} rounds · ${wl}.`;
     $('#lobby-note').textContent = this.isHost
-      ? (enough ? `Best of ${this.room.total_rounds} rounds.` : 'Waiting for one more player…')
-      : 'Waiting for the host to start…';
+      ? (enough ? setup : 'Waiting for one more player…')
+      : `${setup} Waiting for the host to start…`;
     if (this.me) {
       $('#hud-you').textContent = this.me.name;
       $('#hud-you').style.color = this.me.color;
@@ -181,7 +187,7 @@ export class Game {
     } else {
       chainEl.hidden = true;
     }
-    $('#ghost-bar').hidden = this.mode !== 'pvp';
+    resetRails();
     loadDictionary(row.word_length);
 
     // `rule` (blackout) actually changes how this round is played, not just
@@ -523,14 +529,53 @@ export class Game {
         if (r.round_id === this.round.id) lastRound.set(r.player_id, r);
       }
     }
+    // Every settled round this player took part in — the standings show a
+    // solve rate and an average alongside the raw score, so a big number
+    // that came from two lucky rounds reads differently from a steady one.
+    const form = new Map();
+    for (const r of this.results) {
+      let f = form.get(r.player_id);
+      if (!f) form.set(r.player_id, f = { solved: 0, played: 0, guesses: 0 });
+      f.played += 1;
+      if (r.solved) { f.solved += 1; f.guesses += r.guesses_used ?? 0; }
+    }
     return this.players
-      .map((p) => ({
-        name: p.name, color: p.color,
-        total: byId.get(p.id) ?? 0,
-        delta: lastRound.get(p.id)?.points ?? 0,
-        isMe: p.id === this.me?.id,
-      }))
+      .map((p) => {
+        const f = form.get(p.id);
+        return {
+          name: p.name, color: p.color,
+          total: byId.get(p.id) ?? 0,
+          delta: lastRound.get(p.id)?.points ?? 0,
+          isMe: p.id === this.me?.id,
+          solved: f?.solved ?? 0,
+          played: f?.played ?? 0,
+          avgGuesses: f?.solved ? f.guesses / f.solved : 0,
+        };
+      })
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  }
+
+  /** "Round 3 · CHEAT — Fox got it in 4." Blank if there's nothing to say. */
+  #roundRecap() {
+    if (!this.round) return '';
+    const word = (this.round.revealed_secret ?? '').toUpperCase();
+    if (!word) return '';
+    const mine = this.results.filter((r) => r.round_id === this.round.id);
+    const solvers = mine.filter((r) => r.solved);
+    let tail;
+    if (!solvers.length) {
+      tail = 'Nobody got it.';
+    } else if (this.mode === 'coop') {
+      const best = Math.min(...solvers.map((r) => r.guesses_used));
+      tail = `Team solved it in ${best}.`;
+    } else if (this.mode === 'solo') {
+      tail = `Solved in ${solvers[0].guesses_used}.`;
+    } else {
+      const first = solvers.slice().sort((a, b) => a.guesses_used - b.guesses_used)[0];
+      const who = this.players.find((p) => p.id === first.player_id);
+      tail = `${who?.name ?? 'Someone'} got it in ${first.guesses_used}.`;
+    }
+    return `<b class="recap-word">${word}</b> <span>${tail}</span>`;
   }
 
   #showFinal() {
@@ -553,6 +598,7 @@ export class Game {
         $('#board-note').textContent = rows.length ? `${rows[0].name} wins the duel.` : '';
       }
       $('#btn-again').hidden = false;
+      setRoundRecap('');
       renderBoard(rows);
       showScreen('screen-board');
       sfx.win();
@@ -614,16 +660,20 @@ export class Game {
         wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
         guesses: [], active: '', canType: false,
       });
+      this.#renderRails([]);
       return;
     }
 
     const playerColor = this.mode === 'coop'
       ? new Map(this.players.map((p) => [p.id, p.color])) : null;
 
+    this.#renderRails(visible);
+
     renderGrid({
       wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
       guesses: visible, active: this.local.active,
-      canType: phase === 'live', playerColor, shake: this.local.shake,
+      canType: phase === 'live', playerColor, meId: this.me?.id ?? null,
+      shake: this.local.shake,
     });
 
     if (this.roundRule === 'blackout') {
@@ -645,7 +695,6 @@ export class Game {
       setStatusLine(this.mode === 'pvp' && this.ghost
         ? `<div class="small">Opponent: ${this.ghost.attempts}/${this.round.max_guesses} guesses</div>`
         : '');
-      this.#renderGhostBar();
     } else if (phase === 'settling') {
       setStatusLine('<div class="small">Settling…</div>');
     } else if (phase === 'reveal') {
@@ -665,24 +714,51 @@ export class Game {
       $('#board-title').textContent = `After round ${this.round.round_no}`;
       $('#board-note').textContent = this.isHost ? 'Next round starting…' : 'Waiting for the host…';
       $('#btn-again').hidden = true;
+      setRoundRecap(this.#roundRecap());
       renderBoard(this.#standings());
     }
   }
 
-  #renderGhostBar() {
-    const bar = $('#ghost-bar');
-    if (bar.hidden) return;
-    const filled = this.ghost ? this.ghost.attempts : 0;
-    const total = this.round.max_guesses;
-    bar.innerHTML = '';
-    for (let i = 0; i < total; i++) {
-      const dot = document.createElement('i');
-      if (i < filled) {
-        dot.dataset.tier = this.ghost.solved && i === filled - 1 ? 'hit'
-          : i < (this.ghost.hits ?? 0) ? 'hit' : 'present';
-      }
-      bar.appendChild(dot);
-    }
+  /**
+   * The two columns either side of the board. Everything here is already
+   * known to the render loop -- it was just never shown. Both renderers
+   * diff against their last input, so a frame that changes nothing costs a
+   * JSON.stringify and no DOM work.
+   */
+  #renderRails(visible) {
+    const info = EVENTS[this.round.event];
+    const mid = this.local.midModifierShown || this.round.mid_modifier_fired
+      ? EVENTS[this.round.mid_modifier] : null;
+
+    renderRailLeft({
+      roundNo: this.round.round_no,
+      totalRounds: this.room.total_rounds,
+      guessesUsed: visible.length,
+      maxGuesses: this.round.max_guesses,
+      eventEmoji: info?.emoji ?? null,
+      eventLabel: info?.label ?? null,
+      midEmoji: mid?.emoji ?? null,
+      midLabel: mid?.label ?? null,
+    });
+
+    const byId = new Map(this.leaderboard.map((r) => [r.player_id, r.total]));
+    const perPlayer = new Map();
+    for (const g of visible) perPlayer.set(g.player_id, (perPlayer.get(g.player_id) ?? 0) + 1);
+
+    renderRailRight({
+      mode: this.mode,
+      maxGuesses: this.round.max_guesses,
+      ghost: this.ghost ? {
+        attempts: this.ghost.attempts, hits: this.ghost.hits ?? 0,
+        solved: !!this.ghost.solved,
+      } : null,
+      rows: this.players.map((p) => ({
+        name: p.name, color: p.color,
+        isMe: p.id === this.me?.id,
+        guesses: perPlayer.get(p.id) ?? 0,
+        total: byId.get(p.id) ?? 0,
+      })),
+    });
   }
 
   #onPhaseChange(phase) {
@@ -715,6 +791,7 @@ export class Game {
       setPhase('Standings', null);
       $('#board-title').textContent = `After round ${this.round?.round_no ?? ''}`;
       $('#btn-again').hidden = true;
+      setRoundRecap(this.#roundRecap());
       renderBoard(this.#standings());
       showScreen('screen-board');
     } else if (phase === 'waiting') {

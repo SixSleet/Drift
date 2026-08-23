@@ -605,16 +605,38 @@ html, body {
   position: absolute; left: 50%; top: 140px; transform: translateX(-50%);
   width: 720px; height: 340px;
   border-radius: 220px 220px 30px 30px;
-  background: linear-gradient(190deg, #3d322a 0%, #241d17 52%, #12100c 100%);
+  /* Padded panels, not a plain dome. Three layers, camera-facing side only:
+     the vertical seams between the cushions, a soft horizontal bulge across
+     each panel, then the base shading. Without the seams this whole shape
+     read as one featureless dark blob taking up a quarter of the frame. */
+  background:
+    repeating-linear-gradient(90deg,
+      transparent 0 96px,
+      rgba(0, 0, 0, .34) 96px 101px,
+      rgba(255, 210, 160, .05) 101px 105px,
+      transparent 105px 200px),
+    linear-gradient(0deg, rgba(0, 0, 0, .3) 0%, transparent 26%, rgba(255, 205, 150, .05) 47%, transparent 62%),
+    linear-gradient(190deg, #3d322a 0%, #241d17 52%, #12100c 100%);
   /* Warm rim: the lamp is the only thing lighting the chair's camera-facing
      side. Keeps the chair a distinctly lighter mass than the person, which
      is what lets the silhouette read at all. */
   box-shadow: inset 0 7px 11px -7px rgba(255, 200, 140, .40), 0 -30px 70px rgba(0, 0, 0, .5);
 }
+/* Headrest: a separate, slightly proud pad on top of the backrest, which is
+   what actually tells you this is a chair rather than a wall. */
+.chair-back::after {
+  content: ''; position: absolute;
+  left: 50%; top: -34px; transform: translateX(-50%);
+  width: 330px; height: 96px;
+  border-radius: 54px 54px 22px 22px;
+  background: linear-gradient(188deg, #47392f 0%, #2a221b 60%, #171310 100%);
+  box-shadow: inset 0 6px 9px -6px rgba(255, 205, 150, .5), 0 9px 18px rgba(0, 0, 0, .45);
+}
 .chair-arm {
   position: absolute; bottom: 0; width: 60px; height: 150px;
   border-radius: 18px 18px 0 0;
   background: linear-gradient(180deg, #2a221b, #120e0a);
+  box-shadow: inset 0 4px 7px -4px rgba(255, 200, 140, .3);
 }
 .chair-arm-left  { left:  calc(50% - 415px); }
 .chair-arm-right { right: calc(50% - 415px); }
@@ -1108,9 +1130,33 @@ html, body {
   counter-increment: rank; content: counter(rank);
   font-family: var(--mono); font-size: 13px; color: var(--ink-faint); min-width: 1.4em;
 }
-.board i { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+.board li { position: relative; overflow: hidden; }
+/* Each row is filled to its share of the leader's score, in the player's
+   own colour. Two numbers in a column don't show a gap; this does. */
+.board-bar {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-radius: 11px 0 0 11px;
+  transition: width .5s cubic-bezier(.2, .8, .3, 1);
+  pointer-events: none;
+}
+.board li > *:not(.board-bar) { position: relative; }
+.board-dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+.board-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.board-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-sub { font-size: 11.5px; font-weight: 600; color: var(--ink-faint); }
 .board .pts { margin-left: auto; font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--accent); }
 .board .delta { font-family: var(--mono); font-size: 13px; color: var(--sage); }
+
+.round-recap {
+  margin: -4px 0 6px; text-align: center;
+  font-size: 14px; color: var(--ink-dim);
+  display: flex; align-items: baseline; justify-content: center; gap: 10px; flex-wrap: wrap;
+}
+.recap-word {
+  font-family: var(--mono); font-size: 26px; font-weight: 800; letter-spacing: .08em;
+  background: linear-gradient(96deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
 
 /* ── HUD ───────────────────────────────────────────────────────────── */
 
@@ -1184,14 +1230,110 @@ html, body {
    flexible one -- a Co-op 5-letter round is the tall case at 8 rows. */
 .play-area {
   flex: 1; width: 100%;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; padding: 12px 16px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center; justify-items: center;
+  gap: 10px 18px; padding: 12px 16px 12px;
   min-height: 0;
 }
+.play-main {
+  grid-column: 2; grid-row: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; min-height: 0;
+}
+.letter-legend { grid-column: 1 / -1; grid-row: 2; }
 
-.ghost-bar { display: flex; gap: 8px; justify-content: center; flex: 0 0 auto; }
+/* ── Rails ─────────────────────────────────────────────────────────────
+   Read-only columns either side of the board. They carry nothing focusable
+   and nothing clickable, so a keystroke aimed at the board can never end up
+   here. The board is centred by the grid, not by these -- so a rail that
+   renders empty (solo before the first frame) doesn't shift it. */
+
+.rail {
+  grid-row: 1;
+  display: flex; flex-direction: column; gap: 14px;
+  width: 100%; max-width: 240px;
+  align-self: center;
+  color: var(--ink-dim);
+  user-select: none;
+}
+.rail-left  { grid-column: 1; align-items: flex-start; }
+.rail-right { grid-column: 3; align-items: flex-start; }
+/* Both rails hang from the top of the row rather than centring on their own
+   content, so they stay level with each other and the left one doesn't jump
+   down the screen when the "In play" block appears mid-round. */
+.rail { align-self: start; }
+
+.rail-block {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 240, 220, .045), rgba(255, 240, 220, .015));
+  border: 1px solid rgba(255, 240, 220, .07);
+}
+.rail-label {
+  margin: 0 0 8px; font-size: 10px; font-weight: 800;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint);
+}
+.rail-sub { margin: 7px 0 0; font-size: 11px; color: var(--ink-faint); }
+.rail-name { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 9px; }
+.rail-big {
+  font-family: var(--mono); font-size: 34px; font-weight: 800; line-height: 1;
+  color: var(--accent);
+}
+.rail-big.is-low { color: var(--red); animation: timer-pulse 1.1s ease-in-out infinite; }
+
+.round-dots { display: flex; flex-wrap: wrap; gap: 5px; }
+.round-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: rgba(255, 240, 220, .1);
+  border: 1px solid rgba(255, 240, 220, .14);
+}
+.round-dot.is-done { background: var(--sage); border-color: var(--sage); }
+.round-dot.is-now {
+  background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(226, 162, 89, .18);
+}
+
+.guess-pips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
+.guess-pip {
+  width: 100%; max-width: 15px; height: 5px; border-radius: 3px;
+  background: rgba(148, 176, 115, .5);
+}
+.guess-pip.is-spent { background: rgba(255, 240, 220, .1); }
+
+.rail-mod {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 8px; margin-top: 6px; border-radius: 9px;
+  font-size: 12px; font-weight: 700; color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.rail-mod:first-of-type { margin-top: 0; }
+.rail-mod.is-mid {
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 38%, transparent);
+}
+.rail-mod-emoji { font-size: 14px; }
+
+.team-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.team-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 6px; border-radius: 7px;
+  font-size: 12.5px; color: var(--ink-dim);
+}
+.team-row.is-me { background: rgba(255, 240, 220, .05); color: var(--ink); font-weight: 700; }
+.team-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.team-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-count {
+  margin-left: auto; font-family: var(--mono); font-size: 12px; font-weight: 700;
+  color: var(--accent);
+}
+
+.ghost-bar { display: flex; flex-wrap: wrap; gap: 6px; }
 .ghost-bar i {
-  width: 16px; height: 16px; border-radius: 5px;
+  width: 15px; height: 15px; border-radius: 5px;
   background: var(--panel-2); border: 1px solid var(--line);
 }
 .ghost-bar i[data-tier="hit"] { background: var(--sage); border-color: var(--sage); }
@@ -1215,7 +1357,27 @@ html, body {
   grid-template-columns: repeat(var(--word-length), var(--tile));
   gap: 6px;
 }
-.tile-row.has-owner { box-shadow: inset 4px 0 0 var(--row-owner); border-radius: 4px; }
+/* Co-op: who played this row. A 4px inset stripe was there before and was
+   effectively invisible against the tiles -- two teammates' rows looked
+   identical. This hangs a colour tab off the left edge instead, outside the
+   grid, so it reads at a glance without moving a single tile. */
+.tile-row.has-owner {
+  position: relative;
+  border-radius: 4px;
+}
+.tile-row.has-owner::before {
+  content: ''; position: absolute;
+  left: -11px; top: 3px; bottom: 3px; width: 4px;
+  border-radius: 3px;
+  background: var(--row-owner);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--row-owner) 55%, transparent);
+}
+.tile-row.is-mine::after {
+  content: ''; position: absolute;
+  left: -11px; top: 3px; bottom: 3px; width: 4px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, .5);
+}
 .tile-row.shake { animation: tile-shake .4s ease; }
 @keyframes tile-shake {
   10%, 90%      { transform: translateX(-1px); }
@@ -1493,8 +1655,37 @@ html, body {
   .hud { padding: 9px 14px; }
   .pill { font-size: 12px; padding: 4px 10px; }
   .btn-icon { width: 34px; height: 34px; font-size: 15px; }
-  .play-area { padding: 16px 14px 20px; gap: 14px; }
-  .tile-grid { --tile: min(46px, calc((58vh - (var(--rows) - 1) * 6px) / var(--rows))); }
+  /* One column: there is no spare width to put a rail in. The rails become
+     compact horizontal strips instead of columns -- the readout is still
+     there, it just runs across rather than down, and the board keeps the
+     full width. */
+  .play-area {
+    /* The "open this on a bigger display" note is fixed to the bottom of
+       the viewport; without this the legend's second row hides behind it. */
+    padding: 16px 14px 46px; gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    align-items: stretch;
+  }
+  .rail-right { grid-column: 1; grid-row: 1; }
+  .play-main  { grid-column: 1; grid-row: 2; }
+  .rail-left  { grid-column: 1; grid-row: 3; }
+  .letter-legend { grid-column: 1; grid-row: 4; }
+  .rail {
+    flex-direction: row; flex-wrap: wrap; align-items: stretch;
+    max-width: none; gap: 8px;
+  }
+  .rail-block { flex: 1 1 130px; padding: 8px 10px; }
+  .rail-label { margin-bottom: 5px; font-size: 9.5px; }
+  .rail-big { font-size: 22px; }
+  .rail-name { font-size: 14px; margin-bottom: 6px; }
+  /* The pips and the caption say the same thing as the big number and the
+     dots; on a small screen only one of each earns its space. */
+  .guess-pips, .rail-sub { display: none; }
+  .team-list { flex-direction: row; flex-wrap: wrap; gap: 4px 10px; }
+  .team-row { padding: 2px 4px; }
+
+  .tile-grid { --tile: min(46px, calc((52vh - (var(--rows) - 1) * 6px) / var(--rows))); }
   .ghost-bar i { width: 16px; height: 16px; }
   .status-line { font-size: 14px; }
   .status-line .big { font-size: 40px; }
@@ -1522,3 +1713,18 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+
+/* ── Focus ─────────────────────────────────────────────────────────────
+   There was no focus style at all: tabbing through the title screen moved
+   an invisible cursor. `:focus-visible` rather than `:focus`, so a mouse
+   click on a chip doesn't leave a ring behind it. */
+
+:where(button, [href], input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+.chip:focus-visible { outline-offset: 2px; }
+.btn:focus-visible { outline-offset: 3px; }
+.how summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

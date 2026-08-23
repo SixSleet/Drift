@@ -36,7 +36,10 @@ at a monitor, not poking a touchscreen.
 
 Built for a desktop screen. Below about 1080px wide the 3D room is dropped
 and the game falls back to a plain (still warm) flat layout, because at that
-size the monitor would end up smaller than the text on it.
+size the monitor would end up smaller than the text on it. Nothing is cut in
+that fallback: the two rails either side of the board turn into compact
+horizontal strips above and below it, so the readout still fits without
+squeezing the board.
 
 **Play: <https://sixsleet.github.io/Drift/>**
 
@@ -54,7 +57,7 @@ and realtime signalling. GitHub Pages for hosting. The one dependency
 | Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. There's no on-screen keyboard — type guesses on your own physical keyboard, watching the monitor the way the character in the room does. Each letter pops as you type it, tiles flip in as each guess is scored (hit / present / miss), and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out in the compact legend below the board so you don't waste a guess retyping it — unless this round is Blackout (see below). Partway through, a round may also spring a global mid-round modifier, and your own room may interrupt you at any time — see below. |
 | Settling | Brief. Any client — not just the host — can ask the server "is this round actually over," and the server independently re-checks before agreeing. |
 | Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed, plus who won the round. |
-| Board | ~5.5s. Running standings, then the next round. |
+| Board | ~5.5s. Running standings, then the next round. The recap line names the word and who got it in how many; each row carries a bar filled to its share of the leader's score, and a form line — rounds solved, average guesses when solved — so a total that came from two lucky rounds reads differently from a steady one. |
 
 Matches run 4, 6, 8 or 12 rounds. Points build across the whole match — most
 points (or, in Co-op, most rounds solved) wins after the last one.
@@ -84,6 +87,30 @@ panel; a 7-letter Co-op round is 10 rows.
 as hard as your half of a duel. `word length + 3` in Co-op, since that pool
 is shared across the whole team rather than per player. Jackpot adds one
 more guess on top of that, for the round.
+
+**The rails.** The board is about 200px wide inside an 830px panel, so most
+of the screen used to be empty. Two read-only columns fill it with things the
+render loop already knew and never showed:
+
+- **Left, in every mode:** a dot per round of the match with the current one
+  lit, the number of guesses left as a large figure (red and pulsing on the
+  last one) with a pip per attempt, and an "In play" block naming whatever
+  modifiers are currently active — including one that landed mid-round.
+- **Right, by mode:** in Co-op, the team, each with their colour and how many
+  of the shared guesses they personally spent this round; in PvP, the rival
+  and the ghost bar (a count of their burned guesses — never their letters);
+  in Solo, your running score.
+
+Both rails contain nothing focusable and nothing clickable, which is the
+property that matters: there's no on-screen keyboard, so a rail that could
+take focus would silently eat the next letter you typed. `wf-rails-test.mjs`
+clicks a rail and then types, to prove the board still gets it.
+
+**Who played which row.** In Co-op every guess is somebody's, and two
+teammates' rows used to look identical — the ownership stripe was a 4px
+inset shadow that read as nothing. It's now a colour tab hanging off the
+left edge of the row, outside the grid so it costs the board no width, with
+a white ring on the ones that are yours.
 
 **Winning a PvP round.** First to solve it wins — not fewest guesses. The
 round ends the instant either player gets it, so there's no reason to wait
@@ -162,6 +189,29 @@ itself; clicking one clears it early. All of it lives in
 `js/room-events.js`, and the models stand in the same 3D stage as the desk, so
 they sit in real perspective rather than floating flat over the scene.
 
+**Sound is synthesised, and the shape of the synthesis is the point.** There
+are no audio files anywhere in the repo — every cue in `js/sfx.js` is a few
+oscillators and an envelope. Which means each one has to be built out of
+whatever the real thing actually *is*, not out of a pitch that vaguely
+gestures at it:
+
+- The **meow** is a formant sweep — a sawtooth gliding through a resonant
+  bandpass that tracks the pitch, with a 22Hz vibrato. The wobble is most of
+  what separates "cat" from "synth".
+- The **moth** is discrete wingbeats. Modulating a continuous band of noise
+  with a 14Hz LFO is amplitude-modulated hiss; it read as static. A wingbeat
+  is a ~14ms papery tap, so the taps are scheduled individually, jittered in
+  spacing, level and brightness — because a moth stalls and surges rather
+  than beating like a metronome — under a swell that carries it past the
+  lamp and away.
+- The **phone** is two things at once: the motor, a 68Hz body gated by its
+  own ~29Hz rotation, and the case chattering on the wood, a thin band of
+  noise riding the same gate. As two square blips it just sounded like a
+  bass note.
+- The **UI cues** all sit on one C-major pentatonic set with rounded attacks
+  and a lowpass, so nothing in the game can produce a dissonant interval
+  against anything else.
+
 ## The room
 
 The game isn't a page with a room drawn behind it — it's a room, and the
@@ -176,12 +226,29 @@ that one point of view: the back of someone's head, their desk, and the
 screen they're working on.
 
 Every screen in the app — title, lobby, code entry, the board, standings,
-the full-screen event takeover — renders on that monitor's panel, a fixed
-1100x740 surface standing at z = -900. Because it's ordinary DOM inside the
-3D scene rather than a texture, the tiles and text stay crisp, selectable
-and accessible. The trade is that perspective scales the panel to about
-67%, so type inside it is authored proportionally larger, and nothing in
-there uses `vw`/`vh` — the panel is a fixed box, not the viewport.
+the full-screen event takeover — renders on that monitor's screen. Not
+*inside* the 3D stage, though: the monitor stands at z = -900, so
+perspective scales it to about 67%, and a downscaled layer is rasterised at
+its layout size and then shrunk. Text does not survive that; every letter on
+the monitor came out soft. So `#monitor-screen` is left as a bare measuring
+rectangle, and `js/screen-fit.js` pins a flat, unscaled `#app-overlay` to
+that rectangle's exact on-screen pixels, rounded outward so no seam of bezel
+shows through. The app is ordinary 1:1 DOM — crisp, selectable, accessible —
+that merely happens to sit where the screen is.
+
+That gives three stacked layers, and the order is load-bearing:
+
+| z | Layer | What's in it |
+| --- | --- | --- |
+| 1 | `.room#room-scene` | The 3D stage: floor, walls, desk, monitor, the player |
+| 2 | `#app-overlay` | The flat app, pinned to the screen rectangle, plus the glass |
+| 3 | `.room#room-front` | A second 3D stage sharing the same perspective, holding `#room-3d-fx` |
+| 4 | `.screen-fx` | A flat viewport layer, for things that land on a specific tile |
+
+Layer 3 exists so a room event that should pass *in front of* the monitor
+(the cat) still draws over the app, even though the app is now above the
+room. It shares layer 1's `perspective` and `perspective-origin`, so a rig
+placed in it lands in the same 3D space the desk does.
 
 Two things worth knowing before touching this:
 
@@ -209,13 +276,21 @@ and a cool rim on the back of the player's head where the screen's light
 wraps around them. That warm/cool disagreement is most of what reads as
 "cozy" rather than "dark UI".
 
-Mid-round distractions (the cat, the phone) live in `#room-fx`, a flat layer
-over the room rather than inside the 3D stage — a sprite placed in the stage
-would inherit the perspective scaling of whatever plane it sat on. They show
-up out in the room, never over the screen.
+- **`#room-3d-fx` needs `position: absolute; inset: 0`.** `transform-style:
+  preserve-3d` makes an element a containing block for its absolutely
+  positioned descendants. Left as a zero-height static div, every rig's
+  `top: 50%` resolved against nothing and the cat floated at the ceiling.
 
-It's all hand-drawn CSS: gradients, clip-paths and a couple of emoji. No
-image assets, no build step, same as everything else here.
+Room events split across layers 3 and 4 by what they have to line up with.
+The cat, the phone and the storm are room objects, so they go in the 3D
+stage and inherit its perspective. The moth has to land on one specific
+tile, and converting a tile's screen rectangle back into stage coordinates
+would be guesswork — so it lives in the flat layer and works in viewport
+pixels.
+
+It's all hand-drawn CSS and inline SVG: gradients, clip-paths, and curves
+where a shape has to actually read as a thing (the cat). No image assets, no
+build step, same as everything else here.
 
 ## Keeping the secret secret
 
@@ -344,17 +419,20 @@ Supabase project.
 ## Layout
 
 ```
-index.html          the 3D room, with every app screen nested inside the
-                    monitor's panel; guesses go in on the player's own
-                    physical keyboard, nothing on screen to tap
-css/app.css          two coordinate systems: the 3D room, then the flat
-                    panel standing in it (see The room)
+index.html          the flat app overlay first, then the 3D room behind
+                    it, then the front stage and fx layers over it — the
+                    order is the z-stack (see The room); guesses go in on
+                    the player's own physical keyboard, nothing to tap
+css/app.css          two coordinate systems: the 3D room, and the flat
+                    panel pinned onto it (see The room)
 js/config.js         connection details and every tunable
 js/net.js            token identity, clock sync, RPCs, realtime channel
 js/words.js           client-side "is this a real word" check (UX only)
 js/sfx.js             synthesised WebAudio sound; no audio files
+js/screen-fit.js      pins the flat overlay to the monitor's measured rect
+js/room-events.js     the player-sided room: cat, moth, phone, lamp, storm
 js/game.js            phase clock, round settlement, input, scoring display
-js/ui.js               DOM rendering: tile grid, letter legend, boards
+js/ui.js               DOM rendering: tile grid, legend, rails, standings
 js/main.js            wires the buttons up and listens for physical keydown
 vendor/               supabase-js 2.58.0, unmodified
 data/answers-*.json    the exact seed for wf_words — dev/repo only, never

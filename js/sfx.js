@@ -272,43 +272,106 @@ export const sfx = {
     src.stop(t0 + dur); lfo.stop(t0 + dur);
   },
 
-  /** A moth blundering around the lamp -- soft, papery wingbeats. */
+  /**
+   * A moth blundering around the lamp.
+   *
+   * The first version modulated a continuous band of noise with a 14 Hz
+   * square LFO, which is amplitude-modulated hiss -- it read as static, not
+   * as an insect. A wingbeat is a *discrete* event: a ~14 ms papery tap.
+   * So this schedules the taps individually, jittered in spacing, level and
+   * brightness, because a moth stalls and surges rather than beating like a
+   * metronome. A swell over the whole burst carries it past the lamp and
+   * away again.
+   */
   mothFlutter() {
     const c = ensure();
     if (!c) return;
     const t0 = c.currentTime;
-    const dur = 1.1;
-    const src = noise(c);
-    const bp = c.createBiquadFilter();
-    const env = c.createGain();
-    const lfo = c.createOscillator();
-    const lfoAmt = c.createGain();
-    bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(1700, t0);
-    bp.Q.setValueAtTime(1.2, t0);
-    lfo.type = 'square';
-    lfo.frequency.setValueAtTime(14, t0);   // wingbeat
-    lfoAmt.gain.setValueAtTime(0.022, t0);
-    lfo.connect(lfoAmt).connect(env.gain);
-    env.gain.setValueAtTime(0.024, t0);
-    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(bp).connect(env).connect(master);
-    src.start(t0); lfo.start(t0);
-    src.stop(t0 + dur); lfo.stop(t0 + dur);
-  },
+    const beats = 16;
+    let t = t0;
+    for (let i = 0; i < beats; i++) {
+      // Louder in the middle of the pass, quieter at either end.
+      const swell = Math.sin((i / (beats - 1)) * Math.PI);
+      const src = noise(c);
+      const bp = c.createBiquadFilter();
+      const env = c.createGain();
+      const tap = 0.014 + Math.random() * 0.008;
 
-  /** The phone buzzing face-down on the desk. */
-  phoneBuzz() {
-    for (let i = 0; i < 2; i++) {
-      const d = i * 0.62;
-      blip({ freq: 82, dur: 0.34, type: 'square', gain: 0.09, delay: d });
-      blip({ freq: 120, dur: 0.34, type: 'sawtooth', gain: 0.045, delay: d });
+      bp.type = 'bandpass';
+      // Papery, and a touch brighter on the harder beats.
+      bp.frequency.setValueAtTime(1250 + Math.random() * 900 + swell * 500, t);
+      bp.Q.setValueAtTime(1.7, t);
+
+      const peak = 0.006 + swell * 0.017 * (0.6 + Math.random() * 0.7);
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.linearRampToValueAtTime(peak, t + 0.002);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + tap);
+
+      src.connect(bp).connect(env).connect(master);
+      src.start(t);
+      src.stop(t + tap + 0.01);
+
+      // ~13-20 Hz, wandering. Every so often it hesitates for a beat.
+      t += (Math.random() < 0.12 ? 0.13 : 0.05 + Math.random() * 0.026);
     }
   },
 
-  /** Silenced it. */
+  /**
+   * The phone buzzing face-down on the desk. Two things at once: the motor,
+   * a low tone chopped by its own rotation, and the case chattering against
+   * the wood. The old version was two square blips, which sounded like a
+   * bass note rather than a vibration.
+   */
+  phoneBuzz() {
+    const c = ensure();
+    if (!c) return;
+    for (let i = 0; i < 2; i++) {
+      const t = c.currentTime + i * 0.62;
+      const dur = 0.36;
+
+      // Motor: 68 Hz body, gated by a ~29 Hz rotation so it stutters.
+      const osc = c.createOscillator();
+      const env = c.createGain();
+      const chop = c.createOscillator();
+      const chopAmt = c.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(68, t);
+      osc.frequency.linearRampToValueAtTime(62, t + dur);
+      chop.type = 'square';
+      chop.frequency.setValueAtTime(29, t);
+      chopAmt.gain.setValueAtTime(0.05, t);
+      chop.connect(chopAmt).connect(env.gain);
+      env.gain.setValueAtTime(0.055, t);
+      env.gain.setValueAtTime(0.055, t + dur - 0.05);
+      env.gain.linearRampToValueAtTime(0.0001, t + dur);
+      osc.connect(env).connect(master);
+      osc.start(t); chop.start(t);
+      osc.stop(t + dur + 0.02); chop.stop(t + dur + 0.02);
+
+      // Case on wood: a thin dry rattle riding the same gate.
+      const src = noise(c);
+      const hp = c.createBiquadFilter();
+      const renv = c.createGain();
+      const rchop = c.createOscillator();
+      const rchopAmt = c.createGain();
+      hp.type = 'bandpass';
+      hp.frequency.setValueAtTime(2100, t);
+      hp.Q.setValueAtTime(0.9, t);
+      rchop.type = 'square';
+      rchop.frequency.setValueAtTime(29, t);
+      rchopAmt.gain.setValueAtTime(0.011, t);
+      rchop.connect(rchopAmt).connect(renv.gain);
+      renv.gain.setValueAtTime(0.011, t);
+      renv.gain.linearRampToValueAtTime(0.0001, t + dur);
+      src.connect(hp).connect(renv).connect(master);
+      src.start(t); rchop.start(t);
+      src.stop(t + dur); rchop.stop(t + dur);
+    }
+  },
+
+  /** Silenced it: the buzz cut off, and the room a little quieter for it. */
   phoneSilence() {
-    blip({ freq: 420, to: 240, dur: 0.11, type: 'sine', gain: 0.1 });
+    tone({ freq: PENTA[3], to: PENTA[1], dur: 0.16, type: 'sine', gain: 0.07, cutoff: 1800, attack: 0.004 });
   },
 
   /** The desk lamp stuttering -- a dry electrical tick. */

@@ -149,14 +149,22 @@
         </div>
       </header>
 
+      <!-- Three columns. The board only ever needs ~200px of the panel's
+           830, so the width either side goes to the two things that were
+           previously invisible: where you are in the match, and who else is
+           at the table. Both rails are pure readouts -- nothing in them is
+           interactive, so they never steal a keystroke. -->
       <div class="play-area">
-        <div class="ghost-bar" id="ghost-bar" hidden aria-label="Opponent progress"></div>
+        <aside class="rail rail-left" id="rail-left" aria-label="Round progress"></aside>
 
-        <div class="board-wrap">
-          <div class="tile-grid" id="board"></div>
+        <div class="play-main">
+          <div class="board-wrap">
+            <div class="tile-grid" id="board"></div>
+          </div>
+          <div class="status-line" id="status-line"></div>
         </div>
 
-        <div class="status-line" id="status-line"></div>
+        <aside class="rail rail-right" id="rail-right" aria-label="Players"></aside>
 
         <!-- Reference only -- nothing here is clickable. The keyboard
      you type on is the one on the desk. -->
@@ -168,6 +176,9 @@
     <section class="screen" id="screen-board">
       <div class="stack">
         <h2 class="heading" id="board-title">Standings</h2>
+        <!-- What just happened, in one line: the word and who got it. The
+             standings used to be two names on an empty screen. -->
+        <p class="round-recap" id="board-recap" hidden></p>
         <ol class="board" id="board-list"></ol>
         <p class="note" id="board-note"></p>
         <button class="btn btn-primary btn-lg" id="btn-again" hidden>New room</button>

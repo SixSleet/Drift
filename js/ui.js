@@ -18,6 +18,13 @@ const CODE_KEYPAD_ROWS = [
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
 export function showScreen(id) {
   $$('.screen').forEach((s) => s.removeAttribute('data-active'));
   $(`#${id}`)?.setAttribute('data-active', '');
@@ -124,28 +131,52 @@ export function renderPlayers(players, meId) {
   $('#lobby-count').textContent = `${players.length}`;
 }
 
-/** rows: [{ name, color, total, delta, isMe }] already sorted. */
+/**
+ * rows: [{ name, color, total, delta, isMe, solved, played, avgGuesses }]
+ * already sorted, best first.
+ *
+ * Each row gets a bar filled to its share of the leader's score, so the
+ * gap between first and last is something you see rather than something you
+ * work out from two numbers.
+ */
 export function renderBoard(rows) {
   const ol = $('#board-list');
   ol.innerHTML = '';
+  const top = Math.max(1, ...rows.map((r) => r.total));
   for (const r of rows) {
     const li = document.createElement('li');
     if (r.isMe) li.classList.add('is-me');
-    const dot = document.createElement('i');
+
+    const bar = el('i', 'board-bar');
+    bar.style.width = `${Math.round((r.total / top) * 100)}%`;
+    bar.style.background = `color-mix(in srgb, ${r.color} 26%, transparent)`;
+    li.appendChild(bar);
+
+    const dot = el('i', 'board-dot');
     dot.style.background = r.color;
-    li.append(dot, document.createTextNode(r.name));
-    if (r.delta > 0) {
-      const d = document.createElement('span');
-      d.className = 'delta';
-      d.textContent = `+${r.delta}`;
-      li.appendChild(d);
+    li.appendChild(dot);
+
+    const who = el('span', 'board-who');
+    who.appendChild(el('span', 'board-name', r.name));
+    if (r.played) {
+      const bits = [`solved ${r.solved}/${r.played}`];
+      if (r.avgGuesses) bits.push(`${r.avgGuesses.toFixed(1)} guesses avg`);
+      who.appendChild(el('span', 'board-sub', bits.join(' · ')));
     }
-    const pts = document.createElement('span');
-    pts.className = 'pts';
-    pts.textContent = r.total;
-    li.appendChild(pts);
+    li.appendChild(who);
+
+    if (r.delta > 0) li.appendChild(el('span', 'delta', `+${r.delta}`));
+    li.appendChild(el('span', 'pts', String(r.total)));
     ol.appendChild(li);
   }
+}
+
+/** One line above the standings: the word, and who got it. */
+export function setRoundRecap(html) {
+  const el2 = $('#board-recap');
+  if (!el2) return;
+  el2.innerHTML = html || '';
+  el2.hidden = !html;
 }
 
 /**
@@ -167,6 +198,7 @@ export function renderBoard(rows) {
  *   active: string,          // the in-progress typed guess, or ''
  *   canType: boolean,        // round is live and this player/team can still guess
  *   playerColor: Map<player_id, color>,   // co-op only; omit for pvp
+ *   meId: string,            // co-op only: marks your own rows
  *   shake: boolean,          // true for one frame after an invalid submit
  * }
  */
@@ -204,7 +236,7 @@ export function renderGrid(opts) {
   const board = $('#board');
 
   // Structure only -- `active` and `shake` are deliberately absent.
-  const sig = JSON.stringify([wordLength, maxGuesses, canType,
+  const sig = JSON.stringify([wordLength, maxGuesses, canType, opts.meId ?? null,
     guesses.map((g) => `${g.player_id}:${g.attempt_no}`)]);
   const activeIndex = guesses.length;
 
@@ -233,6 +265,9 @@ export function renderGrid(opts) {
       if (playerColor && g) {
         row.style.setProperty('--row-owner', playerColor.get(g.player_id) ?? 'transparent');
         row.classList.add('has-owner');
+        // Your own rows get a ring on the tab as well as the colour, so you
+        // can find them without having to remember which colour you are.
+        if (opts.meId && g.player_id === opts.meId) row.classList.add('is-mine');
       }
 
       for (let j = 0; j < wordLength; j++) {
@@ -282,4 +317,153 @@ export function showError(title, body) {
   $('#error-title').textContent = title;
   $('#error-body').innerHTML = body;
   showScreen('screen-error');
+}
+
+/* ── Side rails ───────────────────────────────────────────────────────
+   The board is about 200px wide inside an 830px panel, so most of the
+   screen used to be empty. These two columns fill it with the two things
+   the game already knew but never showed: where you are in the match, and
+   who else is at the table.
+
+   Both are read-only. Nothing in them takes focus or a click, so they can
+   never swallow a keystroke meant for the board.
+
+   Rebuilt wholesale on every frame would restart the pulse animations, so
+   like the grid these compare a signature first and only redraw on change.
+*/
+
+const _railSig = { left: null, right: null };
+
+/**
+ * opts: { roundNo, totalRounds, guessesUsed, maxGuesses, canType,
+ *         eventLabel, eventEmoji, midLabel, midEmoji }
+ */
+export function renderRailLeft(opts) {
+  const rail = $('#rail-left');
+  if (!rail) return;
+  const sig = JSON.stringify(opts);
+  if (sig === _railSig.left) return;
+  _railSig.left = sig;
+
+  rail.innerHTML = '';
+
+  const rounds = el('div', 'rail-block');
+  rounds.append(el('p', 'rail-label', 'Match'));
+  const dots = el('div', 'round-dots');
+  for (let i = 1; i <= opts.totalRounds; i++) {
+    const d = el('i', 'round-dot');
+    if (i < opts.roundNo) d.classList.add('is-done');
+    if (i === opts.roundNo) d.classList.add('is-now');
+    d.title = `Round ${i}`;
+    dots.appendChild(d);
+  }
+  rounds.append(dots, el('p', 'rail-sub', `Round ${opts.roundNo} of ${opts.totalRounds}`));
+  rail.appendChild(rounds);
+
+  const left = Math.max(0, opts.maxGuesses - opts.guessesUsed);
+  const guesses = el('div', 'rail-block');
+  guesses.append(el('p', 'rail-label', 'Guesses left'));
+  const big = el('div', 'rail-big', String(left));
+  if (left <= 1) big.classList.add('is-low');
+  guesses.append(big);
+  const pips = el('div', 'guess-pips');
+  for (let i = 0; i < opts.maxGuesses; i++) {
+    const p = el('i', 'guess-pip');
+    if (i < opts.guessesUsed) p.classList.add('is-spent');
+    pips.appendChild(p);
+  }
+  guesses.append(pips);
+  rail.appendChild(guesses);
+
+  if (opts.eventLabel || opts.midLabel) {
+    const mods = el('div', 'rail-block');
+    mods.append(el('p', 'rail-label', 'In play'));
+    for (const [emoji, label, isMid] of [
+      [opts.eventEmoji, opts.eventLabel, false],
+      [opts.midEmoji, opts.midLabel, true],
+    ]) {
+      if (!label) continue;
+      const card = el('div', 'rail-mod');
+      if (isMid) card.classList.add('is-mid');
+      card.append(el('span', 'rail-mod-emoji', emoji ?? '•'), el('span', null, label));
+      mods.appendChild(card);
+    }
+    rail.appendChild(mods);
+  }
+}
+
+/**
+ * opts: {
+ *   mode,
+ *   rows: [{ id, name, color, isMe, guesses, solved, total }],  // coop/pvp/solo
+ *   ghost: { attempts, hits, solved } | null,   // pvp only
+ *   maxGuesses,
+ * }
+ */
+export function renderRailRight(opts) {
+  const rail = $('#rail-right');
+  if (!rail) return;
+  const sig = JSON.stringify(opts);
+  if (sig === _railSig.right) return;
+  _railSig.right = sig;
+
+  rail.innerHTML = '';
+
+  if (opts.mode === 'pvp') {
+    const block = el('div', 'rail-block');
+    block.append(el('p', 'rail-label', 'Rival'));
+    const rival = opts.rows.find((r) => !r.isMe);
+    block.append(el('div', 'rail-name', rival?.name ?? 'Waiting…'));
+    // You never see a rival's letters -- only how much of their budget is
+    // gone. The dots are that, and nothing more.
+    const bar = el('div', 'ghost-bar');
+    bar.id = 'ghost-bar';
+    const filled = opts.ghost?.attempts ?? 0;
+    for (let i = 0; i < opts.maxGuesses; i++) {
+      const dot = el('i');
+      if (i < filled) {
+        dot.dataset.tier = opts.ghost.solved && i === filled - 1 ? 'hit'
+          : i < (opts.ghost.hits ?? 0) ? 'hit' : 'present';
+      }
+      bar.appendChild(dot);
+    }
+    block.appendChild(bar);
+    block.append(el('p', 'rail-sub', `${filled}/${opts.maxGuesses} guesses burned`));
+    rail.appendChild(block);
+    return;
+  }
+
+  if (opts.mode === 'solo') {
+    const block = el('div', 'rail-block');
+    block.append(el('p', 'rail-label', 'Score'));
+    const me = opts.rows.find((r) => r.isMe);
+    block.append(el('div', 'rail-big', String(me?.total ?? 0)));
+    block.append(el('p', 'rail-sub', 'points this match'));
+    rail.appendChild(block);
+    return;
+  }
+
+  // Co-op: everyone shares the board, so the useful readout is who has
+  // spent what out of the shared pool.
+  const block = el('div', 'rail-block');
+  block.append(el('p', 'rail-label', `Team · ${opts.rows.length}`));
+  const list = el('ul', 'team-list');
+  for (const r of opts.rows) {
+    const li = el('li', 'team-row');
+    if (r.isMe) li.classList.add('is-me');
+    const dot = el('i', 'team-dot');
+    dot.style.background = r.color;
+    li.append(dot, el('span', 'team-name', r.name + (r.isMe ? ' (you)' : '')));
+    li.append(el('span', 'team-count', String(r.guesses)));
+    list.appendChild(li);
+  }
+  block.appendChild(list);
+  block.append(el('p', 'rail-sub', 'guesses played this round'));
+  rail.appendChild(block);
+}
+
+/** Forces the next renderRail* call to redraw — used when the round changes. */
+export function resetRails() {
+  _railSig.left = null;
+  _railSig.right = null;
 }
