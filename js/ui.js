@@ -63,18 +63,11 @@ export function flashKey(ch) {
   setTimeout(() => btn.classList.remove('is-pressed'), 120);
 }
 
-/**
- * Renders the A-Z on-screen keyboard. Tiers are applied afterward.
- * `rows` defaults to QWERTY order; pass a shuffled layout (see
- * `shuffledLetterRows`) to rebuild with a scrambled one instead — each key
- * plays a one-shot "shuffle-in" entrance when `shuffled` is true.
- */
-export function buildLetterKeyboard(onKey, rows = LETTER_KEYBOARD_ROWS, shuffled = false) {
+/** Renders the A-Z on-screen keyboard once. Tiers are applied afterward. */
+export function buildLetterKeyboard(onKey) {
   const kb = $('#keyboard');
   kb.innerHTML = '';
-  kb.classList.toggle('is-shuffled', shuffled);
-  let i = 0;
-  for (const row of rows) {
+  for (const row of LETTER_KEYBOARD_ROWS) {
     const rowEl = document.createElement('div');
     rowEl.className = 'kb-row';
     for (const key of row) {
@@ -88,30 +81,11 @@ export function buildLetterKeyboard(onKey, rows = LETTER_KEYBOARD_ROWS, shuffled
         b.className = 'kb-key';
         b.textContent = key;
       }
-      if (shuffled) b.style.setProperty('--shuffle-delay', `${(i++) * 18}ms`);
       b.addEventListener('click', () => onKey(key));
       rowEl.appendChild(b);
     }
     kb.appendChild(rowEl);
   }
-}
-
-/** A-Z + ENTER/BACK, reshuffled within each row (row sizes/anchors kept so ENTER and BACK stay put). */
-export function shuffledLetterRows() {
-  const letters = LETTER_KEYBOARD_ROWS.flat().filter((k) => k !== 'ENTER' && k !== 'BACK');
-  for (let i = letters.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [letters[i], letters[j]] = [letters[j], letters[i]];
-  }
-  const sizes = LETTER_KEYBOARD_ROWS.map((row) => row.filter((k) => k !== 'ENTER' && k !== 'BACK').length);
-  const rows = [];
-  let cursor = 0;
-  for (const size of sizes) {
-    rows.push(letters.slice(cursor, cursor + size));
-    cursor += size;
-  }
-  rows[rows.length - 1] = ['ENTER', ...rows[rows.length - 1], 'BACK'];
-  return rows;
 }
 
 /** tiers: Map<letter, 'hit'|'present'|'miss'> — the best status seen so far. */
@@ -203,14 +177,13 @@ export function renderBoard(rows) {
  *   canType: boolean,        // round is live and this player/team can still guess
  *   playerColor: Map<player_id, color>,   // co-op only; omit for pvp
  *   shake: boolean,          // true for one frame after an invalid submit
- *   bullseye: boolean,       // hide per-letter tier colour, show a hit-count badge instead
  * }
  */
 let _gridSig = null;
 export function renderGrid(opts) {
-  const { wordLength, maxGuesses, guesses, active, canType, playerColor, bullseye } = opts;
+  const { wordLength, maxGuesses, guesses, active, canType, playerColor } = opts;
   const shake = !!opts.shake;
-  const sig = JSON.stringify([wordLength, maxGuesses, active, canType, shake, !!bullseye,
+  const sig = JSON.stringify([wordLength, maxGuesses, active, canType, shake,
     guesses.map((g) => `${g.player_id}:${g.attempt_no}`)]);
   if (sig === _gridSig) return;
   _gridSig = sig;
@@ -240,20 +213,12 @@ export function renderGrid(opts) {
       if (g.feedback.every((f) => f !== 'hit')) row.classList.add('is-whiff');
     }
 
-    const hits = bullseye ? g?.feedback.filter((f) => f === 'hit').length : null;
-    if (bullseye && g) {
-      const badge = document.createElement('div');
-      badge.className = 'hit-badge';
-      badge.textContent = `🎯 ${hits}/${wordLength}`;
-      row.appendChild(badge);
-    }
-
     for (let j = 0; j < wordLength; j++) {
       const tile = document.createElement('div');
       tile.className = 'tile';
       if (g) {
         tile.textContent = g.word[j]?.toUpperCase() ?? '';
-        tile.dataset.tier = bullseye ? 'asked' : g.feedback[j];
+        tile.dataset.tier = g.feedback[j];
         tile.style.setProperty('--flip-delay', `${j * 90}ms`);
         tile.classList.add('is-revealed');
       } else if (isActive && active[j]) {
@@ -264,6 +229,54 @@ export function renderGrid(opts) {
     }
     board.appendChild(row);
   }
+}
+
+/**
+ * A cat wanders across the room (never over the monitor screen) and lingers
+ * for `windowMs`. Clicking it before it leaves calls `onCatch` and plays a
+ * pounce-away exit; letting it time out plays a scurry-off exit instead.
+ * Self-removing either way -- callers never have to clean this up.
+ */
+export function spawnCat(windowMs, onCatch) {
+  const scene = $('#room-scene');
+  if (!scene) return;
+  const cat = document.createElement('button');
+  cat.type = 'button';
+  cat.className = 'cat-sprite';
+  cat.setAttribute('aria-label', 'Catch the cat');
+  cat.textContent = '🐈';
+  cat.style.setProperty('--walk-dur', `${windowMs}ms`);
+  scene.appendChild(cat);
+
+  // Freeze the cat's current (mid-walk) position as a plain inline style
+  // before swapping in the caught/fled animation -- otherwise the browser
+  // resets `left` to the base rule's value the instant cat-walk stops,
+  // and the cat visibly teleports back to the edge it started from.
+  const freeze = () => {
+    const rect = cat.getBoundingClientRect();
+    const sceneRect = scene.getBoundingClientRect();
+    cat.style.left = `${rect.left - sceneRect.left}px`;
+    cat.style.bottom = `${sceneRect.bottom - rect.bottom}px`;
+  };
+
+  let resolved = false;
+  const timeout = setTimeout(() => {
+    if (resolved) return;
+    resolved = true;
+    freeze();
+    cat.classList.add('is-fleeing');
+    cat.addEventListener('animationend', () => cat.remove(), { once: true });
+  }, windowMs);
+
+  cat.addEventListener('click', () => {
+    if (resolved) return;
+    resolved = true;
+    clearTimeout(timeout);
+    freeze();
+    cat.classList.add('is-caught');
+    cat.addEventListener('animationend', () => cat.remove(), { once: true });
+    onCatch();
+  });
 }
 
 export function setPhase(text, tone) {

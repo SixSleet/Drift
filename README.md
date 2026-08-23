@@ -4,8 +4,12 @@ A 1–10 player browser word game. Same idea as that word game you already know
 — guess the secret word, get colour-coded feedback — with a few twists that
 keep it from being a five-letter clone: the word length shifts every round
 (4 or 5 letters — longer proved too hard to be fun), most rounds have to
-start with the last letter of the previous round's word, and any round can
-roll a random party-game event that changes the stakes.
+start with the last letter of the previous round's word, a round can roll a
+start-of-round event that changes the stakes, and — partway through, when
+you're not expecting it — something can happen mid-round instead: a cat
+wanders into the room and is worth chasing down, or (Co-op) two guesses
+suddenly swap tiles. The whole thing is staged as a little room, with the
+actual puzzle living on a monitor screen inside it.
 
 Three modes:
 
@@ -35,8 +39,8 @@ and realtime signalling. GitHub Pages for hosting. The one dependency
 
 | Phase | What happens |
 | --- | --- |
-| Countdown | 5s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained. If this round rolled an event, a full-screen card takes over for the whole 5 seconds — emoji, name, and what it does — so nobody starts guessing before they've actually read what changed. |
-| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. Type guesses on the on-screen keyboard or your own — each letter pops as you type it, tiles flip in as each guess is scored (hit / present / miss), and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out on the keyboard so you don't waste a guess retyping it — unless this round is Blackout or Bullseye (see below). |
+| Countdown | 5s. Everyone's clock lines up on the server's `starts_at`. The chain-letter badge shows here if this round is constrained. If this round rolled a start-of-round event, a full-screen card takes over for the whole 5 seconds — emoji, name, and what it does — so nobody starts guessing before they've actually read what changed. |
+| Live | A clock (5 minutes normally, 90s on a Blitz round), ticking down in the HUD — red and pulsing under 30s, pulsing faster and ticking audibly (rising pitch) in the final 10s. Type guesses on the on-screen keyboard or your own — each letter pops as you type it, tiles flip in as each guess is scored (hit / present / miss), and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out on the keyboard so you don't waste a guess retyping it — unless this round is Blackout (see below). Partway through, about half of all rounds also spring a mid-round event — see below. |
 | Settling | Brief. Any client — not just the host — can ask the server "is this round actually over," and the server independently re-checks before agreeing. |
 | Reveal | ~4.5s. The secret word, and (in PvP) what your opponent actually guessed, plus who won the round. |
 | Board | ~5.5s. Running standings, then the next round. |
@@ -74,32 +78,62 @@ one memorised opening guess all match. If no word of the right length starts
 with that letter, the constraint quietly drops for that round (`chain_broken`)
 rather than the round ever failing to start.
 
-**Random events.** Every round has a 75% chance of rolling an event, decided
+**Round-start events.** Every round has a 65% chance of rolling one, decided
 server-side the instant the round is minted (`wf_next_round`, one shared
 `random()` roll compared against cumulative odds — not one draw per
 outcome, which would silently skew them) and — where it has a *numeric*
 effect at all — baked straight into that round's `max_guesses` /
-`time_limit_ms`, so there's nothing for the client to derive there. Three
-of the six actually change how the round is *played*, not just scored:
+`time_limit_ms`, so there's nothing for the client to derive there:
 
 | Event | Odds | Effect |
 | --- | --- | --- |
-| 💰 Double Points | 14% | Score doubled. |
-| ⚡ Blitz | 14% | Clock cut to 90 seconds. |
-| 🙈 Blackout | 14% | The keyboard stops greying out letters you already know — no more free memory aid. |
-| 🔀 Shuffle | 14% | The on-screen keyboard layout is scrambled for the round (ENTER/BACK stay anchored). |
-| 🎯 Bullseye | 14% | Tiles stop showing hit/present/miss. You only learn how many letters you got in the exact right spot — a hit-count badge, not a colour map. |
+| 💰 Double Points | 20% | Score doubled. |
+| ⚡ Blitz | 20% | Clock cut to 90 seconds. |
+| 🙈 Blackout | 20% | The keyboard stops greying out letters you already know — no more free memory aid. |
 | 🎰 **Jackpot** | 5% | Extra guess **and** double points, at once — the rare one worth stopping for. |
-| *(none)* | 25% | A normal round. |
+| *(none)* | 35% | A normal round. |
 
 Every event gets a full-screen card for the whole 5-second countdown (so
 there's no missing what just changed), plus a HUD pill for the rest of the
-round, and a distinct WebAudio stinger. Four also carry a physical effect:
-Blitz strobes the screen and shakes it, Double Points and Jackpot rain
-confetti, and Jackpot piles on a gold spinning pill and a slot-machine
-fanfare on top of everything else. Blackout, Shuffle and Bullseye are pure
-client-side rule changes — same secret, same scoring, just a harder way to
-find it — so they carry no `max_guesses`/`time_limit_ms` effect at all.
+round, and a distinct WebAudio stinger. Blitz strobes the screen and shakes
+it; Double Points and Jackpot rain confetti; Jackpot piles on a gold
+spinning pill and a slot-machine fanfare on top of everything else.
+Blackout is a pure client-side rule change — same secret, same scoring,
+just a harder way to find it — so it carries no `max_guesses`/`time_limit_ms`
+effect at all.
+
+**Mid-round events.** A second, independent roll (also decided at mint time,
+in the same `wf_next_round` call) picks something that happens *partway
+through* live play instead of being announced up front — a surprise, not a
+warning. `mid_event_at_ms` lands 45-60 seconds into the round (always
+leaving at least 30 seconds of clock to react), and the event only actually
+resolves once a client calls the matching RPC after that point:
+
+| Event | Odds | What happens |
+| --- | --- | --- |
+| 🐈 Cat | up to 50% | A cat wanders across the room (never onto the monitor screen — see below). Click it within 4 seconds for 20 bonus seconds on the clock (`wf_catch_cat`); miss it and it just wanders off, no penalty. |
+| 🔀 Letter Swap | up to 25%, **Co-op only** | Two players' most recent guesses (never a winning one) suddenly swap tiles with each other (`wf_trigger_letter_swap`) — the words stay put, but the colours briefly tell the wrong story. PvP/Solo never roll this: PvP guesses are invisible to the other player until settle, so a swap there would either leak a guess or land silently invisible. |
+| *(none)* | 50% | Nothing happens. |
+
+Letter Swap only ever touches guesses that aren't the actual solve — the
+server excludes any all-hit guess from the swap pool, so this can never
+accidentally hand a team a false win. Both RPCs are idempotent
+(`mid_event_fired`): whichever client's call reaches the server first wins,
+everyone else's just quietly does nothing, so racing Co-op teammates or a
+flaky connection can't double-apply an event or hand out two cat bonuses.
+
+## The room
+
+The game screen is staged as a small room instead of bare UI: a desk, a
+chair, someone typing (seen from behind, over-the-shoulder), and a monitor
+whose screen *is* the actual game — the HUD, tile grid and keyboard render
+exactly as before, just inside `.monitor-screen` now. It's all hand-drawn
+CSS (gradients, shapes, a couple of emoji) — no image assets, no build
+step, same as everything else here.
+
+The cat from the mid-round event above always walks across the room itself,
+never over the monitor screen — it's a distraction happening around you
+while you play, not a change to what's on the puzzle in front of you.
 
 ## Keeping the secret secret
 
@@ -154,7 +188,7 @@ Seven tables, all with row-level security. See
 | `wf_rooms` | code, mode, status, round count |
 | `wf_players` | seat, generated name and colour, token hash, per room |
 | `wf_words` | the curated answer pool — **RLS-locked, no policies** |
-| `wf_rounds` | word length, guess budget, chain letter, event, timing, `revealed_secret` |
+| `wf_rounds` | word length, guess budget, chain letter, start/mid-round events, timing, `revealed_secret` |
 | `wf_round_secrets` | the live secret for a round — **RLS-locked, no policies** |
 | `wf_guesses` | word, per-letter feedback, attempt number; visibility is mode-aware |
 | `wf_results` | settled points, per player per round, which is what the leaderboard sums |

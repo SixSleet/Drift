@@ -97,6 +97,8 @@ export const api = {
   nextRound: (roomId) => rpc('wf_next_round', { p_room: roomId }),
   submitGuess: (roundId, word) => rpc('wf_submit_guess', { p_round: roundId, p_word: word }),
   checkSettle: (roundId) => rpc('wf_check_settle', { p_round: roundId }),
+  catchCat: (roundId) => rpc('wf_catch_cat', { p_round: roundId }),
+  triggerLetterSwap: (roundId) => rpc('wf_trigger_letter_swap', { p_round: roundId }),
 };
 
 // ── Realtime ───────────────────────────────────────────────────────────────

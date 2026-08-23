@@ -111,15 +111,10 @@ export const sfx = {
       // Lights going out: a slow, muffled descent into near-silence.
       blip({ freq: 480, to: 90, dur: 0.6, type: 'sine', gain: 0.16 });
       blip({ freq: 200, to: 60, dur: 0.4, type: 'sine', gain: 0.1, delay: 0.15 });
-    } else if (kind === 'shuffle') {
-      // A scatter of quick, randomly-pitched clicks -- keys being shuffled.
-      for (let i = 0; i < 14; i++) {
-        blip({ freq: 300 + Math.random() * 900, dur: 0.03, type: 'triangle', gain: 0.09, delay: i * 0.025 });
-      }
-    } else if (kind === 'bullseye') {
-      // A dart zipping in, then a sharp thud on the target.
-      blip({ freq: 260, to: 1200, dur: 0.14, type: 'sawtooth', gain: 0.13 });
-      blip({ freq: 140, dur: 0.12, type: 'square', gain: 0.18, delay: 0.14 });
+    } else if (kind === 'letter_swap') {
+      // Two quick tones crossing past each other -- a swap, not a reveal.
+      blip({ freq: 700, to: 420, dur: 0.16, type: 'triangle', gain: 0.14 });
+      blip({ freq: 420, to: 700, dur: 0.16, type: 'triangle', gain: 0.14, delay: 0.05 });
     } else if (kind === 'jackpot') {
       // Slot-machine reel spin-up, an ascending fanfare, then a shimmer tail.
       for (let i = 0; i < 10; i++) {
@@ -135,6 +130,18 @@ export const sfx = {
   /** A guess that landed zero hits -- a dud, "not even one." */
   whiff() {
     blip({ freq: 220, to: 90, dur: 0.22, type: 'sawtooth', gain: 0.13 });
+  },
+
+  /** A cat just wandered into the room. A soft, playful "mrow." */
+  catAppear() {
+    blip({ freq: 500, to: 700, dur: 0.1, type: 'triangle', gain: 0.1 });
+    blip({ freq: 700, to: 550, dur: 0.14, type: 'triangle', gain: 0.09, delay: 0.1 });
+  },
+
+  /** Caught it! A bright little chime. */
+  catCaught() {
+    [880, 1175, 1568].forEach((f, i) =>
+      blip({ freq: f, dur: 0.12, type: 'square', gain: 0.14, delay: i * 0.06 }));
   },
 
   /** The last few seconds of a round's clock. Pitch climbs as it nears zero. */

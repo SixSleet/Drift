@@ -58,7 +58,8 @@
           <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
           <li>Type guesses on the on-screen keyboard or your own — each letter pops in as you type it. Tiles flip to show hit (right spot), present (wrong spot) or miss, and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out on the keyboard, so you never waste a guess retyping it.</li>
           <li>Every round has a 5-minute clock, ticking audibly in the last 10 seconds. Run out, and the round ends there — revealed, unsolved, for whoever hadn't gotten it yet.</li>
-          <li><b>Random events:</b> about 3 rounds in 4 draw one, announced full-screen for the whole 5-second countdown so nobody misses it — 💰 double points, ⚡ a 90-second blitz, 🙈 blackout (the keyboard stops greying out known letters), 🔀 shuffle (the keyboard layout gets scrambled), 🎯 bullseye (tiles stop showing hit/present/miss — you only learn how many you got exactly right), and a rare (1 in 20) 🎰 <b>Jackpot</b>: extra guess AND double points, with confetti, a screen shake and a slot-machine fanfare.</li>
+          <li><b>Round-start events:</b> about 2 rounds in 3 draw one, announced full-screen for the whole 5-second countdown so nobody misses it — 💰 double points, ⚡ a 90-second blitz, 🙈 blackout (the keyboard stops greying out known letters), and a rare (1 in 20) 🎰 <b>Jackpot</b>: extra guess AND double points, with confetti, a screen shake and a slot-machine fanfare.</li>
+          <li><b>Mid-round events:</b> about half of all rounds also spring something on you partway through, out in the room around your monitor rather than on it — 🐈 a cat wanders in; click it within 4 seconds for 20 bonus seconds on the clock, or let it go with no penalty. In Co-op only, a 🔀 <b>Letter Swap</b> can also strike: two guesses (never a winning one) suddenly have their tiles mixed up.</li>
           <li><b>Solo:</b> no lobby, no code — just you against the word, same guess budget as a duel. Good for warming up or chasing a personal best.</li>
           <li><b>PvP Duel:</b> you and a rival race the same word at the same time. You only ever see your own board — the "ghost" bar shows how many guesses your rival has burned, nothing more. Whoever solves it first wins the round, however many guesses it took.</li>
           <li><b>Co-op:</b> the whole room shares one board and one guess budget (word length + 3, no bigger a team just because you invited more people). Anyone can drop the next guess — coordinate or waste attempts.</li>
@@ -101,33 +102,54 @@
   </section>
 
   <!-- ── Game ──────────────────────────────────────────────────────────── -->
+  <!-- A little room: a desk, a chair, someone typing (seen from behind),
+       and a monitor whose screen is the actual game -- everything below
+       already existed, it just now lives inside room-scene/monitor-screen.
+       Mid-round distractions (the cat) happen out here in the room, never
+       on the screen itself. -->
   <section class="screen screen-wide" id="screen-game">
-    <div class="event-flash" id="event-flash" aria-hidden="true"></div>
-    <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
-
-    <header class="hud">
-      <div class="hud-left">
-        <span class="pill" id="hud-round">Round 1/6</span>
-        <span class="pill pill-phase" id="hud-phase">Get ready</span>
-        <span class="pill pill-chain" id="hud-chain" hidden></span>
-        <span class="pill pill-event" id="hud-event" hidden></span>
-        <span class="pill pill-timer" id="hud-timer" hidden></span>
+    <div class="room-scene" id="room-scene">
+      <div class="room-window" aria-hidden="true"><i class="room-window-glow"></i></div>
+      <div class="room-desk" aria-hidden="true"></div>
+      <div class="room-character" aria-hidden="true">
+        <i class="character-head"></i>
+        <i class="character-body"></i>
       </div>
-      <div class="hud-right">
-        <span class="pill" id="hud-you"></span>
-        <button class="btn-icon" id="btn-mute" type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
+
+      <div class="monitor">
+        <div class="monitor-bezel">
+          <div class="monitor-screen" id="monitor-screen">
+            <div class="event-flash" id="event-flash" aria-hidden="true"></div>
+            <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
+
+            <header class="hud">
+              <div class="hud-left">
+                <span class="pill" id="hud-round">Round 1/6</span>
+                <span class="pill pill-phase" id="hud-phase">Get ready</span>
+                <span class="pill pill-chain" id="hud-chain" hidden></span>
+                <span class="pill pill-event" id="hud-event" hidden></span>
+                <span class="pill pill-timer" id="hud-timer" hidden></span>
+              </div>
+              <div class="hud-right">
+                <span class="pill" id="hud-you"></span>
+                <button class="btn-icon" id="btn-mute" type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
+              </div>
+            </header>
+
+            <div class="ghost-bar" id="ghost-bar" hidden aria-label="Opponent progress"></div>
+
+            <div class="board-wrap">
+              <div class="tile-grid" id="board"></div>
+            </div>
+
+            <div class="status-line" id="status-line"></div>
+
+            <div class="keyboard" id="keyboard"></div>
+          </div>
+        </div>
+        <div class="monitor-stand" aria-hidden="true"></div>
       </div>
-    </header>
-
-    <div class="ghost-bar" id="ghost-bar" hidden aria-label="Opponent progress"></div>
-
-    <div class="board-wrap">
-      <div class="tile-grid" id="board"></div>
     </div>
-
-    <div class="status-line" id="status-line"></div>
-
-    <div class="keyboard" id="keyboard"></div>
   </section>
 
   <!-- Full-screen round-event card: shown for the whole 5s countdown so a

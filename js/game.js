@@ -5,6 +5,7 @@
 import {
   MODES, ROUND_LEAD_MS, ROUND_TIME_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
   POLL_MS, DEFAULT_ROUNDS, TIER_RANK, EVENTS, TICK_START_MS, EVENT_CARD_MS,
+  MID_EVENTS, CAT_WINDOW_MS,
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
@@ -12,7 +13,7 @@ import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
   setPhase, setStatusLine, selectChip, buildLetterKeyboard, paintKeyboard,
-  shuffledLetterRows,
+  spawnCat,
 } from './ui.js';
 
 const CONFETTI_COLORS = ['#ffd166', '#ff6161', '#7be495', '#4bd0ff', '#ff4d9d'];
@@ -38,7 +39,10 @@ export class Game {
   }
 
   #freshLocal() {
-    return { active: '', shake: false, revealAt: 0, boardAt: 0, lastSettleTry: 0, lastTickSecond: null };
+    return {
+      active: '', shake: false, revealAt: 0, boardAt: 0, lastSettleTry: 0, lastTickSecond: null,
+      midEventShown: false, // this round's mid-event has been spawned/triggered client-side
+    };
   }
 
   get isHost() { return !!this.me?.is_host; }
@@ -180,12 +184,10 @@ export class Game {
     $('#ghost-bar').hidden = this.mode !== 'pvp';
     loadDictionary(row.word_length);
 
-    // `rule` (blackout/shuffle/bullseye) actually changes how this round is
-    // played, not just how it looks -- read directly off EVENTS elsewhere
-    // in the render loop instead of re-deriving it from row.event each time.
+    // `rule` (blackout) actually changes how this round is played, not just
+    // how it looks -- read directly off EVENTS elsewhere in the render loop
+    // instead of re-deriving it from row.event each time.
     this.roundRule = EVENTS[row.event]?.rule ?? null;
-    const shuffled = this.roundRule === 'shuffle';
-    buildLetterKeyboard((k) => this.handleKey(k), shuffled ? shuffledLetterRows() : undefined, shuffled);
     $('#keyboard').classList.toggle('is-blackout', this.roundRule === 'blackout');
     paintKeyboard(new Map());
 
@@ -263,6 +265,62 @@ export class Game {
       piece.style.setProperty('--delay', `${Math.random() * 0.4}s`);
       piece.addEventListener('animationend', () => piece.remove());
       layer.appendChild(piece);
+    }
+  }
+
+  /**
+   * A mid-round event doesn't get announced up front — it just happens,
+   * once the round's own clock crosses mid_event_at_ms. midEventShown
+   * guards against re-spawning the cat / re-firing the swap every frame
+   * once we're past that point; mid_event_fired (server-confirmed, arrives
+   * on the next refresh) is the real source of truth for "already resolved".
+   */
+  #checkMidEvent() {
+    if (!this.round || this.round.mid_event === 'none' || this.round.mid_event_fired) return;
+    if (this.local.midEventShown) return;
+    const elapsed = serverNow() - Date.parse(this.round.starts_at);
+    if (elapsed < this.round.mid_event_at_ms) return;
+    this.local.midEventShown = true;
+
+    if (this.round.mid_event === 'cat') {
+      this.#spawnCatEvent();
+    } else if (this.round.mid_event === 'letter_swap') {
+      this.#triggerLetterSwap();
+    }
+  }
+
+  /** The cat wanders across the room; catching it in time bends the clock. */
+  #spawnCatEvent() {
+    const roundId = this.round.id;
+    sfx.catAppear();
+    spawnCat(CAT_WINDOW_MS, async () => {
+      try {
+        await api.catchCat(roundId);
+        sfx.catCaught();
+        toast('🐈 Caught! +20 seconds on the clock.');
+        this.channel?.poke();
+        await this.refreshState();
+      } catch {
+        // Someone else caught it first, or the window had already closed —
+        // either way, nothing to show; the cat sprite already handles its
+        // own miss animation.
+      }
+    });
+  }
+
+  /** Coop only: swaps two players' guess feedback. Any member can trigger
+   * it; the server's mid_event_fired flag makes every call but the first a
+   * harmless no-op, so racing coop teammates never double-apply it. */
+  async #triggerLetterSwap() {
+    try {
+      await api.triggerLetterSwap(this.round.id);
+      sfx.event('letter_swap');
+      toast('🔀 Letter Swap! Two guesses got their tiles mixed up.');
+      this.channel?.poke();
+      await this.refreshState();
+    } catch {
+      // Another teammate's client already resolved it (or the window
+      // closed) -- their refresh will show the same result to everyone.
     }
   }
 
@@ -486,6 +544,7 @@ export class Game {
     if (changed) this.#onPhaseChange(phase);
     this.#hostTick(phase);
     if (phase === 'settling') this.#trySettle();
+    if (phase === 'live') this.#checkMidEvent();
 
     if (!this.round) { $('#hud-timer').hidden = true; return; }
     if (phase === 'lobby' || phase === 'final' || phase === 'waiting') { $('#hud-timer').hidden = true; return; }
@@ -535,18 +594,14 @@ export class Game {
 
     const playerColor = this.mode === 'coop'
       ? new Map(this.players.map((p) => [p.id, p.color])) : null;
-    const bullseye = this.roundRule === 'bullseye';
 
     renderGrid({
       wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
       guesses: visible, active: this.local.active,
-      canType: phase === 'live', playerColor, shake: this.local.shake, bullseye,
+      canType: phase === 'live', playerColor, shake: this.local.shake,
     });
 
-    // Blackout and Bullseye both retire the keyboard's letter-tracking —
-    // Bullseye has to, or the keyboard would leak exactly what its tile
-    // colours are hiding.
-    if (this.roundRule === 'blackout' || bullseye) {
+    if (this.roundRule === 'blackout') {
       paintKeyboard(new Map());
     } else {
       const tiers = new Map();

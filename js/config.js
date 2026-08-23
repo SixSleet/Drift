@@ -36,26 +36,40 @@ export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
                                              // round.time_limit_ms is authoritative
                                              // (a blitz event shortens it)
 
-// ── Random events ────────────────────────────────────────────────────────
-// Picked server-side in wf_next_round (25% none, 14% each of five events,
-// 5% jackpot) — this is display metadata only, any *numeric* effect (blitz's
+// ── Round-start events ──────────────────────────────────────────────────
+// Picked server-side in wf_next_round (35% none, 20% each of three, 5%
+// jackpot) — this is display metadata only, any *numeric* effect (blitz's
 // clock, jackpot's guess budget) already happened by the time the client
 // ever sees the round row. `fx` names the per-event presentation treatment
 // in game.js/app.css: 'coins' rains money, 'siren' strobes the flash and
-// shakes the screen, 'eclipse' dims the keyboard's hint colours, 'shuffle'
-// scrambles the on-screen keyboard layout, 'scope' hides per-letter tile
-// colours behind a hit-count badge, and 'jackpot' stacks all of it. `rule`
-// (blackout/shuffle/bullseye) is read directly by game.js to change how a
-// round is actually played, not just how it looks.
+// shakes the screen, 'eclipse' dims the keyboard's hint colours, and
+// 'jackpot' stacks all of it. `rule` ('blackout') is read directly by
+// game.js to change how a round is actually played, not just how it looks.
 export const EVENTS = Object.freeze({
   none: null,
   double_points: { label: 'Double Points', emoji: '💰', tint: '#ffd166', blurb: 'This round pays double.', fx: 'coins' },
   blitz:         { label: 'Blitz',         emoji: '⚡', tint: '#4bd0ff', blurb: 'Only 90 seconds on the clock.', fx: 'siren' },
   blackout:      { label: 'Blackout',      emoji: '🙈', tint: '#8a7bff', blurb: 'The keyboard stops showing you which letters you know.', fx: 'eclipse', rule: 'blackout' },
-  shuffle:       { label: 'Shuffle',       emoji: '🔀', tint: '#ff9f4b', blurb: 'The keyboard layout is scrambled for the round.', fx: 'shuffle', rule: 'shuffle' },
-  bullseye:      { label: 'Bullseye',      emoji: '🎯', tint: '#ff4d9d', blurb: "Tiles won't show hit/present/miss — only how many you got exactly right.", fx: 'scope', rule: 'bullseye' },
   jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#ffd166', blurb: 'Extra guess AND double points!', fx: 'jackpot', rare: true },
 });
+
+// ── Mid-round events ─────────────────────────────────────────────────────
+// Also decided at mint time (wf_next_round: 50% none, the rest split
+// between the two below, letter_swap coop-only), but *applied* partway
+// through live play once the round's own clock crosses `mid_event_at_ms`
+// — a surprise mid-guess, not a card you read at the start. The cat is a
+// distraction in the room around the monitor, not on it: catch it (click
+// within CAT_WINDOW_MS) for a CAT_BONUS_MS bonus on the clock; miss it and
+// nothing happens, it just wanders off. Letter Swap needs a real server
+// round-trip (it mutates two players' actual guesses), so it isn't purely
+// cosmetic like the cat.
+export const MID_EVENTS = Object.freeze({
+  none: null,
+  cat:         { label: 'A cat wandered in',  emoji: '🐈', blurb: 'Catch it before it wanders off!' },
+  letter_swap: { label: 'Letter Swap!',       emoji: '🔀', blurb: 'Two guesses just got their tiles mixed up.' },
+});
+export const CAT_WINDOW_MS = 4000;  // matches wf_catch_cat's server-side window
+export const CAT_BONUS_MS = 20000;  // matches wf_catch_cat's time_limit_ms bump
 
 export const TICK_START_MS = 10000; // audible tick begins this far from zero
 export const EVENT_CARD_MS = 5000;  // full-screen event card, minimum readable time

@@ -249,6 +249,113 @@ body {
 .board .pts { margin-left: auto; font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--cyan); }
 .board .delta { font-family: var(--mono); font-size: 13px; color: var(--lime); }
 
+/* ── Room scene: a desk, a chair, someone typing, and their monitor ──── */
+/* The game screen frames itself as furniture in a little room instead of
+   floating UI -- the HUD/board/keyboard below all live inside
+   .monitor-screen, unchanged; this is purely the room dressed around it. */
+
+.room-scene {
+  width: 100%; max-width: 640px; margin: 0 auto;
+  position: relative; overflow: hidden;
+  border-radius: 22px; border: 1px solid var(--line);
+  padding: 40px clamp(12px, 4vw, 30px) 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  background:
+    radial-gradient(360px 240px at 18% 4%, #1b2454 0%, transparent 62%),
+    radial-gradient(320px 220px at 90% 74%, #201338 0%, transparent 60%),
+    linear-gradient(180deg, #0c1026 0%, #070910 70%, #050710 100%);
+}
+
+.room-window {
+  position: absolute; top: 20px; right: 26px;
+  width: 56px; height: 40px; border-radius: 5px;
+  background: linear-gradient(165deg, #182050, #090c1e);
+  border: 3px solid #262c54;
+  box-shadow: 0 0 22px -4px rgba(75, 208, 255, .2);
+}
+.room-window::before, .room-window::after { content: ''; position: absolute; background: #262c54; }
+.room-window::before { top: 0; bottom: 0; left: 50%; width: 3px; transform: translateX(-50%); }
+.room-window::after { left: 0; right: 0; top: 50%; height: 3px; transform: translateY(-50%); }
+.room-window-glow {
+  position: absolute; inset: 4px; border-radius: 3px;
+  background: radial-gradient(circle at 32% 28%, rgba(155, 178, 255, .4), transparent 68%);
+}
+
+.room-character { position: relative; z-index: 1; margin-bottom: -10px; }
+.character-head {
+  display: block; width: 32px; height: 32px; border-radius: 50%; margin: 0 auto 2px;
+  background: linear-gradient(180deg, #2a3160, #171b38); box-shadow: 0 0 0 3px #0a0d1c;
+}
+.character-body {
+  display: block; width: 76px; height: 42px; margin: 0 auto;
+  border-radius: 38px 38px 0 0;
+  background: linear-gradient(180deg, #232a54, #12162e); box-shadow: 0 0 0 3px #0a0d1c;
+}
+
+.room-desk {
+  width: 100%; max-width: 520px; height: 20px; margin-top: -2px;
+  position: relative; z-index: 2;
+  border-radius: 8px 8px 0 0; border: 1px solid #262c54; border-bottom: none;
+  background: linear-gradient(180deg, #1a2040, #0a0d1c);
+  box-shadow: 0 -10px 26px -16px rgba(75, 208, 255, .22);
+}
+
+.monitor { position: relative; z-index: 3; width: 100%; display: flex; flex-direction: column; align-items: center; }
+.monitor-bezel {
+  width: 100%; border-radius: 16px; padding: 11px;
+  background: linear-gradient(155deg, #1b2040, #0c0f22);
+  border: 1px solid #2a3060;
+  box-shadow: 0 24px 60px -22px rgba(0, 0, 0, .65);
+}
+.monitor-screen {
+  position: relative; overflow: hidden;
+  border-radius: 9px; background: var(--bg);
+  padding: 14px clamp(10px, 2.4vw, 20px) 18px;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: inset 0 0 0 1px #1c2140, inset 0 0 40px rgba(75, 208, 255, .05);
+}
+.monitor-screen::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 40;
+  background: repeating-linear-gradient(180deg,
+    rgba(255, 255, 255, .015) 0px, rgba(255, 255, 255, .015) 1px, transparent 1px, transparent 3px);
+}
+.monitor-stand {
+  width: 60px; height: 24px; margin-top: -2px;
+  background: linear-gradient(180deg, #1b2040, #0c0f22);
+  clip-path: polygon(32% 0, 68% 0, 100% 100%, 0 100%);
+}
+
+/* ── The cat: a mid-round distraction in the room, never on the screen ── */
+
+.cat-sprite {
+  position: absolute; bottom: 4px; left: -10%;
+  appearance: none; border: none; background: none; padding: 0; margin: 0;
+  font-size: 28px; line-height: 1; cursor: pointer; z-index: 6;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .5));
+  animation: cat-walk var(--walk-dur, 4000ms) linear forwards, cat-bob .4s ease-in-out infinite;
+}
+@keyframes cat-walk {
+  0% { left: -10%; transform: scaleX(1); }
+  48% { transform: scaleX(1); }
+  50% { transform: scaleX(-1); }
+  100% { left: 104%; transform: scaleX(-1); }
+}
+@keyframes cat-bob {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -4px; }
+}
+.cat-sprite.is-caught { animation: cat-caught .4s ease forwards; }
+@keyframes cat-caught {
+  0% { transform: scale(1) rotate(0); opacity: 1; }
+  60% { transform: scale(1.4) rotate(12deg); }
+  100% { transform: scale(0) rotate(30deg); opacity: 0; }
+}
+.cat-sprite.is-fleeing { animation: cat-flee .3s ease-in forwards; }
+@keyframes cat-flee {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-14px) scale(.5); opacity: 0; }
+}
+
 /* ── Game HUD ────────────────────────────────────────────────────────── */
 
 .hud {
@@ -466,7 +573,6 @@ body {
 .tile[data-tier="hit"] { background: var(--lime); border-color: var(--lime); color: #05170c; }
 .tile[data-tier="present"] { background: var(--amber); border-color: var(--amber); color: #221800; }
 .tile[data-tier="miss"] { background: var(--bg-2); border-color: var(--line); color: var(--ink-faint); }
-.tile[data-tier="asked"] { background: var(--panel-2); border-color: var(--ink-faint); color: var(--ink); }
 
 @keyframes tile-pop {
   0% { transform: scale(1.4); }
@@ -479,15 +585,6 @@ body {
   50% { transform: rotateX(90deg); }
   51% { transform: rotateX(90deg); }
   100% { transform: rotateX(0deg); }
-}
-
-/* ── Bullseye hit-count badge ────────────────────────────────────────── */
-
-.hit-badge {
-  grid-column: 1 / -1;
-  text-align: center; font-size: 12px; font-weight: 800; letter-spacing: .04em;
-  color: var(--magenta); margin-bottom: 2px;
-  animation: event-pop .3s cubic-bezier(.2, 1.4, .4, 1) both;
 }
 
 /* ── Zero-hit whiff ───────────────────────────────────────────────────── */
@@ -541,15 +638,7 @@ body {
 .kb-key[data-tier="present"] { background: var(--amber); border-color: var(--amber); color: #221800; }
 .kb-key[data-tier="miss"] { background: var(--bg-2); border-color: var(--line); color: var(--ink-faint); }
 
-.keyboard.is-shuffled .kb-key {
-  animation: key-shuffle-in .3s cubic-bezier(.2, 1.4, .4, 1) both;
-  animation-delay: var(--shuffle-delay, 0ms);
-}
 .keyboard.is-blackout { filter: brightness(.6) saturate(.5); transition: filter .3s ease; }
-@keyframes key-shuffle-in {
-  0% { transform: scale(.3) rotate(-20deg); opacity: 0; }
-  100% { transform: scale(1) rotate(0); opacity: 1; }
-}
 
 /* ── Toast ───────────────────────────────────────────────────────────── */
 
