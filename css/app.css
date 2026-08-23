@@ -2130,3 +2130,107 @@ html, body {
   0%   { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.9) rotate(28deg); }
 }
+
+/* Chain */
+.chain-cue { display: flex; align-items: baseline; justify-content: center; gap: 12px; }
+.chain-cue-label {
+  font-size: 11px; font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.chain-cue-letter {
+  font-family: var(--mono); font-size: 46px; font-weight: 800; line-height: 1;
+  background: linear-gradient(96deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* The first slot is spoken for, so it is shown rather than left for you to
+   remember to type. Ghosted so it reads as given, not as entered. */
+.rack-slot.is-ghost { color: var(--ink-faint); opacity: .5; border-style: dashed; }
+.chain-links {
+  display: flex; flex-wrap: wrap; gap: 5px; justify-content: center;
+  width: 100%; min-height: 26px;
+}
+
+/* ── The spider ────────────────────────────────────────────────────────
+   The one event that moves vertically. Everything else in this room
+   travels sideways, which is exactly why a thing coming down through the
+   middle of the shot is so hard to ignore. */
+
+.spider-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 120px; height: 96px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: spider-descend 9s cubic-bezier(.3, .6, .5, 1) forwards;
+}
+/* Between the camera and the monitor, like the cat -- it has to be in the
+   way to be worth anything. */
+@keyframes spider-descend {
+  0%   { transform: translate(-50%, -50%) translateZ(-560px) translateX(var(--x, 0px)) translateY(-620px); }
+  22%  { transform: translate(-50%, -50%) translateZ(-560px) translateX(var(--x, 0px)) translateY(calc(-620px + var(--drop, 360px))); }
+  38%  { transform: translate(-50%, -50%) translateZ(-560px) translateX(var(--x, 0px)) translateY(calc(-620px + var(--drop, 360px) - 26px)); }
+  62%  { transform: translate(-50%, -50%) translateZ(-560px) translateX(var(--x, 0px)) translateY(calc(-620px + var(--drop, 360px) + 14px)); }
+  100% { transform: translate(-50%, -50%) translateZ(-560px) translateX(var(--x, 0px)) translateY(calc(-620px + var(--drop, 360px))); }
+}
+.spider-rig.is-climbing { animation: spider-climb .9s cubic-bezier(.5, 0, .8, .4) forwards; }
+@keyframes spider-climb {
+  to { transform: translate(-50%, -50%) translateZ(-560px) translateX(var(--x, 0px)) translateY(-660px); opacity: .2; }
+}
+/* The thread runs from off the top of the rig up out of frame. Drawn as a
+   tall, hairline element rather than an SVG line so it can outrun the rig's
+   own box without the SVG having to be enormous. */
+.spider-thread {
+  position: absolute; left: 50%; bottom: 52%;
+  width: 1px; height: 1400px;
+  background: linear-gradient(180deg, transparent, rgba(226, 212, 186, .34));
+}
+.spider-body-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.spider-abdomen { fill: #251d16; }
+.spider-head    { fill: #322820; }
+.spider-eye     { fill: rgba(226, 212, 186, .75); }
+.spider-legs path {
+  fill: none; stroke: #2b221a; stroke-width: 3.4; stroke-linecap: round;
+}
+.spider-rig .spider-legs {
+  transform-box: fill-box; transform-origin: 50% 20%;
+  animation: spider-twitch 1.9s ease-in-out infinite;
+}
+@keyframes spider-twitch {
+  0%, 100% { transform: scaleY(1) scaleX(1); }
+  50%      { transform: scaleY(1.07) scaleX(.96); }
+}
+
+/* ── The bird ──────────────────────────────────────────────────────────
+   Outside, on the sill. Lives inside .window (which is in the room stage,
+   behind the app overlay) rather than in the fx layer, because it is behind
+   glass and across the room -- putting it in the front stage would float it
+   over the monitor. Nothing to click: some things are just the room. */
+
+.bird-rig {
+  position: absolute; bottom: 6px; left: var(--perch, 30%);
+  width: 66px; height: 52px;
+  pointer-events: none;
+  /* The room is lit and the sky is not, so light spilling out through the
+     glass catches its near edge. Physically what would happen, and the only
+     reason it reads as a bird rather than a smudge on the sill. */
+  filter: drop-shadow(-1px -1px 0 rgba(255, 196, 130, .55))
+          drop-shadow(0 0 7px rgba(255, 196, 130, .22));
+  animation: bird-hop 1.5s ease-in-out infinite;
+}
+@keyframes bird-hop {
+  0%, 62%, 100% { transform: translateY(0) rotate(0deg); }
+  70%           { transform: translateY(-7px) rotate(-4deg); }
+  82%           { transform: translateY(0) rotate(2deg); }
+}
+.bird-rig svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* Silhouetted against the night sky -- it is backlit from the room's point
+   of view, so it reads as a shape rather than a bird with plumage. */
+.bird-body, .bird-tail { fill: #3d4757; }
+.bird-wing { fill: #2b3442; }
+.bird-beak { fill: #4a4032; }
+.bird-eye  { fill: rgba(226, 232, 240, .6); }
+.bird-legs { stroke: #3a4150; stroke-width: 2; fill: none; stroke-linecap: round; }
+.bird-rig.is-away { animation: bird-away .85s ease-in forwards; }
+@keyframes bird-away {
+  to { transform: translate(70px, -90px) scale(.5) rotate(-16deg); opacity: 0; }
+}

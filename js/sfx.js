@@ -464,6 +464,52 @@ export const sfx = {
     }
   },
 
+  /**
+   * A spider paying out silk. There is no real sound to copy here, so this
+   * is the *idea* of one: a very quiet descending band of noise, which is
+   * the shape your ear expects for something lowering itself.
+   */
+  silkDrop() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const dur = 1.6;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(2600, t0);
+    bp.frequency.exponentialRampToValueAtTime(700, t0 + dur);
+    bp.Q.setValueAtTime(4, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.012, t0 + 0.2);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
+
+  /** Poked. The same idea in reverse, and quicker. */
+  silkRetreat() {
+    tone({ freq: 900, to: 2400, dur: 0.22, type: 'sine', gain: 0.045, cutoff: 4200, attack: 0.005 });
+  },
+
+  /**
+   * A small bird outside. Two or three notes, high and short, each one a
+   * quick rise and fall -- a chirp is a gesture rather than a pitch, and a
+   * plain beep at the same frequency sounds like a microwave.
+   */
+  birdChirp() {
+    const notes = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < notes; i++) {
+      const base = 2300 + Math.random() * 900;
+      const delay = i * (0.1 + Math.random() * 0.07);
+      tone({ freq: base, to: base * 1.5, dur: 0.045, type: 'sine',
+             gain: 0.028, cutoff: 7000, attack: 0.004, delay });
+      tone({ freq: base * 1.5, to: base * 0.85, dur: 0.05, type: 'sine',
+             gain: 0.022, cutoff: 7000, attack: 0.004, delay: delay + 0.042 });
+    }
+  },
+
   /** The desk lamp stuttering -- a dry electrical tick. */
   lampBuzz() {
     for (let i = 0; i < 4; i++) {

@@ -325,6 +325,123 @@ function mothSwat(root, api) {
   };
 }
 
+/* ── Chain ────────────────────────────────────────────────────────────────
+   The main game's own chain-letter rule, on its own. You are given a letter;
+   type any 4- or 5-letter word starting with it, and the last letter of that
+   word is what you have to start the next one with.
+
+   It is the closest thing here to an actual warm-up: the constraint is
+   exactly the one that catches people out mid-match, when a round demands a
+   word starting with the previous round's last letter and the opening guess
+   they always use is suddenly illegal.
+
+   Only `x` is genuinely thin in the shipped list (18 words against 2,007 for
+   `s`), so a pass costs time rather than being forbidden -- the same deal as
+   Word Hunt's reroll. */
+
+const CHAIN_SECONDS = 60;
+const CHAIN_PASS_S = 5;
+/** Letters a pass will hand you: common enough that a pass is a real reset. */
+const KIND_LETTERS = 'abcdefghlmnoprstw';
+
+function chainStart(root, api) {
+  const cue = el('div', 'chain-cue');
+  const entry = el('div', 'rack-entry');
+  const chainBox = el('div', 'chain-links');
+  const hint = el('p', 'hint hint-inline',
+    'Type a 4- or 5-letter word starting with that letter. Its last letter starts the next one. Tab to pass.');
+  root.append(cue, entry, chainBox, hint);
+  return { cue, entry, chainBox, hint };
+}
+
+async function chain(root, api) {
+  const [d4, d5] = await Promise.all([loadDictionary(4), loadDictionary(5)]);
+  if (!d4.size || !d5.size) {
+    root.appendChild(el('p', 'arcade-note', 'The word list could not be loaded, so this one is unavailable offline.'));
+    return () => {};
+  }
+  const { cue, entry, chainBox } = chainStart(root, api);
+
+  let letter = KIND_LETTERS[Math.floor(Math.random() * KIND_LETTERS.length)];
+  let typed = '';
+  let score = 0;
+  let over = false;
+  const used = new Set();
+
+  const paintCue = () => {
+    cue.innerHTML = '';
+    cue.append(el('span', 'chain-cue-label', 'starts with'),
+               el('b', 'chain-cue-letter', letter.toUpperCase()));
+  };
+  const paintEntry = () => {
+    entry.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+      const slot = el('i', 'rack-slot', typed[i] ? typed[i].toUpperCase() : '');
+      if (i >= 4 && !typed[i]) slot.classList.add('is-optional');
+      if (typed[i]) slot.classList.add('is-filled');
+      // The first slot is spoken for -- show it rather than making people
+      // remember to type it.
+      if (i === 0 && !typed[i]) { slot.textContent = letter.toUpperCase(); slot.classList.add('is-ghost'); }
+      entry.appendChild(slot);
+    }
+  };
+  const paintChain = () => {
+    chainBox.innerHTML = '';
+    // Only the tail: a 40-word chain would push everything else off screen.
+    for (const w of [...used].slice(-9)) {
+      chainBox.appendChild(el('span', `found-word${w.length === 5 ? ' is-long' : ''}`, w.toUpperCase()));
+    }
+  };
+  const flash = (kind) => {
+    entry.classList.remove('is-bad', 'is-dupe');
+    void entry.offsetWidth;
+    entry.classList.add(kind);
+  };
+
+  const submit = () => {
+    if (typed.length < 4) return;
+    if (typed[0] !== letter) { flash('is-bad'); sfx.invalid(); return; }
+    if (used.has(typed)) { flash('is-dupe'); return; }
+    const dict = typed.length === 5 ? d5 : d4;
+    if (!dict.has(typed)) { flash('is-bad'); sfx.invalid(); return; }
+
+    used.add(typed);
+    score += typed.length === 5 ? 2 : 1;
+    api.setScore(score);
+    sfx.reveal(typed.length === 5 ? 'hit' : 'present');
+    letter = typed[typed.length - 1];
+    typed = '';
+    paintCue(); paintEntry(); paintChain();
+  };
+
+  const onKey = (e) => {
+    if (over) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key === 'Enter') { e.preventDefault(); submit(); return; }
+    if (e.key === 'Backspace') { e.preventDefault(); typed = typed.slice(0, -1); paintEntry(); return; }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      api.penalise(CHAIN_PASS_S);
+      letter = KIND_LETTERS[Math.floor(Math.random() * KIND_LETTERS.length)];
+      typed = '';
+      paintCue(); paintEntry();
+      return;
+    }
+    const ch = e.key.length === 1 ? e.key.toLowerCase() : '';
+    if (!/^[a-z]$/.test(ch) || typed.length >= 5) return;
+    e.preventDefault();
+    typed += ch;
+    sfx.type();
+    paintEntry();
+  };
+
+  document.addEventListener('keydown', onKey);
+  paintCue(); paintEntry(); paintChain();
+  api.setScore(0);
+
+  return () => { over = true; document.removeEventListener('keydown', onKey); };
+}
+
 export const GAMES = {
   hunt: {
     name: 'Word Hunt',
@@ -332,6 +449,13 @@ export const GAMES = {
     seconds: HUNT_SECONDS,
     unit: 'points',
     run: wordHunt,
+  },
+  chain: {
+    name: 'Chain',
+    blurb: "Each word starts with the last letter of the one before. The rule that catches people out mid-match.",
+    seconds: CHAIN_SECONDS,
+    unit: 'points',
+    run: chain,
   },
   swat: {
     name: 'Moth Swat',

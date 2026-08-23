@@ -402,6 +402,98 @@ function powerCut(done) {
   };
 }
 
+/* ── The spider ───────────────────────────────────────────────────────────
+   Comes down on a thread from somewhere above the monitor, hangs in front of
+   the screen for a moment, then climbs back up. The only event that moves
+   vertically, which is most of why it registers at all -- everything else in
+   this room travels sideways, so a thing descending through the middle of
+   your field of view is genuinely hard to ignore.
+
+   Click it and it retreats early. */
+function spider(done) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'spider-rig';
+  el.setAttribute('aria-label', 'Send the spider back up');
+  el.style.setProperty('--drop', `${300 + Math.random() * 220}px`);
+  el.style.setProperty('--x', `${(Math.random() * 620 - 310).toFixed(0)}px`);
+  el.innerHTML = `
+    <i class="spider-thread"></i>
+    <svg class="spider-body-svg" viewBox="0 0 120 96" aria-hidden="true">
+      <g class="spider-legs">
+        <path d="M52 46 C 34 34, 20 30, 8 36"/>
+        <path d="M52 50 C 32 46, 18 48, 6 58"/>
+        <path d="M52 54 C 32 60, 20 66, 10 78"/>
+        <path d="M54 58 C 42 70, 36 80, 32 92"/>
+        <path d="M68 46 C 86 34, 100 30, 112 36"/>
+        <path d="M68 50 C 88 46, 102 48, 114 58"/>
+        <path d="M68 54 C 88 60, 100 66, 110 78"/>
+        <path d="M66 58 C 78 70, 84 80, 88 92"/>
+      </g>
+      <ellipse class="spider-abdomen" cx="60" cy="58" rx="17" ry="15"/>
+      <ellipse class="spider-head" cx="60" cy="40" rx="10" ry="9"/>
+      <circle class="spider-eye" cx="56" cy="38" r="2.1"/>
+      <circle class="spider-eye" cx="64" cy="38" r="2.1"/>
+    </svg>`;
+  layer().appendChild(el);
+  sfx.silkDrop();
+
+  let over = false;
+  const finish = (poked) => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    if (poked) sfx.silkRetreat();
+    el.classList.add('is-climbing');
+    el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
+    setTimeout(() => { if (el.isConnected) { el.remove(); done(); } }, 1600);
+  };
+  const timer = setTimeout(() => finish(false), 9000);
+  el.addEventListener('click', () => finish(true));
+  return () => { clearTimeout(timer); over = true; el.remove(); };
+}
+
+/* ── The bird ─────────────────────────────────────────────────────────────
+   Lands on the sill outside, hops about, and goes. Purely ambient: it is
+   across the room, behind glass, and there is nothing to click.
+
+   It goes in the window rather than the fx layer because it is *outside* --
+   the window lives in the room stage, which sits behind the app overlay, so
+   a bird placed there is correctly behind the monitor rather than floating
+   in front of it. */
+function bird(done) {
+  const win = document.querySelector('.window');
+  if (!win) return done();
+  const el = document.createElement('i');
+  el.className = 'bird-rig';
+  el.style.setProperty('--perch', `${18 + Math.random() * 52}%`);
+  el.innerHTML = `
+    <svg viewBox="0 0 90 70" aria-hidden="true">
+      <path class="bird-tail" d="M18 40 L2 50 L20 50 Z"/>
+      <path class="bird-body" d="M18 42 C 18 26, 32 18, 48 20 C 62 22, 70 30, 72 40
+                                  C 74 50, 62 56, 46 56 C 28 56, 18 52, 18 42 Z"/>
+      <path class="bird-wing" d="M32 34 C 44 30, 58 34, 62 42 C 54 48, 40 46, 32 34 Z"/>
+      <circle class="bird-eye" cx="62" cy="30" r="2.6"/>
+      <path class="bird-beak" d="M70 32 L84 35 L70 38 Z"/>
+      <path class="bird-legs" d="M40 56 L40 64 M52 56 L52 64"/>
+    </svg>`;
+  win.appendChild(el);
+  sfx.birdChirp();
+  const chirps = setInterval(() => sfx.birdChirp(), 3200 + Math.random() * 2600);
+
+  let over = false;
+  const finish = () => {
+    if (over) return;
+    over = true;
+    clearInterval(chirps);
+    clearTimeout(timer);
+    el.classList.add('is-away');
+    setTimeout(() => { el.remove(); done(); }, 900);
+  };
+  const timer = setTimeout(finish, 11000 + Math.random() * 5000);
+  return () => { clearInterval(chirps); clearTimeout(timer); over = true; el.remove(); };
+}
+
 /* ── The neighbour ────────────────────────────────────────────────────────
    Someone through the wall puts music on. This is the one room event that
    takes over the *soundtrack* rather than the picture: the bed swaps to a
@@ -461,8 +553,10 @@ const KINDS = [
   { run: mouse,        weight: 13 },
   { run: paperPlane,   weight: 12 },
   { run: lampFlicker,  weight: 14 },
-  { run: neighbour,    weight: 12 },
-  { run: storm,        weight: 11 },
+  { run: neighbour,    weight: 11 },
+  { run: spider,       weight: 11 },
+  { run: bird,         weight: 10 },
+  { run: storm,        weight: 10 },
   // The most intrusive one in here, so the rarest.
   { run: powerCut,     weight: 6 },
 ];
@@ -483,7 +577,8 @@ const between = ([lo, hi]) => lo + Math.random() * (hi - lo);
 // main.js): the scheduler's gaps are tens of seconds, so a test that wants to
 // see a specific event runs it directly rather than waiting one out.
 export const __events = {
-  cat, moth, phone, mouse, paperPlane, lampFlicker, neighbour, storm, powerCut,
+  cat, moth, phone, mouse, paperPlane, spider, bird,
+  lampFlicker, neighbour, storm, powerCut,
 };
 
 /**
@@ -525,6 +620,7 @@ export function startRoomEvents() {
     // Any event that took the music has to hand it back, even if the round
     // ended mid-storm -- otherwise the standings play thunder.
     music.release();
+    document.querySelectorAll('.bird-rig').forEach((b) => b.remove());
     const fx = $('#screen-fx');
     if (fx) fx.innerHTML = '';
     document.querySelectorAll('.tile.is-smudged').forEach((t) => t.classList.remove('is-smudged'));

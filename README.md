@@ -181,6 +181,8 @@ distractions at different moments, and neither can see the other's.
 | 📱 Phone | Buzzes face-up on the desk, screen lit. Click to silence it. |
 | 🐁 Mouse | Darts along the front edge of the desk. Deliberately the *small* one — it never crosses the screen, so what it costs you is movement in the corner of your eye. Click to scare it off. |
 | ✈️ Paper plane | Sails across the front of the room on an arc. The only room event with a window on it: catch it in flight, or it glides on and lands off-screen. |
+| 🕷 Spider | Comes down on a thread from above the monitor and hangs in front of the screen. The only event that moves *vertically*, which is most of why it registers — everything else in this room travels sideways. Click it and it climbs back up. |
+| 🐦 Bird | Lands on the sill outside, hops about, and goes. Purely ambient: it is across the room, behind glass, and there is nothing to click. |
 | 🔊 Neighbour | Someone through the wall puts music on, and the soundtrack swaps to a muffled four-on-the-floor with the top end gone — what actually makes it through plasterboard. Bang on the wall to stop it. One bang is rude, not effective; the second one works. |
 | 💡 Lamp flicker | The desk lamp stutters and the warm half of the room drops out with it. |
 | 🔌 Power flicker | The monitor, not the lamp: the board dims and stutters for a beat. The most intrusive thing in here, so also the shortest and the rarest — and never dark enough to actually hide a letter, because room events do not carry penalties. |
@@ -292,6 +294,14 @@ moment a round starts.
   the one thing that makes this feel unfair. (A straight "unscramble this
   word" version was tried first and is a bad game on this dictionary for
   exactly that reason.)
+- **Chain.** The main game's own chain-letter rule on its own: you get a
+  letter, you type a word starting with it, and that word's last letter is
+  what the next one has to start with. The closest thing here to an actual
+  warm-up — it is exactly the constraint that catches people out mid-match,
+  when a round demands a word starting with the previous round's last letter
+  and the opening guess they always use is suddenly illegal. Only `x` is
+  genuinely thin in the shipped list (18 words against 2,007 for `s`), so a
+  pass costs 5 seconds rather than being forbidden.
 - **Moth Swat.** Reflex rather than vocabulary. They arrive faster as you
   go; three get past you and it's over.
 
@@ -520,10 +530,10 @@ js/words.js           client-side "is this a real word" check (UX only)
 js/audio.js           the one AudioContext, split into music/effects buses
 js/sfx.js             synthesised WebAudio cues; no audio files
 js/music.js           the generative soundtrack, one theme per situation
-js/arcade.js          Word Hunt and Moth Swat, for the dead time
+js/arcade.js          Word Hunt, Chain and Moth Swat, for the dead time
 js/screen-fit.js      pins the flat overlay to the monitor's measured rect
-js/room-events.js     the player-sided room: cat, moth, mouse, plane, phone,
-                      lamp, neighbour, storm, power cut
+js/room-events.js     the player-sided room: cat, moth, mouse, plane, spider,
+                      bird, phone, lamp, neighbour, storm, power cut
 js/game.js            phase clock, round settlement, input, scoring display
 js/ui.js               DOM rendering: tile grid, legend, rails, standings
 js/main.js            wires the buttons up and listens for physical keydown
