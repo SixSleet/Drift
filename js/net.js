@@ -99,6 +99,7 @@ export const api = {
   checkSettle: (roundId) => rpc('wf_check_settle', { p_round: roundId }),
   catchCat: (roundId) => rpc('wf_catch_cat', { p_round: roundId }),
   triggerLetterSwap: (roundId) => rpc('wf_trigger_letter_swap', { p_round: roundId }),
+  answerPhone: (roundId) => rpc('wf_answer_phone', { p_round: roundId }),
 };
 
 // ── Realtime ───────────────────────────────────────────────────────────────

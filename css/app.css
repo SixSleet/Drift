@@ -291,6 +291,17 @@ body {
   border-radius: 38px 38px 0 0;
   background: linear-gradient(180deg, #232a54, #12162e); box-shadow: 0 0 0 3px #0a0d1c;
 }
+/* A little life while a round is actually live -- someone's typing. */
+.room-character.is-typing .character-head { animation: typing-nod 1.1s ease-in-out infinite; }
+.room-character.is-typing .character-body { animation: typing-sway 1.1s ease-in-out infinite; }
+@keyframes typing-nod {
+  0%, 100% { translate: 0 0; rotate: 0deg; }
+  50% { translate: 0 -2px; rotate: -2deg; }
+}
+@keyframes typing-sway {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 1px 0; }
+}
 
 .room-desk {
   width: 100%; max-width: 520px; height: 20px; margin-top: -2px;
@@ -354,6 +365,31 @@ body {
 @keyframes cat-flee {
   0% { transform: translateY(0) scale(1); opacity: 1; }
   100% { transform: translateY(-14px) scale(.5); opacity: 0; }
+}
+
+/* ── The phone: rings on the desk, stationary rather than walking ────── */
+
+.phone-sprite {
+  position: absolute; bottom: 22px; left: calc(50% - 13px);
+  appearance: none; border: none; background: none; padding: 0; margin: 0;
+  font-size: 26px; line-height: 1; cursor: pointer; z-index: 6;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .5));
+  animation: phone-ring .13s ease-in-out infinite;
+}
+@keyframes phone-ring {
+  0%, 100% { rotate: 0deg; }
+  25% { rotate: -10deg; }
+  75% { rotate: 10deg; }
+}
+.phone-sprite.is-caught { animation: phone-answered .35s ease forwards; }
+@keyframes phone-answered {
+  0% { scale: 1; opacity: 1; }
+  100% { scale: 0; translate: 0 -12px; opacity: 0; }
+}
+.phone-sprite.is-fleeing { animation: phone-hangup .3s ease-in forwards; }
+@keyframes phone-hangup {
+  0% { opacity: 1; rotate: 0deg; }
+  100% { opacity: 0; rotate: -20deg; }
 }
 
 /* ── Game HUD ────────────────────────────────────────────────────────── */

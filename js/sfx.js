@@ -144,6 +144,19 @@ export const sfx = {
       blip({ freq: f, dur: 0.12, type: 'square', gain: 0.14, delay: i * 0.06 }));
   },
 
+  /** The phone starts ringing on the desk -- a classic two-tone burst. */
+  phoneRing() {
+    for (let i = 0; i < 3; i++) {
+      blip({ freq: 940, dur: 0.15, type: 'sine', gain: 0.12, delay: i * 0.35 });
+      blip({ freq: 760, dur: 0.15, type: 'sine', gain: 0.1, delay: 0.1 + i * 0.35 });
+    }
+  },
+
+  /** Picked up -- a quick affirmative double-beep. */
+  phoneAnswer() {
+    [660, 990].forEach((f, i) => blip({ freq: f, dur: 0.1, type: 'square', gain: 0.13, delay: i * 0.08 }));
+  },
+
   /** The last few seconds of a round's clock. Pitch climbs as it nears zero. */
   tick(secondsLeft) {
     const freq = 500 + (10 - Math.min(10, Math.max(0, secondsLeft))) * 40;

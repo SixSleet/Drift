@@ -5,7 +5,7 @@
 import {
   MODES, ROUND_LEAD_MS, ROUND_TIME_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
   POLL_MS, DEFAULT_ROUNDS, TIER_RANK, EVENTS, TICK_START_MS, EVENT_CARD_MS,
-  MID_EVENTS, CAT_WINDOW_MS,
+  MID_EVENTS, DISTRACTION_WINDOW_MS,
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
@@ -13,7 +13,7 @@ import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
   setPhase, setStatusLine, selectChip, buildLetterKeyboard, paintKeyboard,
-  spawnCat,
+  spawnCat, spawnPhone,
 } from './ui.js';
 
 const CONFETTI_COLORS = ['#ffd166', '#ff6161', '#7be495', '#4bd0ff', '#ff4d9d'];
@@ -284,6 +284,8 @@ export class Game {
 
     if (this.round.mid_event === 'cat') {
       this.#spawnCatEvent();
+    } else if (this.round.mid_event === 'phone') {
+      this.#spawnPhoneEvent();
     } else if (this.round.mid_event === 'letter_swap') {
       this.#triggerLetterSwap();
     }
@@ -293,7 +295,7 @@ export class Game {
   #spawnCatEvent() {
     const roundId = this.round.id;
     sfx.catAppear();
-    spawnCat(CAT_WINDOW_MS, async () => {
+    spawnCat(DISTRACTION_WINDOW_MS, async () => {
       try {
         await api.catchCat(roundId);
         sfx.catCaught();
@@ -304,6 +306,24 @@ export class Game {
         // Someone else caught it first, or the window had already closed —
         // either way, nothing to show; the cat sprite already handles its
         // own miss animation.
+      }
+    });
+  }
+
+  /** The phone rings on the desk; answering in time earns an extra guess. */
+  #spawnPhoneEvent() {
+    const roundId = this.round.id;
+    sfx.phoneRing();
+    spawnPhone(DISTRACTION_WINDOW_MS, async () => {
+      try {
+        await api.answerPhone(roundId);
+        sfx.phoneAnswer();
+        toast('📱 Answered! One extra guess this round.');
+        this.channel?.poke();
+        await this.refreshState();
+      } catch {
+        // Someone else answered first, or it had already stopped ringing —
+        // nothing to show; the phone sprite already handles its own miss.
       }
     });
   }
@@ -662,6 +682,8 @@ export class Game {
   }
 
   #onPhaseChange(phase) {
+    $('#room-scene')?.querySelector('.room-character')?.classList.toggle('is-typing', phase === 'live');
+
     if (phase === 'countdown' || phase === 'live') {
       setPhase(phase === 'countdown' ? 'Get ready' : 'Live', null);
       showScreen('screen-game');

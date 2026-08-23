@@ -111,16 +111,17 @@ resolves once a client calls the matching RPC after that point:
 
 | Event | Odds | What happens |
 | --- | --- | --- |
-| 🐈 Cat | up to 50% | A cat wanders across the room (never onto the monitor screen — see below). Click it within 4 seconds for 20 bonus seconds on the clock (`wf_catch_cat`); miss it and it just wanders off, no penalty. |
-| 🔀 Letter Swap | up to 25%, **Co-op only** | Two players' most recent guesses (never a winning one) suddenly swap tiles with each other (`wf_trigger_letter_swap`) — the words stay put, but the colours briefly tell the wrong story. PvP/Solo never roll this: PvP guesses are invisible to the other player until settle, so a swap there would either leak a guess or land silently invisible. |
+| 🐈 Cat | up to ~25%, ~17% in Co-op | A cat wanders across the room (never onto the monitor screen — see below). Click it within 4 seconds for 20 bonus seconds on the clock (`wf_catch_cat`); miss it and it just wanders off, no penalty. |
+| 📱 Phone | up to ~25%, ~17% in Co-op | The phone rings on the desk, stationary and shaking rather than walking. Answer it within 4 seconds for one extra guess this round (`wf_answer_phone`, capped at the table's own 12-guess ceiling); miss it and it just stops ringing. |
+| 🔀 Letter Swap | ~17%, **Co-op only** | Two players' most recent guesses (never a winning one) suddenly swap tiles with each other (`wf_trigger_letter_swap`) — the words stay put, but the colours briefly tell the wrong story. PvP/Solo never roll this: PvP guesses are invisible to the other player until settle, so a swap there would either leak a guess or land silently invisible. |
 | *(none)* | 50% | Nothing happens. |
 
 Letter Swap only ever touches guesses that aren't the actual solve — the
 server excludes any all-hit guess from the swap pool, so this can never
-accidentally hand a team a false win. Both RPCs are idempotent
+accidentally hand a team a false win. All three RPCs are idempotent
 (`mid_event_fired`): whichever client's call reaches the server first wins,
 everyone else's just quietly does nothing, so racing Co-op teammates or a
-flaky connection can't double-apply an event or hand out two cat bonuses.
+flaky connection can't double-apply an event or hand out two bonuses.
 
 ## The room
 
@@ -131,8 +132,11 @@ exactly as before, just inside `.monitor-screen` now. It's all hand-drawn
 CSS (gradients, shapes, a couple of emoji) — no image assets, no build
 step, same as everything else here.
 
-The cat from the mid-round event above always walks across the room itself,
-never over the monitor screen — it's a distraction happening around you
+The character's head and shoulders idle-bob while a round is actually live,
+so the room reads as occupied rather than a static diorama.
+
+The cat and phone from the mid-round events above always appear in the room
+itself, never over the monitor screen — a distraction happening around you
 while you play, not a change to what's on the puzzle in front of you.
 
 ## Keeping the secret secret

@@ -155,7 +155,7 @@ create table public.wf_rounds (
                                         'extra_guess', 'sudden_death', 'shuffle', 'bullseye')), -- last four
                                         -- retired (in roll order), kept legal so an old row stays valid
   time_limit_ms      int  not null default 300000 check (time_limit_ms > 0), -- blitz shortens this
-  mid_event          text not null default 'none' check (mid_event in ('none', 'cat', 'letter_swap')),
+  mid_event          text not null default 'none' check (mid_event in ('none', 'cat', 'letter_swap', 'phone')),
   mid_event_at_ms    int  not null default 0 check (mid_event_at_ms >= 0), -- ms into the round it fires
   mid_event_fired    boolean not null default false,
   created_at         timestamptz not null default now(),
@@ -683,20 +683,25 @@ begin
   end if;
 
   -- Mid-round event: fires partway through *live* play instead of being
-  -- announced up front, via wf_catch_cat / wf_trigger_letter_swap once the
-  -- round's own clock crosses mid_event_at_ms. 50% none; letter_swap only
-  -- ever rolls in coop (it needs another player's guess to swap with, and
-  -- PvP guesses are invisible to each other until settle); everyone else
-  -- gets the cat instead. mid_event_at_ms lands 45s-60s in by default, and
-  -- always leaves at least 30s of clock after it so there's time to react
-  -- (compressed proportionally on a Blitz round's shorter clock).
+  -- announced up front, via wf_catch_cat / wf_trigger_letter_swap /
+  -- wf_answer_phone once the round's own clock crosses mid_event_at_ms.
+  -- 50% none, the remaining 50% split evenly between whatever's eligible:
+  -- letter_swap only ever rolls in coop (it needs another player's guess
+  -- to swap with, and PvP guesses are invisible to each other until
+  -- settle) -- coop splits the 50% three ways (letter_swap/cat/phone),
+  -- everyone else splits it two ways (cat/phone). mid_event_at_ms lands
+  -- 45s-60s in by default, always leaving at least 30s of clock after it.
   v_mid_roll := random();
   if v_mid_roll < 0.5 then
     v_mid_event := 'none';
-  elsif v_room.mode = 'coop' and v_mid_roll < 0.75 then
-    v_mid_event := 'letter_swap';
+  elsif v_room.mode = 'coop' then
+    v_mid_event := case
+      when v_mid_roll < 0.667 then 'letter_swap'
+      when v_mid_roll < 0.833 then 'cat'
+      else 'phone'
+    end;
   else
-    v_mid_event := 'cat';
+    v_mid_event := case when v_mid_roll < 0.75 then 'cat' else 'phone' end;
   end if;
   v_mid_at_ms := 45000 + floor(random() * greatest(1, v_time_limit_ms - 75000))::int;
 
@@ -1022,6 +1027,46 @@ begin
 end;
 $$;
 
+-- Resolves this round's phone: callable by any member, only inside a 4s
+-- window starting at mid_event_at_ms. Answering adds one guess to
+-- max_guesses (capped at the table's own max of 12), shared like the cat's
+-- time bonus. Idempotent via mid_event_fired.
+create or replace function public.wf_answer_phone(p_token text, p_round uuid)
+returns public.wf_rounds
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_player public.wf_players := public.wf_player_in_round(p_token, p_round);
+  v_round  public.wf_rounds;
+  v_elapsed_ms int;
+begin
+  select * into v_round from public.wf_rounds where id = p_round for update;
+
+  if v_round.status <> 'active' then
+    raise exception 'wordforge: round is not live' using errcode = 'P0022';
+  end if;
+  if v_round.mid_event <> 'phone' then
+    raise exception 'wordforge: no phone this round' using errcode = 'P0023';
+  end if;
+  if v_round.mid_event_fired then
+    raise exception 'wordforge: already resolved' using errcode = 'P0024';
+  end if;
+
+  v_elapsed_ms := extract(epoch from (now() - v_round.starts_at)) * 1000;
+  if v_elapsed_ms < v_round.mid_event_at_ms or v_elapsed_ms > v_round.mid_event_at_ms + 4000 then
+    raise exception 'wordforge: too slow, it stopped ringing' using errcode = 'P0025';
+  end if;
+
+  update public.wf_rounds
+     set mid_event_fired = true, max_guesses = least(12, max_guesses + 1)
+   where id = p_round
+   returning * into v_round;
+  return v_round;
+end;
+$$;
+
 -- Single read RPC the whole client polls/refetches on every `poke`. Bundles
 -- room, membership, players, the latest round, visibility-filtered guesses,
 -- settled results and a derived leaderboard into one jsonb payload so the
@@ -1100,6 +1145,7 @@ begin
     'wf_check_settle(text, uuid)',
     'wf_catch_cat(text, uuid)',
     'wf_trigger_letter_swap(text, uuid)',
+    'wf_answer_phone(text, uuid)',
     'wf_state(text, uuid)',
     'wf_server_time()'
   ] loop

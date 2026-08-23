@@ -54,22 +54,24 @@ export const EVENTS = Object.freeze({
 });
 
 // ── Mid-round events ─────────────────────────────────────────────────────
-// Also decided at mint time (wf_next_round: 50% none, the rest split
-// between the two below, letter_swap coop-only), but *applied* partway
-// through live play once the round's own clock crosses `mid_event_at_ms`
-// — a surprise mid-guess, not a card you read at the start. The cat is a
-// distraction in the room around the monitor, not on it: catch it (click
-// within CAT_WINDOW_MS) for a CAT_BONUS_MS bonus on the clock; miss it and
-// nothing happens, it just wanders off. Letter Swap needs a real server
-// round-trip (it mutates two players' actual guesses), so it isn't purely
-// cosmetic like the cat.
+// Also decided at mint time (wf_next_round: 50% none, the rest split three
+// ways in coop / two ways elsewhere, letter_swap coop-only), but *applied*
+// partway through live play once the round's own clock crosses
+// `mid_event_at_ms` — a surprise mid-guess, not a card you read at the
+// start. The cat and the phone are both distractions in the room around
+// the monitor, not on it: react within DISTRACTION_WINDOW_MS for a bonus
+// (the cat adds CAT_BONUS_MS to the clock, the phone adds one guess); miss
+// either and nothing happens, they just go away. Letter Swap needs a real
+// server round-trip (it mutates two players' actual guesses), so it isn't
+// purely cosmetic like the other two.
 export const MID_EVENTS = Object.freeze({
   none: null,
-  cat:         { label: 'A cat wandered in',  emoji: '🐈', blurb: 'Catch it before it wanders off!' },
-  letter_swap: { label: 'Letter Swap!',       emoji: '🔀', blurb: 'Two guesses just got their tiles mixed up.' },
+  cat:         { label: 'A cat wandered in',    emoji: '🐈', blurb: 'Catch it before it wanders off!' },
+  phone:       { label: 'The phone is ringing', emoji: '📱', blurb: 'Answer it before it stops!' },
+  letter_swap: { label: 'Letter Swap!',         emoji: '🔀', blurb: 'Two guesses just got their tiles mixed up.' },
 });
-export const CAT_WINDOW_MS = 4000;  // matches wf_catch_cat's server-side window
-export const CAT_BONUS_MS = 20000;  // matches wf_catch_cat's time_limit_ms bump
+export const DISTRACTION_WINDOW_MS = 4000; // matches the RPCs' server-side reaction window
+export const CAT_BONUS_MS = 20000;         // matches wf_catch_cat's time_limit_ms bump
 
 export const TICK_START_MS = 10000; // audible tick begins this far from zero
 export const EVENT_CARD_MS = 5000;  // full-screen event card, minimum readable time

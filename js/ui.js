@@ -232,31 +232,31 @@ export function renderGrid(opts) {
 }
 
 /**
- * A cat wanders across the room (never over the monitor screen) and lingers
- * for `windowMs`. Clicking it before it leaves calls `onCatch` and plays a
- * pounce-away exit; letting it time out plays a scurry-off exit instead.
+ * A distraction sprite in the room (never over the monitor screen) that
+ * lingers for `windowMs`. Clicking it before it leaves calls `onCatch` and
+ * plays a caught exit; letting it time out plays a fled exit instead.
  * Self-removing either way -- callers never have to clean this up.
  */
-export function spawnCat(windowMs, onCatch) {
+function spawnDistraction({ className, emoji, ariaLabel, windowMs, onCatch }) {
   const scene = $('#room-scene');
   if (!scene) return;
-  const cat = document.createElement('button');
-  cat.type = 'button';
-  cat.className = 'cat-sprite';
-  cat.setAttribute('aria-label', 'Catch the cat');
-  cat.textContent = '🐈';
-  cat.style.setProperty('--walk-dur', `${windowMs}ms`);
-  scene.appendChild(cat);
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = className;
+  el.setAttribute('aria-label', ariaLabel);
+  el.textContent = emoji;
+  el.style.setProperty('--walk-dur', `${windowMs}ms`);
+  scene.appendChild(el);
 
-  // Freeze the cat's current (mid-walk) position as a plain inline style
-  // before swapping in the caught/fled animation -- otherwise the browser
-  // resets `left` to the base rule's value the instant cat-walk stops,
-  // and the cat visibly teleports back to the edge it started from.
+  // Freeze the sprite's current position as a plain inline style before
+  // swapping in the caught/fled animation -- otherwise the browser resets
+  // `left` to the base rule's value the instant the idle animation stops,
+  // and a walking sprite visibly teleports back to the edge it started from.
   const freeze = () => {
-    const rect = cat.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
     const sceneRect = scene.getBoundingClientRect();
-    cat.style.left = `${rect.left - sceneRect.left}px`;
-    cat.style.bottom = `${sceneRect.bottom - rect.bottom}px`;
+    el.style.left = `${rect.left - sceneRect.left}px`;
+    el.style.bottom = `${sceneRect.bottom - rect.bottom}px`;
   };
 
   let resolved = false;
@@ -264,19 +264,29 @@ export function spawnCat(windowMs, onCatch) {
     if (resolved) return;
     resolved = true;
     freeze();
-    cat.classList.add('is-fleeing');
-    cat.addEventListener('animationend', () => cat.remove(), { once: true });
+    el.classList.add('is-fleeing');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
   }, windowMs);
 
-  cat.addEventListener('click', () => {
+  el.addEventListener('click', () => {
     if (resolved) return;
     resolved = true;
     clearTimeout(timeout);
     freeze();
-    cat.classList.add('is-caught');
-    cat.addEventListener('animationend', () => cat.remove(), { once: true });
+    el.classList.add('is-caught');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
     onCatch();
   });
+}
+
+/** A cat walks across the room. See spawnDistraction. */
+export function spawnCat(windowMs, onCatch) {
+  spawnDistraction({ className: 'cat-sprite', emoji: '🐈', ariaLabel: 'Catch the cat', windowMs, onCatch });
+}
+
+/** A phone rings on the desk, stationary and shaking rather than walking. */
+export function spawnPhone(windowMs, onCatch) {
+  spawnDistraction({ className: 'phone-sprite', emoji: '📱', ariaLabel: 'Answer the phone', windowMs, onCatch });
 }
 
 export function setPhase(text, tone) {
