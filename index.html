@@ -77,6 +77,7 @@
 
           <button class="btn btn-primary btn-lg" id="btn-create">Play solo</button>
           <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
+          <button class="btn btn-quiet" id="btn-settings-title" type="button" aria-expanded="false" aria-controls="settings-panel">Sound settings</button>
         </div>
 
         <details class="how">
@@ -146,6 +147,7 @@
         <div class="hud-right">
           <span class="pill" id="hud-you"></span>
           <button class="btn-icon" id="btn-mute" type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
+          <button class="btn-icon" id="btn-settings" type="button" aria-expanded="false" aria-controls="settings-panel" aria-label="Sound settings">⚙</button>
         </div>
       </header>
 
@@ -184,6 +186,34 @@
         <button class="btn btn-primary btn-lg" id="btn-again" hidden>New room</button>
       </div>
     </section>
+
+    <!-- Sound settings. Music and cues carry separate volumes because they
+         are different things: the bed plays continuously and the cues land
+         on top of it, so "turn the music down but keep the tile flips" is
+         the adjustment people actually reach for, and one slider can't say
+         it. Rendered once, at overlay level, so it opens over any screen. -->
+    <div class="settings-panel" id="settings-panel" hidden role="dialog" aria-modal="false" aria-label="Sound settings">
+      <div class="settings-head">
+        <p class="label">Sound</p>
+        <button class="btn-icon settings-close" id="btn-settings-close" type="button" aria-label="Close sound settings">✕</button>
+      </div>
+
+      <label class="slider-row" for="vol-music">
+        <span class="slider-name">Music</span>
+        <input type="range" id="vol-music" min="0" max="100" step="1" aria-describedby="vol-music-val">
+        <output class="slider-val" id="vol-music-val" for="vol-music"></output>
+      </label>
+      <p class="hint hint-inline">The room's soundtrack. It changes with what's happening — blitz, blackout, jackpot, and the storm all sound different.</p>
+
+      <label class="slider-row" for="vol-sfx">
+        <span class="slider-name">Effects</span>
+        <input type="range" id="vol-sfx" min="0" max="100" step="1" aria-describedby="vol-sfx-val">
+        <output class="slider-val" id="vol-sfx-val" for="vol-sfx"></output>
+      </label>
+      <p class="hint hint-inline">Typing, tiles flipping, the timer, and everything the room does.</p>
+
+      <button class="btn btn-ghost" id="btn-mute-all" type="button" aria-pressed="false">Mute everything</button>
+    </div>
 
     <!-- ── Errors / setup ────────────────────────────────────── -->
     <section class="screen" id="screen-error">

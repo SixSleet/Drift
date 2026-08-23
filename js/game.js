@@ -10,6 +10,7 @@ import {
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
 import { sfx } from './sfx.js';
+import { music } from './music.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
   setPhase, setStatusLine, selectChip, buildLetterLegend, paintLetterLegend,
@@ -306,6 +307,7 @@ export class Game {
     }
     sfx.event(kind);
     this.#announceMidModifier(kind);
+    music.set(this.musicTheme());
     if (info?.rule) {
       this.roundRule = info.rule;
       $('#letter-legend').classList.toggle('is-blackout', this.roundRule === 'blackout');
@@ -326,6 +328,7 @@ export class Game {
     }
     sfx.event('letter_swap');
     this.#announceMidModifier('letter_swap');
+    music.set(this.musicTheme());
     this.channel?.poke();
     await this.refreshState();
   }
@@ -623,6 +626,31 @@ export class Game {
     this.#renderFrame(phase);
   }
 
+  /**
+   * What the music should be right now. One function rather than a `set()`
+   * scattered through every transition: the answer depends on three things
+   * at once (phase, the round's opening event, and any modifier that landed
+   * mid-round), and working that out in each caller is how they drift apart.
+   *
+   * Room events are NOT considered here. Those are player-sided and take
+   * the music over through music.override(), precisely so they never have
+   * to be entangled with the shared, server-driven state below.
+   */
+  musicTheme() {
+    if (!this.room || this.phase === 'idle') return 'title';
+    if (this.phase === 'settling' || this.phase === 'reveal') return 'reveal';
+    if (this.phase === 'board' || this.phase === 'next' || this.phase === 'final') return 'standings';
+    if (this.phase === 'countdown' || this.phase === 'live') {
+      // A modifier that has actually landed outranks the round's opening
+      // event: it is the more recent thing to have happened to the player.
+      const fired = this.local?.midModifierShown || this.round?.mid_modifier_fired;
+      const mid = fired ? this.round?.mid_modifier : null;
+      const kind = mid && mid !== 'none' ? mid : this.round?.event;
+      return music.knows(kind) ? kind : 'live';
+    }
+    return 'lobby';
+  }
+
   #renderTimer(phase) {
     const el = $('#hud-timer');
     if (phase !== 'live') { el.hidden = true; return; }
@@ -763,6 +791,7 @@ export class Game {
 
   #onPhaseChange(phase) {
     $('#room-scene')?.querySelector('.room-character')?.classList.toggle('is-typing', phase === 'live');
+    music.set(this.musicTheme());
 
     // The room only comes alive while a round is actually being played, and
     // is torn down on the way out of every other phase -- otherwise a cat

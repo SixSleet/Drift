@@ -16,6 +16,7 @@
 
 import { $ } from './ui.js';
 import { sfx } from './sfx.js';
+import { music } from './music.js';
 
 /** How long after the round goes live before the room can first interrupt. */
 const FIRST_GAP_MS = [9000, 26000];
@@ -250,13 +251,24 @@ function storm(done) {
 
   const seconds = 20 + Math.random() * 12;
   room.classList.add('is-storm');
+  // The weather gets the soundtrack for as long as it lasts. An override
+  // rather than a set(), so whatever the round was playing is waiting
+  // underneath when the rain stops.
+  music.override('storm');
   const stopRain = sfx.rain(seconds);
   const strikes = [];
 
-  // 3-5 strikes, spread across the storm but never in the first second.
+  // 3-5 strikes, one per slice of the storm rather than all drawn from the
+  // whole window. Drawing independently meant the first strike could land
+  // 18 seconds in, by which point the event has just been rain -- and it
+  // also let two strikes land a moment apart and then nothing. A slice each
+  // keeps them spread and puts the first one early, where it establishes
+  // what is happening.
   const count = 3 + Math.floor(Math.random() * 3);
+  const window = seconds * 1000 - 4000;
+  const slice = window / count;
   for (let i = 0; i < count; i++) {
-    const at = 2000 + Math.random() * (seconds * 1000 - 4000);
+    const at = 1500 + i * slice + Math.random() * slice * 0.7;
     strikes.push(setTimeout(() => {
       room.classList.add('is-lightning');
       // The thunder trails the flash, the way it does outdoors.
@@ -267,6 +279,7 @@ function storm(done) {
 
   const end = setTimeout(() => {
     room.classList.remove('is-storm', 'is-lightning');
+    music.release('storm');
     stopRain();
     done();
   }, seconds * 1000);
@@ -275,17 +288,183 @@ function storm(done) {
     strikes.forEach(clearTimeout);
     clearTimeout(end);
     room.classList.remove('is-storm', 'is-lightning');
+    music.release('storm');
     stopRain();
+  };
+}
+
+/* ── The mouse ────────────────────────────────────────────────────────────
+   Runs the front edge of the desk in a couple of darting bursts, low and
+   quick. It is deliberately the *small* interruption: it never crosses the
+   screen, so the cost is having something move in the corner of your eye
+   while you are trying to hold five letters in your head. Click to scare it
+   off early. */
+function mouse(done) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'mouse-rig';
+  el.setAttribute('aria-label', 'Scare the mouse off the desk');
+  el.style.setProperty('--dir', Math.random() < 0.5 ? 1 : -1);
+  el.innerHTML = `
+    <svg viewBox="0 0 200 96" aria-hidden="true">
+      <defs>
+        <linearGradient id="mouseFur" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#8a7b6b"/>
+          <stop offset="1" stop-color="#3a312a"/>
+        </linearGradient>
+      </defs>
+      <path class="mouse-tail" d="M42 62 C 8 62, 6 34, 26 30"/>
+      <ellipse class="mouse-ear" cx="132" cy="38" rx="15" ry="15"/>
+      <path class="mouse-body" d="M40 68 C 40 40, 78 26, 112 30 C 142 33, 160 44, 168 56
+                                   C 174 65, 168 72, 152 72 L 56 72 C 44 72, 40 71, 40 68 Z"/>
+      <circle class="mouse-eye" cx="150" cy="49" r="3.4"/>
+      <circle class="mouse-nose" cx="170" cy="58" r="3"/>
+      <g class="mouse-leg mouse-leg-f"><rect x="140" y="66" width="7" height="18" rx="3.5"/></g>
+      <g class="mouse-leg mouse-leg-b"><rect x="62" y="66" width="7" height="18" rx="3.5"/></g>
+    </svg>`;
+  layer().appendChild(el);
+  sfx.mouseSkitter();
+  const again = setInterval(() => sfx.mouseSkitter(), 2300);
+
+  let over = false;
+  const finish = (scared) => {
+    if (over) return;
+    over = true;
+    clearInterval(again); clearTimeout(timer);
+    if (scared) sfx.mouseSqueak();
+    el.classList.add('is-gone');
+    el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
+  };
+  const timer = setTimeout(() => finish(false), 7600);
+  el.addEventListener('click', () => finish(true));
+  return () => { clearInterval(again); clearTimeout(timer); over = true; el.remove(); };
+}
+
+/* ── The paper plane ──────────────────────────────────────────────────────
+   Sails in on an arc across the front of the room. The only room event with
+   a window on it: catch it in flight and you get a small papery thump and it
+   is gone, miss it and it glides on and lands off-screen. Nothing is won
+   either way -- like everything else here, the stake is entirely that it is
+   in your way. */
+function paperPlane(done) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'plane-rig';
+  el.setAttribute('aria-label', 'Catch the paper plane');
+  el.style.setProperty('--dir', Math.random() < 0.5 ? 1 : -1);
+  el.innerHTML = `
+    <svg viewBox="0 0 220 120" aria-hidden="true">
+      <path class="plane-wing-far"  d="M8 30 L212 54 L96 74 Z"/>
+      <path class="plane-wing-near" d="M8 30 L96 74 L52 96 Z"/>
+      <path class="plane-fold"      d="M8 30 L96 74"/>
+    </svg>`;
+  layer().appendChild(el);
+  sfx.paperGlide();
+
+  let over = false;
+  const finish = (caught) => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    if (caught) sfx.paperCatch();
+    el.classList.add(caught ? 'is-caught' : 'is-gone');
+    el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
+    // A caught plane is crumpled instantly; a missed one is already most of
+    // the way out of frame, so don't wait on an animation that may not fire.
+    setTimeout(() => { if (el.isConnected) { el.remove(); done(); } }, 1400);
+  };
+  const timer = setTimeout(() => finish(false), 5200);
+  el.addEventListener('click', () => finish(true));
+  return () => { clearTimeout(timer); over = true; el.remove(); };
+}
+
+/* ── The power flicker ────────────────────────────────────────────────────
+   Not the lamp -- the monitor. The board dims and stutters for a beat, which
+   is the most intrusive thing in here, so it is also the shortest and the
+   rarest. It never hides a letter outright: at its darkest the board is
+   still readable, just unpleasant. */
+function powerCut(done) {
+  const overlay = $('#app-overlay');
+  const room = $('#room-scene');
+  if (!overlay) return done();
+  sfx.powerDip();
+  overlay.classList.add('is-powercut');
+  room?.classList.add('is-powercut');
+  const t = setTimeout(() => {
+    overlay.classList.remove('is-powercut');
+    room?.classList.remove('is-powercut');
+    done();
+  }, 1100);
+  return () => {
+    clearTimeout(t);
+    overlay.classList.remove('is-powercut');
+    room?.classList.remove('is-powercut');
+  };
+}
+
+/* ── The neighbour ────────────────────────────────────────────────────────
+   Someone through the wall puts music on. This is the one room event that
+   takes over the *soundtrack* rather than the picture: the bed swaps to a
+   muffled four-on-the-floor with the top end gone, which is what actually
+   makes it through plasterboard.
+
+   Bang on the wall to make it stop. That is the interaction -- and unlike
+   the cat, what you are clearing is something you can hear rather than
+   something you can see, so the target is the wall itself. */
+function neighbour(done) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'neighbour-rig';
+  el.setAttribute('aria-label', 'Bang on the wall');
+  el.innerHTML = `<i class="neighbour-thump"></i>`;
+  layer().appendChild(el);
+
+  const room = $('#room-scene');
+  room?.classList.add('is-neighbour');
+  music.override('neighbour');
+
+  let over = false;
+  const finish = (banged) => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    room?.classList.remove('is-neighbour');
+    music.release('neighbour');
+    if (banged) sfx.wallBang();
+    el.remove();
+    done();
+  };
+  const timer = setTimeout(() => finish(false), 22000);
+  el.addEventListener('click', () => {
+    sfx.wallBang();
+    // One bang is rude, not effective. The second one works.
+    if (el.dataset.banged) { finish(false); return; }
+    el.dataset.banged = '1';
+    el.classList.remove('is-banged');
+    void el.offsetWidth;
+    el.classList.add('is-banged');
+  });
+  return () => {
+    clearTimeout(timer);
+    over = true;
+    room?.classList.remove('is-neighbour');
+    music.release('neighbour');
+    el.remove();
   };
 }
 
 // Weights, not equal odds: the cat is the headline act, ambience is filler.
 const KINDS = [
-  { run: cat,          weight: 30 },
-  { run: moth,         weight: 18 },
-  { run: phone,        weight: 18 },
-  { run: lampFlicker,  weight: 20 },
-  { run: storm,        weight: 16 },
+  { run: cat,          weight: 24 },
+  { run: moth,         weight: 15 },
+  { run: phone,        weight: 13 },
+  { run: mouse,        weight: 13 },
+  { run: paperPlane,   weight: 12 },
+  { run: lampFlicker,  weight: 14 },
+  { run: neighbour,    weight: 12 },
+  { run: storm,        weight: 11 },
+  // The most intrusive one in here, so the rarest.
+  { run: powerCut,     weight: 6 },
 ];
 const TOTAL_WEIGHT = KINDS.reduce((n, k) => n + k.weight, 0);
 
@@ -303,7 +482,9 @@ const between = ([lo, hi]) => lo + Math.random() * (hi - lo);
 // Exposed for the browser test harness (same spirit as window.__wordforge in
 // main.js): the scheduler's gaps are tens of seconds, so a test that wants to
 // see a specific event runs it directly rather than waiting one out.
-export const __events = { cat, moth, phone, lampFlicker, storm };
+export const __events = {
+  cat, moth, phone, mouse, paperPlane, lampFlicker, neighbour, storm, powerCut,
+};
 
 /**
  * Starts the room running for one round. Returns a stop() that cancels the
@@ -338,7 +519,12 @@ export function startRoomEvents() {
     const l = layer();
     if (l) l.innerHTML = '';
     const room = $('#room-scene');
-    if (room) room.classList.remove('is-flickering', 'is-storm', 'is-lightning');
+    if (room) room.classList.remove('is-flickering', 'is-storm', 'is-lightning',
+                                    'is-neighbour', 'is-powercut');
+    $('#app-overlay')?.classList.remove('is-powercut');
+    // Any event that took the music has to hand it back, even if the round
+    // ended mid-storm -- otherwise the standings play thunder.
+    music.release();
     const fx = $('#screen-fx');
     if (fx) fx.innerHTML = '';
     document.querySelectorAll('.tile.is-smudged').forEach((t) => t.classList.remove('is-smudged'));

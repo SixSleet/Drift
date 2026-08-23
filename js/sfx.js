@@ -1,31 +1,20 @@
 // Synthesised sound. No audio files: a couple of oscillators and a gain
 // envelope per cue, so the whole soundtrack costs nothing to ship.
 //
+// The context and the buses live in audio.js -- music.js needs the same
+// context, and a browser only gives you so many. Everything here lands on
+// the SFX bus, which carries its own volume independent of the music bed.
+//
 // Browsers will not let audio start before a gesture, so the context is
 // created lazily on the first sound — by which point the player has tapped
 // something.
 
-const STORE_KEY = 'wf-muted';
+import { ensureAudio, buses, volume } from './audio.js';
 
-let ctx = null;
-let master = null;
-let muted = (() => {
-  try { return localStorage.getItem(STORE_KEY) === '1'; } catch { return false; }
-})();
+// `ensure()` returns null while muted, which is what every cue below uses as
+// its mute check -- keep that contract.
+const ensure = ensureAudio;
 
-function ensure() {
-  if (muted) return null;
-  if (!ctx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    ctx = new AC();
-    master = ctx.createGain();
-    master.gain.value = 0.5;
-    master.connect(ctx.destination);
-  }
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-  return ctx;
-}
 
 function blip({ freq = 440, to = null, dur = 0.09, type = 'sine', gain = 0.2, delay = 0 }) {
   const c = ensure();
@@ -39,7 +28,7 @@ function blip({ freq = 440, to = null, dur = 0.09, type = 'sine', gain = 0.2, de
   env.gain.setValueAtTime(0.0001, t0);
   env.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
   env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(env).connect(master);
+  osc.connect(env).connect(buses.sfx);
   osc.start(t0);
   osc.stop(t0 + dur + 0.02);
 }
@@ -96,7 +85,7 @@ function meowVoice({ dur = 0.5, base = 480, peak = 760, gain = 0.14, delay = 0 }
   env.gain.setValueAtTime(gain, t0 + dur * 0.55);
   env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
-  osc.connect(band).connect(env).connect(master);
+  osc.connect(band).connect(env).connect(buses.sfx);
   osc.start(t0); vib.start(t0);
   osc.stop(t0 + dur + 0.05); vib.stop(t0 + dur + 0.05);
 }
@@ -123,7 +112,7 @@ function tone({ freq = 440, to = null, dur = 0.24, type = 'sine', gain = 0.12,
   env.gain.exponentialRampToValueAtTime(gain, t0 + attack);
   env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
-  osc.connect(lp).connect(env).connect(master);
+  osc.connect(lp).connect(env).connect(buses.sfx);
   osc.start(t0);
   osc.stop(t0 + dur + 0.04);
 }
@@ -139,13 +128,12 @@ function chime({ freq, dur = 0.5, gain = 0.11, delay = 0 }) {
 const PENTA = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51];
 
 export const sfx = {
-  get muted() { return muted; },
+  get muted() { return volume.muted; },
 
   toggleMute() {
-    muted = !muted;
-    try { localStorage.setItem(STORE_KEY, muted ? '1' : '0'); } catch { /* private mode */ }
-    if (!muted) this.type();
-    return muted;
+    const next = volume.toggleMuted();
+    if (!next) this.type();
+    return next;
   },
 
   /** A single keystroke. Soft and short -- this fires dozens of times a
@@ -267,7 +255,7 @@ export const sfx = {
     env.gain.linearRampToValueAtTime(0.07, t0 + 0.15);
     env.gain.setValueAtTime(0.07, t0 + dur - 0.3);
     env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(lp).connect(env).connect(master);
+    src.connect(lp).connect(env).connect(buses.sfx);
     src.start(t0); lfo.start(t0);
     src.stop(t0 + dur); lfo.stop(t0 + dur);
   },
@@ -307,7 +295,7 @@ export const sfx = {
       env.gain.linearRampToValueAtTime(peak, t + 0.002);
       env.gain.exponentialRampToValueAtTime(0.0001, t + tap);
 
-      src.connect(bp).connect(env).connect(master);
+      src.connect(bp).connect(env).connect(buses.sfx);
       src.start(t);
       src.stop(t + tap + 0.01);
 
@@ -344,7 +332,7 @@ export const sfx = {
       env.gain.setValueAtTime(0.055, t);
       env.gain.setValueAtTime(0.055, t + dur - 0.05);
       env.gain.linearRampToValueAtTime(0.0001, t + dur);
-      osc.connect(env).connect(master);
+      osc.connect(env).connect(buses.sfx);
       osc.start(t); chop.start(t);
       osc.stop(t + dur + 0.02); chop.stop(t + dur + 0.02);
 
@@ -363,7 +351,7 @@ export const sfx = {
       rchop.connect(rchopAmt).connect(renv.gain);
       renv.gain.setValueAtTime(0.011, t);
       renv.gain.linearRampToValueAtTime(0.0001, t + dur);
-      src.connect(hp).connect(renv).connect(master);
+      src.connect(hp).connect(renv).connect(buses.sfx);
       src.start(t); rchop.start(t);
       src.stop(t + dur); rchop.stop(t + dur);
     }
@@ -372,6 +360,108 @@ export const sfx = {
   /** Silenced it: the buzz cut off, and the room a little quieter for it. */
   phoneSilence() {
     tone({ freq: PENTA[3], to: PENTA[1], dur: 0.16, type: 'sine', gain: 0.07, cutoff: 1800, attack: 0.004 });
+  },
+
+  /**
+   * A mouse on a wooden desk. Not footsteps -- claws: a scatter of very
+   * short, very high ticks in an uneven burst, because a mouse moves in
+   * darts rather than at a steady pace.
+   */
+  mouseSkitter() {
+    const c = ensure();
+    if (!c) return;
+    let t = c.currentTime;
+    const ticks = 9 + Math.floor(Math.random() * 6);
+    for (let i = 0; i < ticks; i++) {
+      const src = noise(c);
+      const bp = c.createBiquadFilter();
+      const env = c.createGain();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(3400 + Math.random() * 2600, t);
+      bp.Q.setValueAtTime(3.2, t);
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.linearRampToValueAtTime(0.02 + Math.random() * 0.014, t + 0.001);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + 0.012);
+      src.connect(bp).connect(env).connect(buses.sfx);
+      src.start(t); src.stop(t + 0.02);
+      // Bursts of three or four, then a pause -- a mouse stops to listen.
+      t += (i % 4 === 3) ? 0.12 + Math.random() * 0.14 : 0.028 + Math.random() * 0.02;
+    }
+  },
+
+  /** Startled. Short, very high, and up -- a squeak is a rising glide. */
+  mouseSqueak() {
+    tone({ freq: 1900, to: 3100, dur: 0.09, type: 'sine', gain: 0.055, cutoff: 6000, attack: 0.004 });
+    tone({ freq: 2600, to: 3600, dur: 0.06, type: 'sine', gain: 0.03, cutoff: 7000, delay: 0.08 });
+  },
+
+  /** Paper moving through air: a soft band of noise that swells and passes. */
+  paperGlide() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const dur = 2.4;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(700, t0);
+    bp.frequency.linearRampToValueAtTime(1500, t0 + dur * 0.5);
+    bp.frequency.linearRampToValueAtTime(600, t0 + dur);
+    bp.Q.setValueAtTime(1.1, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.016, t0 + dur * 0.45);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
+
+  /** Caught it. A paper crumple: a fast rattle of tiny broadband ticks. */
+  paperCatch() {
+    const c = ensure();
+    if (!c) return;
+    let t = c.currentTime;
+    for (let i = 0; i < 14; i++) {
+      const src = noise(c);
+      const hp = c.createBiquadFilter();
+      const env = c.createGain();
+      hp.type = 'highpass';
+      hp.frequency.setValueAtTime(1400 + Math.random() * 1800, t);
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.linearRampToValueAtTime(0.014 * (1 - i / 18), t + 0.001);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + 0.02);
+      src.connect(hp).connect(env).connect(buses.sfx);
+      src.start(t); src.stop(t + 0.03);
+      t += 0.008 + Math.random() * 0.018;
+    }
+  },
+
+  /** The monitor browning out: the coil whine dips and comes back. */
+  powerDip() {
+    tone({ freq: 240, to: 90, dur: 0.35, type: 'sawtooth', gain: 0.045, cutoff: 900, attack: 0.006 });
+    tone({ freq: 90, to: 250, dur: 0.4, type: 'sawtooth', gain: 0.035, cutoff: 1100, delay: 0.55 });
+    tone({ freq: 62, dur: 0.5, type: 'sine', gain: 0.05, cutoff: 200, attack: 0.01 });
+  },
+
+  /** Fist on plasterboard. Low, dead, and over immediately. */
+  wallBang() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    for (let i = 0; i < 2; i++) {
+      const t = t0 + i * 0.19;
+      tone({ freq: 96, to: 54, dur: 0.16, type: 'sine', gain: 0.13, cutoff: 260,
+             attack: 0.003, delay: i * 0.19 });
+      const src = noise(c);
+      const lp = c.createBiquadFilter();
+      const env = c.createGain();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(500, t);
+      env.gain.setValueAtTime(0.05, t);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      src.connect(lp).connect(env).connect(buses.sfx);
+      src.start(t); src.stop(t + 0.12);
+    }
   },
 
   /** The desk lamp stuttering -- a dry electrical tick. */
@@ -400,7 +490,7 @@ export const sfx = {
     ce.gain.setValueAtTime(0.0001, t0);
     ce.gain.exponentialRampToValueAtTime(0.1, t0 + 0.012);
     ce.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
-    crack.connect(cf).connect(ce).connect(master);
+    crack.connect(cf).connect(ce).connect(buses.sfx);
     crack.start(t0); crack.stop(t0 + 0.45);
 
     const rumble = noise(c);
@@ -412,7 +502,7 @@ export const sfx = {
     re.gain.setValueAtTime(0.0001, t0 + 0.05);
     re.gain.exponentialRampToValueAtTime(0.14, t0 + 0.3);
     re.gain.exponentialRampToValueAtTime(0.0001, t0 + 3.2);
-    rumble.connect(rf).connect(re).connect(master);
+    rumble.connect(rf).connect(re).connect(buses.sfx);
     rumble.start(t0); rumble.stop(t0 + 3.3);
   },
 
@@ -432,7 +522,7 @@ export const sfx = {
     hp.type = 'highpass'; hp.frequency.setValueAtTime(420, t0);
     env.gain.setValueAtTime(0.0001, t0);
     env.gain.linearRampToValueAtTime(0.045, t0 + 2.5);
-    src.connect(hp).connect(lp).connect(env).connect(master);
+    src.connect(hp).connect(lp).connect(env).connect(buses.sfx);
     src.start(t0);
     let stopped = false;
     const stop = () => {

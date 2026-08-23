@@ -1740,3 +1740,246 @@ html, body {
 .chip:focus-visible { outline-offset: 2px; }
 .btn:focus-visible { outline-offset: 3px; }
 .how summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ── The mouse ─────────────────────────────────────────────────────────
+   Runs the front edge of the desk. Small, fast, low: it never crosses the
+   screen, so what it costs you is peripheral movement while you are trying
+   to hold five letters in your head -- not a blocked board. */
+
+.mouse-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 200px; height: 96px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: mouse-dart 7.6s cubic-bezier(.4, 0, .6, 1) forwards;
+}
+/* Desk top is y = 400 and the rig is 96 tall, so feet land at 400 - 48. */
+@keyframes mouse-dart {
+  0%   { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(-1400px * var(--dir))) scaleX(var(--dir)); }
+  18%  { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(-520px * var(--dir))) scaleX(var(--dir)); }
+  30%  { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(-470px * var(--dir))) scaleX(var(--dir)); }
+  52%  { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(150px * var(--dir))) scaleX(var(--dir)); }
+  64%  { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(190px * var(--dir))) scaleX(var(--dir)); }
+  100% { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(1400px * var(--dir))) scaleX(var(--dir)); }
+}
+.mouse-rig.is-gone { animation: mouse-bolt .4s ease-in forwards; }
+@keyframes mouse-bolt { to { opacity: 0; transform: translate(-50%, -50%) translateY(430px) translateZ(-660px) scale(.7); } }
+
+.mouse-rig svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.mouse-body { fill: url(#mouseFur); }
+.mouse-ear  { fill: #6b5a4c; stroke: #2e261f; stroke-width: 2; }
+.mouse-eye  { fill: #0d0a08; }
+.mouse-nose { fill: #d09c9c; }
+.mouse-tail { fill: none; stroke: #6a5a4b; stroke-width: 5; stroke-linecap: round; }
+/* fill-box again: without it an SVG child's transform-origin resolves
+   against the whole user space and the legs pivot from off-screen. */
+.mouse-rig .mouse-leg, .mouse-rig .mouse-tail {
+  transform-box: fill-box; transform-origin: 50% 0%;
+}
+.mouse-rig .mouse-leg { fill: #4a3d33; animation: mouse-scamper .13s linear infinite; }
+.mouse-rig .mouse-leg-b { animation-delay: .065s; }
+@keyframes mouse-scamper { 0%, 100% { transform: rotate(-22deg); } 50% { transform: rotate(22deg); } }
+.mouse-rig .mouse-tail { transform-origin: 100% 50%; animation: mouse-tail .5s ease-in-out infinite; }
+@keyframes mouse-tail { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+
+/* ── The paper plane ───────────────────────────────────────────────────
+   Crosses the front of the room on an arc, nearer the camera than the desk,
+   with a slow roll. Catchable in flight -- the only room event with a
+   window on it. */
+
+.plane-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 220px; height: 120px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: plane-fly 5.2s cubic-bezier(.28, .5, .6, 1) forwards;
+}
+@keyframes plane-fly {
+  0%   { transform: translate(-50%, -50%) translateY(-260px) translateZ(-520px) translateX(calc(-1500px * var(--dir))) rotateZ(calc(6deg * var(--dir))) scaleX(var(--dir)); }
+  35%  { transform: translate(-50%, -50%) translateY(-70px)  translateZ(-430px) translateX(calc(-460px * var(--dir)))  rotateZ(calc(-9deg * var(--dir))) scaleX(var(--dir)); }
+  70%  { transform: translate(-50%, -50%) translateY(60px)   translateZ(-470px) translateX(calc(430px * var(--dir)))   rotateZ(calc(11deg * var(--dir))) scaleX(var(--dir)); }
+  100% { transform: translate(-50%, -50%) translateY(300px)  translateZ(-560px) translateX(calc(1500px * var(--dir)))  rotateZ(calc(2deg * var(--dir))) scaleX(var(--dir)); }
+}
+.plane-rig.is-gone   { animation: plane-land .5s ease-in forwards; }
+.plane-rig.is-caught { animation: plane-crumple .45s cubic-bezier(.3, 1.5, .5, 1) forwards; }
+@keyframes plane-land    { to { opacity: 0; } }
+@keyframes plane-crumple {
+  40%  { transform: translate(-50%, -50%) translateZ(-300px) scale(.5) rotate(-30deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translateZ(-300px) scale(.15) rotate(60deg); opacity: 0; }
+}
+
+.plane-rig svg { width: 100%; height: 100%; overflow: visible; display: block; }
+/* Two tones, so the fold between the wings reads as a fold rather than a
+   seam -- it is the only thing giving this any solidity. */
+.plane-wing-far  { fill: #d9cdb6; }
+.plane-wing-near { fill: #f2e9d6; }
+.plane-fold      { stroke: #b3a794; stroke-width: 2; fill: none; }
+
+/* ── The power flicker ─────────────────────────────────────────────────
+   The monitor, not the lamp. Short, and never dark enough to actually hide
+   a letter -- an unreadable board would be a penalty, and room events do
+   not carry penalties. */
+
+.app-overlay.is-powercut { animation: powercut-screen 1.1s steps(1, end) forwards; }
+@keyframes powercut-screen {
+  0%, 8%    { filter: none; }
+  9%, 15%   { filter: brightness(.28) saturate(.5); }
+  16%, 21%  { filter: brightness(.9); }
+  22%, 34%  { filter: brightness(.2) saturate(.4); }
+  35%, 45%  { filter: brightness(.75); }
+  46%, 62%  { filter: brightness(.34) saturate(.55); }
+  63%, 100% { filter: none; }
+}
+/* The room dips with it: the monitor is what lights the desk, so if the
+   screen browns out the cool half of the room has to go with it. */
+.room.is-powercut .room-stage { animation: powercut-room 1.1s steps(1, end) forwards; }
+@keyframes powercut-room {
+  0%, 8%    { filter: none; }
+  9%, 15%   { filter: brightness(.72); }
+  22%, 34%  { filter: brightness(.6); }
+  46%, 62%  { filter: brightness(.7); }
+  63%, 100% { filter: none; }
+}
+
+/* ── The neighbour ─────────────────────────────────────────────────────
+   Music through the left wall. The soundtrack swaps to a muffled
+   four-on-the-floor (see the `neighbour` theme in js/music.js); this is the
+   picture that goes with it -- the wall thumping in time, and something to
+   bang on. */
+
+/* Flat, not a plane in the 3D stage. Placing it on .wall-left looked right
+   in the CSS and projected to x = -533 -- completely off the left of the
+   viewport, so the thing you are meant to bang on could not be clicked. The
+   left wall is far too oblique from this camera to hold a target.
+
+   So it is a strip pinned to the left edge instead, sitting at z = 0 in the
+   front stage (nearer the camera than anything, which is what makes it
+   clickable through the room). Width is capped well short of where the app
+   overlay starts at every supported viewport, so it can never swallow a
+   click meant for the board -- wf-room-events-test.mjs checks that. */
+.neighbour-rig {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: min(170px, 12vw);
+  appearance: none; border: 0; padding: 0; margin: 0;
+  cursor: pointer;
+  background: linear-gradient(90deg,
+    rgba(255, 186, 112, .30), rgba(255, 186, 112, .10) 55%, transparent 100%);
+  animation: neighbour-pulse .484s ease-out infinite;   /* 124bpm, on the beat */
+}
+@keyframes neighbour-pulse {
+  0%   { opacity: 1; }
+  55%  { opacity: .38; }
+  100% { opacity: .58; }
+}
+/* A ring going out from the wall on every other beat, so there is something
+   that visibly keeps time with what you are hearing. */
+.neighbour-thump {
+  position: absolute; left: -40%; top: 50%;
+  width: 150%; aspect-ratio: 1;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 205, 150, .30);
+  animation: neighbour-ring .968s ease-out infinite;
+}
+@keyframes neighbour-ring {
+  0%   { transform: translateY(-50%) scale(.55); opacity: .5; }
+  100% { transform: translateY(-50%) scale(1.15); opacity: 0; }
+}
+/* The whole room breathes with it, very slightly. Enough to notice out of
+   the corner of your eye; not enough to make the board move. */
+.room.is-neighbour .wall-left { animation: neighbour-wall .484s ease-out infinite; }
+@keyframes neighbour-wall {
+  0%   { filter: brightness(.82); }
+  100% { filter: brightness(.72); }
+}
+.neighbour-rig.is-banged { animation: neighbour-banged .5s ease-out; }
+@keyframes neighbour-banged {
+  0%   { filter: brightness(2.4); }
+  100% { filter: brightness(1); }
+}
+
+/* ── Sound settings ────────────────────────────────────────────────────
+   Anchored to the overlay, not to a screen, so it opens over whichever one
+   is showing. Top-right, under the HUD gear it hangs from. */
+
+.settings-panel {
+  position: absolute; top: 52px; right: 14px; z-index: 90;
+  width: min(320px, calc(100% - 28px));
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 14px 16px 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #2b241c, #201a15);
+  border: 1px solid rgba(226, 162, 89, .22);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, .62);
+  animation: settings-in .16s cubic-bezier(.2, 1, .3, 1) both;
+}
+@keyframes settings-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+.settings-head { display: flex; align-items: center; justify-content: space-between; }
+.settings-head .label { margin: 0; }
+.settings-close { width: 26px; height: 26px; font-size: 12px; }
+
+.slider-row {
+  display: grid; grid-template-columns: 62px 1fr 42px;
+  align-items: center; gap: 10px;
+  margin-top: 8px;
+}
+.slider-name { font-size: 13px; font-weight: 700; color: var(--ink); }
+.slider-val {
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  color: var(--accent); text-align: right;
+}
+
+/* Styled from scratch in both engines -- a default range control is the one
+   widget that would give away that this is a web page rather than a room. */
+.slider-row input[type="range"] {
+  appearance: none; -webkit-appearance: none;
+  width: 100%; height: 22px; margin: 0;
+  background: transparent; cursor: pointer;
+}
+.slider-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px; border-radius: 3px;
+  background: rgba(255, 240, 220, .12);
+}
+.slider-row input[type="range"]::-moz-range-track {
+  height: 5px; border-radius: 3px;
+  background: rgba(255, 240, 220, .12);
+}
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none;
+  width: 15px; height: 15px; margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #2b241c;
+  box-shadow: 0 0 0 1px rgba(226, 162, 89, .5), 0 2px 6px rgba(0, 0, 0, .5);
+}
+.slider-row input[type="range"]::-moz-range-thumb {
+  width: 15px; height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #2b241c;
+  box-shadow: 0 0 0 1px rgba(226, 162, 89, .5), 0 2px 6px rgba(0, 0, 0, .5);
+}
+.settings-panel .hint-inline { margin: 0 0 2px; font-size: 11.5px; line-height: 1.45; }
+.settings-panel .btn { margin-top: 10px; }
+.settings-panel .btn.is-on {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* A quieter third option under the two big title-screen buttons: it is a
+   preference, not a way into the game, and should not compete with them. */
+.btn-quiet {
+  appearance: none; border: 0; background: none;
+  padding: 6px 2px; margin-top: 2px;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-faint);
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: rgba(255, 240, 220, .2);
+  cursor: pointer;
+}
+.btn-quiet:hover { color: var(--ink-dim); }

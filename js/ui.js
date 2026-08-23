@@ -467,3 +467,109 @@ export function resetRails() {
   _railSig.left = null;
   _railSig.right = null;
 }
+
+/* ── Sound settings ───────────────────────────────────────────────────
+   Two sliders and a mute, sharing one panel between the HUD gear and the
+   title screen's link.
+
+   The keyboard is the whole difficulty here. Guesses are typed on a real
+   keyboard with no on-screen alternative, and a focused `input[type=range]`
+   eats arrow keys, Home/End and Page Up/Down. Worse, main.js's game-key
+   listener fires on any keydown while #screen-game is showing -- so with a
+   slider focused, typing a letter would both move the slider and enter a
+   letter on the board.
+
+   So: the panel stops keydown propagation while it is open (its own controls
+   still work, the game never sees those keys), and closing it returns focus
+   to whatever opened it. Escape closes. wf-settings-test.mjs checks that
+   typing after using a slider goes to the board and not the slider. */
+
+let settingsOpener = null;
+
+function settingsOpen() {
+  return !$('#settings-panel')?.hidden;
+}
+
+export function toggleSettings(force) {
+  const panel = $('#settings-panel');
+  if (!panel) return;
+  const next = force ?? panel.hidden;
+  panel.hidden = !next;
+  for (const id of ['#btn-settings', '#btn-settings-title']) {
+    $(id)?.setAttribute('aria-expanded', String(next));
+  }
+  if (next) {
+    settingsOpener = document.activeElement;
+    $('#vol-music')?.focus();
+  } else {
+    // Hand focus back, so the next keystroke is a guess again rather than
+    // landing on a slider that is no longer visible.
+    if (settingsOpener?.isConnected) settingsOpener.focus();
+    else document.activeElement?.blur?.();
+    settingsOpener = null;
+  }
+}
+
+/**
+ * @param {{ music: number, sfx: number, muted: boolean }} initial  0..1 volumes
+ * @param {{ onMusic: fn, onSfx: fn, onMute: fn }} handlers
+ */
+export function buildSettings(initial, handlers) {
+  const panel = $('#settings-panel');
+  if (!panel) return;
+
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  const wire = (id, valId, start, onChange) => {
+    const el = $(id);
+    const out = $(valId);
+    if (!el) return null;
+    el.value = String(Math.round(start * 100));
+    if (out) out.textContent = pct(start);
+    el.addEventListener('input', () => {
+      const v = Number(el.value) / 100;
+      if (out) out.textContent = pct(v);
+      onChange(v);
+    });
+    return el;
+  };
+
+  wire('#vol-music', '#vol-music-val', initial.music, handlers.onMusic);
+  wire('#vol-sfx', '#vol-sfx-val', initial.sfx, handlers.onSfx);
+
+  const muteAll = $('#btn-mute-all');
+  const paintMute = (muted) => {
+    if (!muteAll) return;
+    muteAll.textContent = muted ? 'Sound is off' : 'Mute everything';
+    muteAll.setAttribute('aria-pressed', String(muted));
+    muteAll.classList.toggle('is-on', muted);
+  };
+  paintMute(initial.muted);
+  muteAll?.addEventListener('click', () => paintMute(handlers.onMute()));
+
+  // Nothing typed inside the panel may reach the game's key handlers.
+  panel.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { toggleSettings(false); return; }
+    e.stopPropagation();
+  });
+
+  $('#btn-settings')?.addEventListener('click', () => toggleSettings());
+  $('#btn-settings-title')?.addEventListener('click', () => toggleSettings());
+  $('#btn-settings-close')?.addEventListener('click', () => toggleSettings(false));
+
+  // Click anywhere else to dismiss — but not on the buttons that open it,
+  // or the panel would close and reopen in the same click.
+  document.addEventListener('pointerdown', (e) => {
+    if (!settingsOpen()) return;
+    if (panel.contains(e.target)) return;
+    if (e.target.closest('#btn-settings, #btn-settings-title')) return;
+    toggleSettings(false);
+  });
+
+  // Escape from outside the panel too.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && settingsOpen()) toggleSettings(false);
+  });
+
+  /** Lets the mute icon in the HUD and the panel's button stay in step. */
+  return { paintMute };
+}

@@ -4,10 +4,12 @@ import { Game } from './game.js';
 import { startScreenFit } from './screen-fit.js';
 import { DEFAULT_ROUNDS, DEFAULT_WORD_LENGTH, WORD_LENGTH_CHOICES } from './config.js';
 import { sfx } from './sfx.js';
+import { music } from './music.js';
 import {
   $, showScreen, toast, buildKeypad, setCodeDisplay, flashKey, setMuteButton,
-  chipGroup, showError, CODE_ALPHABET,
+  chipGroup, showError, CODE_ALPHABET, buildSettings,
 } from './ui.js';
+import { volume } from './audio.js';
 
 const game = new Game();
 // Exposed so the browser test harness can inspect the live simulation.
@@ -106,6 +108,7 @@ $('#btn-code-back').addEventListener('click', () => showScreen('screen-title'));
 document.addEventListener('keydown', (e) => {
   if (!$('#screen-code[data-active]')) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.target.closest?.('input, select, textarea, .settings-panel')) return;
   if (e.key === 'Backspace') { e.preventDefault(); deleteChar(); return; }
   const ch = e.key.length === 1 ? e.key.toUpperCase() : '';
   if (ch && CODE_ALPHABET.includes(ch)) { e.preventDefault(); enterChar(ch); }
@@ -131,7 +134,31 @@ $('#btn-copy').addEventListener('click', async () => {
 // ── Game ───────────────────────────────────────────────────────────────
 
 setMuteButton(sfx.muted);
-$('#btn-mute').addEventListener('click', () => setMuteButton(sfx.toggleMute()));
+
+// The HUD icon and the panel's button are two views of one mute, so each has
+// to repaint the other -- otherwise muting from the panel leaves a speaker
+// icon in the HUD claiming sound is on.
+const settings = buildSettings(
+  { music: volume.music, sfx: volume.sfx, muted: volume.muted },
+  {
+    onMusic: (v) => volume.setMusic(v),
+    onSfx: (v) => {
+      volume.setSfx(v);
+      sfx.type();          // so you can hear what you just set
+    },
+    onMute: () => {
+      const muted = sfx.toggleMute();
+      setMuteButton(muted);
+      return muted;
+    },
+  },
+);
+
+$('#btn-mute').addEventListener('click', () => {
+  const muted = sfx.toggleMute();
+  setMuteButton(muted);
+  settings?.paintMute(muted);
+});
 
 // Guesses are physical-keyboard only -- there's no on-screen keyboard to
 // tap. This listener only fires while the game screen is showing, so it
@@ -139,6 +166,10 @@ $('#btn-mute').addEventListener('click', () => setMuteButton(sfx.toggleMute()));
 document.addEventListener('keydown', (e) => {
   if (!$('#screen-game[data-active]')) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
+  // A focused slider owns its own arrow keys, and a letter typed with one
+  // focused must not do both things at once. The panel stops propagation
+  // itself; this is the backstop for any control added later.
+  if (e.target.closest?.('input, select, textarea, .settings-panel')) return;
   if (e.key === 'Enter') { e.preventDefault(); game.handleKey('ENTER'); return; }
   if (e.key === 'Backspace') { e.preventDefault(); game.handleKey('BACK'); return; }
   const ch = e.key.length === 1 ? e.key.toUpperCase() : '';
@@ -149,6 +180,13 @@ $('#btn-again').addEventListener('click', () => { location.href = location.pathn
 $('#btn-error-back').addEventListener('click', () => { location.href = location.pathname; });
 
 // ── Go ─────────────────────────────────────────────────────────────────
+
+// A browser will not let audio start before a gesture, so the soundtrack
+// cannot begin on load -- it begins the first time the player touches
+// anything. `once` because after that the game drives the theme itself.
+for (const evt of ['pointerdown', 'keydown']) {
+  document.addEventListener(evt, () => music.start(game.musicTheme()), { once: true });
+}
 
 startScreenFit();
 
