@@ -330,15 +330,32 @@ html, body {
 }
 .contact-monitor { left: 50%;   top: 57%; width: 800px; height: 200px; transform: translate(-50%, -50%); opacity: .6; }
 .contact-lamp    { left: 21%;   top: 17%; width: 340px; height: 160px; transform: translate(-50%, -50%); }
-.contact-mug     { left: 74.5%; top: 68%; width: 200px; height: 104px; transform: translate(-50%, -50%); }
+.contact-mug     { left: 78%;   top: 71%; width: 168px; height: 74px;  transform: translate(-50%, -50%); }
 
 /* The lip you'd see edge-on from this camera. */
+/* The front face of the desk. Two things were wrong with it: it was 60px
+   wider than the top it belongs to, so it stood proud at both corners, and
+   it faded to near-black at the bottom -- which made it read as a shadow
+   under a floating slab rather than as a piece of wood you could knock on.
+   It is the same width as the top now, and it keeps a lit top edge where
+   the surface turns over, with the darkness pushed to a separate shadow
+   below it. */
 .desk-edge {
-  width: 2260px; height: 56px;
+  width: 2200px; height: 56px;
   transform: translate(-50%, -50%) translateY(428px) translateZ(-520px);
-  border-radius: 0 0 8px 8px;
-  background: linear-gradient(180deg, var(--wood) 0%, var(--wood-lo) 70%, #2b1c11 100%);
-  box-shadow: 0 26px 50px rgba(0, 0, 0, .6);
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(180deg,
+    var(--wood-hi) 0%, var(--wood) 14%, #7b5230 55%, #5a3a21 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 224, 180, .35),      /* the turn-over highlight */
+    0 26px 50px rgba(0, 0, 0, .6);
+}
+/* The shadow the desk throws on the floor behind it. Previously this was
+   baked into the edge's own gradient, which is why the edge had no bottom. */
+.desk-edge::after {
+  content: ''; position: absolute;
+  left: 2%; right: 2%; top: 100%; height: 130px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, .55), transparent);
 }
 
 /* ── Deskware ──────────────────────────────────────────────────────────
@@ -463,23 +480,54 @@ html, body {
   transform: translate(-50%, -50%) translateY(325px) translateZ(-800px) translateX(540px);
   transform-style: preserve-3d;
 }
+/* A mug is a cylinder seen slightly from above, which needs three things
+   the old one did not have: a base that curves (it was a rounded rectangle,
+   which reads as a bucket), a body shaded ACROSS rather than along -- the
+   light and dark edges are what say "round" -- and a handle that is behind
+   the body on one side and in front on the other, because that is what a
+   loop attached to a cylinder does. */
 .mug-body {
-  position: absolute; left: 0; bottom: 0; width: 118px; height: 122px;
-  border-radius: 12px 12px 22px 22px;
-  background: linear-gradient(96deg, #b9542f 0%, #8e3d21 62%, #63290f 100%);
-  box-shadow: inset -14px 0 22px rgba(0, 0, 0, .35), inset 10px 0 18px rgba(255, 190, 130, .22);
+  position: absolute; left: 0; bottom: 6px; width: 118px; height: 116px;
+  /* Straight sides, and a bottom curved to match .mug-base's ellipse. */
+  border-radius: 6px 6px 46px 46px / 6px 6px 20px 20px;
+  background:
+    linear-gradient(90deg,
+      #7d3519 0%, #a94c29 16%, #c86038 34%, #b1522c 56%, #83381c 78%, #56230f 100%);
+  box-shadow: inset 0 -16px 22px rgba(0, 0, 0, .3);
 }
+/* The near half of the base, which is the only part of it you can see. */
+/* Just enough curve to round off the bottom. It was taller and darker, and
+   at that weight it read as a shadow *under* the mug -- which made the mug
+   look lifted off the desk rather than standing on it. */
+.mug-base {
+  position: absolute; left: 4px; bottom: 1px; width: 110px; height: 13px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #5c2513 0%, #86391b 42%, #63290f 100%);
+}
+/* The lip: a bright ellipse edge, which is what makes the opening read as a
+   hole rather than a dark patch painted on the front. */
+.mug-rim {
+  position: absolute; left: 2px; top: 20px; width: 114px; height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #8e3d21, #d2703f 42%, #9c4524);
+  box-shadow: 0 1px 0 rgba(255, 200, 150, .3);
+}
+/* Behind the body, so only the outer arc of the loop shows -- a handle
+   pasted flat on the front was the single thing making this read as a
+   sticker rather than a mug. */
 .mug-handle {
-  position: absolute; right: 0; bottom: 34px;
-  width: 46px; height: 58px; border-radius: 50%;
-  border: 13px solid #94411f; border-left-color: transparent;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, .3);
+  position: absolute; right: -20px; bottom: 40px;
+  width: 52px; height: 60px;
+  border-radius: 50%;
+  border: 12px solid #8e4022;
+  border-left-color: transparent;
+  box-shadow: inset -2px 0 5px rgba(0, 0, 0, .35), 2px 2px 7px rgba(0, 0, 0, .35);
 }
 .mug-brew {
-  position: absolute; left: 8px; top: 28px; width: 102px; height: 22px;
+  position: absolute; left: 12px; top: 26px; width: 94px; height: 22px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, #3a2113, #24140b);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6);
+  background: radial-gradient(closest-side at 42% 36%, #4b2b18, #2a1509 78%);
+  box-shadow: inset 0 3px 7px rgba(0, 0, 0, .65);
 }
 .steam {
   position: absolute; bottom: 118px;
@@ -721,79 +769,107 @@ html, body {
 
 .cat-rig {
   position: absolute; left: 50%; top: 50%;
-  width: 600px; height: 340px;
+  /* Tall and narrow: a sitting cat, not a walking one. */
+  width: 380px; height: 480px;
   appearance: none; border: 0; background: none; padding: 0; margin: 0;
   cursor: pointer;
   transform-style: preserve-3d;
-  animation: cat-cross 13s linear forwards;
+  animation: cat-arrive 2.2s cubic-bezier(.3, .7, .4, 1) forwards;
 }
-/* Feet on the desk (y = 400) with the rig centred, so 400 - 340/2 = 230. */
-@keyframes cat-cross {
-  0%   { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(calc(-1500px * var(--dir))) scaleX(var(--dir)); }
-  46%  { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(calc(-120px * var(--dir))) scaleX(var(--dir)); }
-  62%  { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(calc(-120px * var(--dir))) scaleX(var(--dir)); }
-  100% { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(calc(1500px * var(--dir))) scaleX(var(--dir)); }
+/* Walks in from one side and settles in the middle of the desk, in front of
+   the monitor. translateY(160) puts its paws on the desk surface (y = 400)
+   given the rig is 480 tall; z = -700 is between the camera and the screen,
+   which is what makes it cover the board rather than sit behind it. */
+@keyframes cat-arrive {
+  0%   { transform: translate(-50%, -50%) translateY(210px) translateZ(-700px) translateX(calc(1150px * var(--dir))) scaleX(var(--dir)); opacity: 0; }
+  18%  { transform: translate(-50%, -50%) translateY(200px) translateZ(-700px) translateX(calc(700px * var(--dir))) scaleX(var(--dir)); opacity: 1; }
+  70%  { transform: translate(-50%, -50%) translateY(196px) translateZ(-700px) translateX(0) scaleX(var(--dir)); opacity: 1; }
+  /* Settling: the haunches drop as it sits. */
+  100% { transform: translate(-50%, -50%) translateY(160px) translateZ(-700px) translateX(0) scaleX(1); opacity: 1; }
 }
-/* Shooed: freeze where it actually is, then bolt. Without the freeze the
-   exit restarts from the walk's first keyframe and the cat teleports. */
-.cat-rig.is-shooed {
-  animation: cat-bolt .5s cubic-bezier(.3, 0, .7, 1) forwards;
-}
-@keyframes cat-bolt {
-  0%   { transform: translate(-50%, -50%) translateY(230px) translateZ(-700px) translateX(var(--frozen-x, 0px)) scaleX(var(--dir)); opacity: 1; }
-  100% { transform: translate(-50%, -50%) translateY(520px) translateZ(-300px) translateX(calc(var(--frozen-x, 0px) + 700px * var(--dir))) scaleX(var(--dir)); opacity: 0; }
+/* Moved: it hops down off the front of the desk, unbothered. */
+.cat-rig.is-shooed { animation: cat-off .55s cubic-bezier(.4, 0, .8, .6) forwards; }
+@keyframes cat-off {
+  0%   { transform: translate(-50%, -50%) translateY(160px) translateZ(-700px); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translateY(620px) translateZ(-420px) rotate(-8deg); opacity: 0; }
 }
 
-.cat-rig svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.cat-rig svg {
+  width: 100%; height: 100%; overflow: visible; display: block;
+  /* It is sitting between you and a lit screen, so it is backlit. The rim
+     is what separates the ears and the shoulder line from the dark panel
+     behind them -- without it the silhouette dissolves into the board. */
+  filter: drop-shadow(0 -2px 0 rgba(169, 196, 214, .5))
+          drop-shadow(0 0 14px rgba(169, 196, 214, .28));
+}
+
+.cat-body, .cat-haunch { fill: url(#catFur); }
+.cat-chest { fill: rgba(214, 196, 168, .30); }
+.cat-legs rect, .cat-legs ellipse { fill: url(#catFurDim); }
+.cat-skull { fill: url(#catFur); }
+.cat-cheek { fill: rgba(160, 130, 96, .30); }
+.cat-ear    { fill: #4c3a29; }
+.cat-ear-in { fill: #8a5f57; }
+.cat-eyes ellipse { fill: url(#catEye); }
+.cat-pupil { fill: #16180a; }
+.cat-muzzle { fill: rgba(214, 196, 168, .26); }
+.cat-nose   { fill: #c98a86; }
+.cat-mouth  { fill: none; stroke: #2a2018; stroke-width: 3.5; stroke-linecap: round; }
+.cat-whisker {
+  fill: none; stroke: rgba(236, 226, 212, .55);
+  stroke-width: 3; stroke-linecap: round;
+}
+.cat-tail {
+  fill: none; stroke: url(#catFurDim); stroke-width: 44; stroke-linecap: round;
+}
 
 /* Everything below animates SVG groups. `transform-box: fill-box` is
    required: without it a CSS transform-origin on an SVG child resolves
-   against the whole viewport-sized user space, and a leg swings from
-   somewhere off-screen instead of from its own hip. */
-.cat-rig .cat-leg,
+   against the whole viewport-sized user space, and an ear twitches from
+   somewhere off-screen instead of from its own base. */
 .cat-rig .cat-tail,
+.cat-rig .cat-ear,
 .cat-rig .cat-head,
 .cat-rig .cat-eyes { transform-box: fill-box; }
 
-.cat-torso { fill: url(#catFur); }
-.cat-torso path:last-of-type { fill: url(#catFurDim); }   /* neck, set back a shade */
-
-.cat-leg rect { fill: url(#catFurDim); }
-.cat-leg-near-b rect, .cat-leg-near-f rect { fill: url(#catFur); }
-.cat-leg { transform-origin: 50% 6%; }
-.cat-leg-far-b, .cat-leg-far-f { opacity: .72; }
-.cat-leg-near-b, .cat-leg-far-f { animation: cat-step 1.05s ease-in-out infinite; }
-.cat-leg-near-f, .cat-leg-far-b { animation: cat-step 1.05s ease-in-out infinite .52s; }
-@keyframes cat-step {
-  0%, 100% { transform: rotate(13deg); }
-  50%      { transform: rotate(-13deg); }
+/* The tail keeps moving even while the rest of it does not, which is most
+   of what stops a sitting cat reading as a statue. */
+.cat-rig .cat-tail {
+  transform-origin: 20% 90%;
+  animation: cat-tail 3.4s ease-in-out infinite;
 }
-
-.cat-tail { transform-origin: 92% 88%; animation: cat-tail-sway 2.3s ease-in-out infinite; }
-@keyframes cat-tail-sway {
-  0%, 100% { transform: rotate(-13deg); }
-  50%      { transform: rotate(14deg); }
+@keyframes cat-tail {
+  0%, 100% { transform: rotate(0deg); }
+  38%      { transform: rotate(-7deg); }
+  72%      { transform: rotate(5deg); }
 }
-
-.cat-head { transform-origin: 68% 92%; animation: cat-head-bob 1.05s ease-in-out infinite; }
-@keyframes cat-head-bob {
-  0%, 100% { transform: rotate(-2.2deg) translateY(0); }
-  50%      { transform: rotate(1.6deg) translateY(-5px); }
+.cat-rig .cat-head {
+  transform-origin: 50% 90%;
+  animation: cat-look 6.5s ease-in-out infinite;
 }
-.cat-skull { fill: url(#catFur); }
-.cat-cheek { fill: rgba(206, 176, 142, .22); }
-.cat-ear { fill: #4b3a2c; }
-.cat-ear-in { fill: #9a6a58; }
-.cat-eyes ellipse { fill: url(#catEye); filter: drop-shadow(0 0 7px rgba(214, 238, 130, .55)); }
-.cat-eyes { animation: cat-blink 5.2s linear infinite; transform-origin: 50% 50%; }
+@keyframes cat-look {
+  0%, 44%, 100% { transform: rotate(0deg) translateY(0); }
+  52%           { transform: rotate(-5deg) translateY(-3px); }
+  70%           { transform: rotate(4deg) translateY(0); }
+}
+.cat-rig .cat-ear:nth-of-type(1) { transform-origin: 60% 100%; animation: cat-ear 5.1s ease-in-out infinite; }
+.cat-rig .cat-ear:nth-of-type(2) { transform-origin: 40% 100%; animation: cat-ear 5.1s ease-in-out infinite .6s; }
+@keyframes cat-ear {
+  0%, 88%, 100% { transform: rotate(0deg); }
+  92%           { transform: rotate(-11deg); }
+  96%           { transform: rotate(7deg); }
+}
+/* A slow blink. The eyes are the only thing here at full saturation, so
+   this is the detail people actually notice. */
+.cat-rig .cat-eyes {
+  transform-origin: 50% 50%;
+  animation: cat-blink 7.3s ease-in-out infinite;
+}
 @keyframes cat-blink {
-  0%, 92%, 100% { transform: scaleY(1); }
+  0%, 93%, 100% { transform: scaleY(1); }
   95%           { transform: scaleY(.08); }
+  97%           { transform: scaleY(1); }
 }
-.cat-pupil { fill: #14180a; }
-.cat-muzzle { fill: rgba(176, 146, 112, .55); }
-.cat-nose { fill: #bd7a6d; }
-.cat-whisker { stroke: rgba(232, 220, 198, .5); stroke-width: 2.5; stroke-linecap: round; fill: none; }
 
 /* ── The moth ──────────────────────────────────────────────────────────
    Flat, in viewport coordinates, above everything -- it has to land on a
@@ -976,7 +1052,7 @@ html, body {
 #app::-webkit-scrollbar-thumb { background: var(--line-hi); border-radius: 5px; }
 #app::-webkit-scrollbar-track { background: transparent; }
 
-.screen { display: none; flex: 1; padding: 20px 22px; }
+.screen { display: none; flex: 1; padding: 16px 22px; }
 .screen[data-active] { display: flex; flex-direction: column; align-items: center; }
 .screen-game[data-active] { padding: 0; position: relative; }
 
@@ -986,7 +1062,7 @@ html, body {
    same way but yield correctly once the content overflows. */
 .stack {
   width: 100%; max-width: 440px; margin: auto;
-  display: flex; flex-direction: column; gap: 12px; align-items: stretch;
+  display: flex; flex-direction: column; gap: 10px; align-items: stretch;
 }
 
 .wordmark {
@@ -1741,48 +1817,6 @@ html, body {
 .btn:focus-visible { outline-offset: 3px; }
 .how summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-/* ── The mouse ─────────────────────────────────────────────────────────
-   Runs the front edge of the desk. Small, fast, low: it never crosses the
-   screen, so what it costs you is peripheral movement while you are trying
-   to hold five letters in your head -- not a blocked board. */
-
-.mouse-rig {
-  position: absolute; left: 50%; top: 50%;
-  width: 200px; height: 96px;
-  appearance: none; border: 0; background: none; padding: 0; margin: 0;
-  cursor: pointer;
-  transform-style: preserve-3d;
-  animation: mouse-dart 7.6s cubic-bezier(.4, 0, .6, 1) forwards;
-}
-/* Desk top is y = 400 and the rig is 96 tall, so feet land at 400 - 48. */
-@keyframes mouse-dart {
-  0%   { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(-1400px * var(--dir))) scaleX(var(--dir)); }
-  18%  { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(-520px * var(--dir))) scaleX(var(--dir)); }
-  30%  { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(-470px * var(--dir))) scaleX(var(--dir)); }
-  52%  { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(150px * var(--dir))) scaleX(var(--dir)); }
-  64%  { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(190px * var(--dir))) scaleX(var(--dir)); }
-  100% { transform: translate(-50%, -50%) translateY(352px) translateZ(-660px) translateX(calc(1400px * var(--dir))) scaleX(var(--dir)); }
-}
-.mouse-rig.is-gone { animation: mouse-bolt .4s ease-in forwards; }
-@keyframes mouse-bolt { to { opacity: 0; transform: translate(-50%, -50%) translateY(430px) translateZ(-660px) scale(.7); } }
-
-.mouse-rig svg { width: 100%; height: 100%; overflow: visible; display: block; }
-.mouse-body { fill: url(#mouseFur); }
-.mouse-ear  { fill: #6b5a4c; stroke: #2e261f; stroke-width: 2; }
-.mouse-eye  { fill: #0d0a08; }
-.mouse-nose { fill: #d09c9c; }
-.mouse-tail { fill: none; stroke: #6a5a4b; stroke-width: 5; stroke-linecap: round; }
-/* fill-box again: without it an SVG child's transform-origin resolves
-   against the whole user space and the legs pivot from off-screen. */
-.mouse-rig .mouse-leg, .mouse-rig .mouse-tail {
-  transform-box: fill-box; transform-origin: 50% 0%;
-}
-.mouse-rig .mouse-leg { fill: #4a3d33; animation: mouse-scamper .13s linear infinite; }
-.mouse-rig .mouse-leg-b { animation-delay: .065s; }
-@keyframes mouse-scamper { 0%, 100% { transform: rotate(-22deg); } 50% { transform: rotate(22deg); } }
-.mouse-rig .mouse-tail { transform-origin: 100% 50%; animation: mouse-tail .5s ease-in-out infinite; }
-@keyframes mouse-tail { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
-
 /* ── The paper plane ───────────────────────────────────────────────────
    Crosses the front of the room on an arc, nearer the camera than the desk,
    with a slow roll. Catchable in flight -- the only room event with a
@@ -2234,3 +2268,202 @@ html, body {
 @keyframes bird-away {
   to { transform: translate(70px, -90px) scale(.5) rotate(-16deg); opacity: 0; }
 }
+
+/* The way into the minigames. It was a small underlined link under two big
+   buttons, which is where you put something you do not expect anyone to
+   click -- and nobody did. It is a real action, so it looks like one: full
+   width, its own colour so it does not compete with Play, and it names the
+   three games rather than making you open it to find out what is in there. */
+.btn-arcade {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--sage) 22%, var(--panel)),
+    color-mix(in srgb, var(--sage) 8%, var(--panel)));
+  border: 1px solid color-mix(in srgb, var(--sage) 46%, transparent);
+  color: var(--ink);
+}
+.btn-arcade:hover {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--sage) 32%, var(--panel)),
+    color-mix(in srgb, var(--sage) 14%, var(--panel)));
+  border-color: color-mix(in srgb, var(--sage) 66%, transparent);
+}
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.btn-row .btn { width: 100%; }
+.btn-arcade-name { font-size: inherit; font-weight: 800; }
+.btn-arcade-sub {
+  font-size: 11px; font-weight: 600; color: var(--sage);
+  letter-spacing: .01em; line-height: 1.3;
+}
+
+/* ── The consumer unit ─────────────────────────────────────────────────
+   A small grey box on the wall to your right with two indicator lights.
+   Green and inert while the power is on -- it is scenery, and clicking
+   scenery should do nothing. A lightning strike trips it, and then it is
+   the only thing you can see. */
+
+/* Below the shelf: at 26% it sat straight on top of it. */
+.fusebox {
+  position: fixed; right: clamp(14px, 2.4vw, 44px); top: 42%;
+  width: clamp(58px, 5.4vw, 84px);
+  aspect-ratio: 3 / 4;
+  z-index: 6;
+  pointer-events: none;      /* scenery, until it trips */
+}
+.fuse-body {
+  position: absolute; inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(160deg, #4a453d 0%, #35302a 46%, #241f1a 100%);
+  border: 1px solid rgba(255, 236, 210, .09);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 236, 210, .13);
+}
+/* The printed strip you get on every one of these. */
+.fuse-label {
+  position: absolute; left: 14%; right: 14%; top: 11%; height: 13%;
+  border-radius: 2px;
+  background: repeating-linear-gradient(90deg,
+    rgba(255, 240, 220, .16) 0 2px, transparent 2px 5px);
+  opacity: .5;
+}
+.fuse-leds {
+  position: absolute; left: 0; right: 0; top: 34%;
+  display: flex; justify-content: center; gap: 22%;
+}
+.fuse-led {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: #1b1a18;
+  border: 1px solid rgba(0, 0, 0, .6);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12);
+  transition: background .12s ease, box-shadow .12s ease;
+}
+.fuse-led-green {
+  background: #56b25c;
+  box-shadow: 0 0 8px rgba(86, 178, 92, .75), inset 0 1px 1px rgba(255, 255, 255, .3);
+}
+/* With the power off the box has nothing lighting it either, so it goes
+   almost black -- what you can make out is the shape its own red LED picks
+   out, and nothing else in the room at all. The whole box stays clickable,
+   so finding it is about the light, not about hitting the small switch. */
+.fusebox.is-tripped .fuse-body {
+  background: #0a0908;
+  border-color: rgba(232, 64, 47, .16);
+  box-shadow: 0 0 26px rgba(232, 64, 47, .13), inset 0 0 18px rgba(232, 64, 47, .08);
+}
+.fusebox.is-tripped .fuse-label { opacity: .04; }
+.fusebox.is-tripped .fuse-switch {
+  background: #100e0c;
+  border-color: rgba(232, 64, 47, .12);
+}
+.fusebox.is-tripped .fuse-lever { background: #2a211d; }
+
+/* Both lights swap when it trips, and the red one pulses -- in a completely
+   dark room it is the only thing telling you where to click. */
+.fusebox.is-tripped .fuse-led-green {
+  background: #1e2a1e;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .06);
+}
+.fusebox.is-tripped .fuse-led-red {
+  background: #e8402f;
+  box-shadow: 0 0 14px rgba(232, 64, 47, .95), 0 0 40px rgba(232, 64, 47, .45),
+              inset 0 1px 1px rgba(255, 255, 255, .35);
+  animation: fuse-alarm .9s ease-in-out infinite;
+}
+@keyframes fuse-alarm {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .45; }
+}
+
+.fuse-switch {
+  position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%);
+  width: 46%; height: 30%;
+  appearance: none; padding: 0; margin: 0;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, .55);
+  background: linear-gradient(180deg, #2b2723, #1c1916);
+  cursor: default;
+}
+.fuse-lever {
+  position: absolute; left: 14%; right: 14%; top: 8%; height: 40%;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #6f685e, #4a443c);
+  transition: top .14s cubic-bezier(.3, 1.6, .5, 1);
+}
+/* Thrown down, which is what a tripped breaker looks like. */
+.fusebox.is-tripped .fuse-lever { top: 52%; }
+.fusebox.is-tripped { pointer-events: auto; }
+.fusebox.is-tripped .fuse-switch { cursor: pointer; }
+.fusebox.is-tripped .fuse-switch:hover { background: linear-gradient(180deg, #3a352f, #262220); }
+
+/* The room with the power off. Opaque and above the app overlay: a breaker
+   that only dimmed things would not be a breaker. */
+.blackout {
+  position: fixed; inset: 0; z-index: 5;
+  background: #000;
+  /* No fade. A breaker does not dim, it goes -- and a fade-in also meant
+     the element spent its first frames semi-transparent, which is a state
+     nothing should ever be able to observe. */
+}
+
+/* ── The bat ───────────────────────────────────────────────────────────
+   What happens if you leave the power off. Full screen, over everything,
+   and gone in under a second. */
+
+.jumpscare {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(60% 60% at 50% 45%, #2a0a06 0%, #000 72%);
+  pointer-events: none;
+  animation: scare-flash .85s steps(1, end) forwards;
+}
+.jumpscare svg {
+  width: min(96vw, 1500px); height: auto;
+  animation: scare-lunge .85s cubic-bezier(.2, 1.4, .4, 1) forwards;
+}
+@keyframes scare-flash {
+  0%   { opacity: 0; }
+  4%   { opacity: 1; }
+  86%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* Straight at the camera, with a shudder at the end of the lunge -- a
+   smooth scale-up reads as a transition rather than a fright. */
+@keyframes scare-lunge {
+  0%   { transform: scale(.18) rotate(-3deg); }
+  38%  { transform: scale(1.16) rotate(1deg); }
+  50%  { transform: scale(1.04) rotate(-2deg); }
+  62%  { transform: scale(1.13) rotate(2deg); }
+  74%  { transform: scale(1.06) rotate(-1deg); }
+  100% { transform: scale(1.2) rotate(0deg); }
+}
+.bat-wing  { fill: #140b0c; stroke: #35181a; stroke-width: 3; }
+.bat-bone  { fill: none; stroke: #2e1517; stroke-width: 4; stroke-linecap: round; }
+.bat-head, .bat-body, .bat-ear { fill: #1b1012; }
+.bat-ear-in { fill: #34191c; }
+.bat-snout { fill: #2c1a1c; }
+.bat-eye   { fill: url(#batEye); }
+.bat-pupil { fill: #180703; }
+.bat-maw   { fill: #070202; }
+.bat-fang  { fill: #f2ece0; }
+.bat-fang-small { fill: #ddd5c6; }
+
+/* ── A short panel ─────────────────────────────────────────────────────
+   The monitor shrinks with the viewport, and below about 545px of panel
+   the title screen stops fitting -- it has always been scrollable, but a
+   primary button you have to scroll to find is a button nobody presses.
+
+   What goes is decoration, never an action: the tagline, the mode blurbs
+   (the names carry them), and some of the breathing room. Every button
+   stays. js/screen-fit.js sets the class, because it is the only thing
+   that knows the panel's real height. */
+
+.app-overlay.is-short #screen-title .stack { gap: 9px; }
+.app-overlay.is-short .wordmark { font-size: 34px; }
+.app-overlay.is-short .tagline { display: none; }
+.app-overlay.is-short .panel { padding: 12px 14px; gap: 7px; }
+.app-overlay.is-short .mode-blurb { display: none; }
+.app-overlay.is-short .mode-chip { padding: 9px 8px; }
+.app-overlay.is-short .label { margin-bottom: 1px; }
+.app-overlay.is-short .hint-inline { display: none; }
+.app-overlay.is-short .btn-lg { font-size: 15px; padding: 11px 14px; }
+.app-overlay.is-short .btn-arcade-sub { display: none; }
+.app-overlay.is-short .how { display: none; }

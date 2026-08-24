@@ -31,6 +31,7 @@ export class Game {
     this.results = [];               // every settled wf_results row visible to us
     this.leaderboard = [];           // [{ player_id, total }]
     this.phase = 'idle';
+    this.won = false;              // set once the match ends; drives the final theme
     this.channel = null;
     this.ghost = null;               // pvp only: opponent's live aggregate
     this.local = this.#freshLocal();
@@ -629,8 +630,29 @@ export class Game {
       setRoundRecap('');
       renderBoard(rows);
       showScreen('screen-board');
-      sfx.win();
+      // Win or lose gets its own music and its own sting -- the match
+      // previously ended on the same fanfare either way, which made losing
+      // feel like nothing had happened.
+      this.won = this.#didWin(rows);
+      music.set(this.won ? 'victory' : 'defeat');
+      if (this.won) sfx.win(); else sfx.matchLost();
     });
+  }
+
+  /**
+   * Did this player's match end well? Deliberately generous in the modes
+   * where "winning" is not a ranking: Co-op is a team against the words, so
+   * solving more than half of them counts; Solo is against yourself, so
+   * anything but a blank counts.
+   */
+  #didWin(rows) {
+    if (!rows.length) return false;
+    const solvedRounds = new Set(
+      this.results.filter((r) => r.solved).map((r) => r.round_id)).size;
+    if (this.mode === 'coop') return solvedRounds * 2 > this.room.total_rounds;
+    if (this.mode === 'solo') return solvedRounds > 0;
+    // PvP: top of the table, and not tied with someone above you.
+    return rows[0].isMe;
   }
 
   // ── Frame ────────────────────────────────────────────────────────────
@@ -664,7 +686,8 @@ export class Game {
   musicTheme() {
     if (!this.room || this.phase === 'idle') return 'title';
     if (this.phase === 'settling' || this.phase === 'reveal') return 'reveal';
-    if (this.phase === 'board' || this.phase === 'next' || this.phase === 'final') return 'standings';
+    if (this.phase === 'final') return this.won ? 'victory' : 'defeat';
+    if (this.phase === 'board' || this.phase === 'next') return 'standings';
     if (this.phase === 'countdown' || this.phase === 'live') {
       // A modifier that has actually landed outranks the round's opening
       // event: it is the more recent thing to have happened to the player.
@@ -764,8 +787,14 @@ export class Game {
       }
       setStatusLine(word + sub);
     } else if (phase === 'board' || phase === 'next') {
-      $('#board-title').textContent = `After round ${this.round.round_no}`;
-      $('#board-note').textContent = this.isHost ? 'Next round starting…' : 'Waiting for the host…';
+      const last = this.round.round_no >= this.room.total_rounds;
+      $('#board-title').textContent = last
+        ? `After the last round` : `After round ${this.round.round_no}`;
+      // There is no next round after the last one. Promising one and then
+      // cutting to the final standings reads as the game losing its place.
+      $('#board-note').textContent = last
+        ? 'Working out the final standings…'
+        : (this.isHost ? 'Next round starting…' : 'Waiting for the host…');
       $('#btn-again').hidden = true;
       setRoundRecap(this.#roundRecap());
       renderBoard(this.#standings());

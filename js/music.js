@@ -38,6 +38,9 @@ const SCALES = {
   dorian:  [0, 2, 3, 5, 7, 9, 10],
   // Deliberately unsettled -- no perfect fifth to land on.
   whole:   [0, 2, 4, 6, 8, 10],
+  // Flat fifth as well as a flat second: the one mode with no stable note
+  // to resolve to at all. Used where nothing should feel safe.
+  locrian: [0, 1, 3, 5, 6, 8, 10],
 };
 
 /** Degree -> semitone offset, wrapping into octaves above the scale's top. */
@@ -118,14 +121,50 @@ const THEMES = {
     arp: { gain: 0.04, every: 2, span: 6, jitter: 0.5, cutoff: 2800 },
     perc: { gain: 0.014, hat: 4, kick: 8 },
   },
-  // ⛈ The storm, which is a room event rather than a modifier -- so this is
-  // player-sided, and only the person whose window it is rains on hears it.
+  // ⛈ The storm. Player-sided -- only the person whose window it is raining
+  // on hears it -- and the one theme that is allowed to be unpleasant.
+  //
+  // It used to be slow and moody, which is what weather sounds like from
+  // indoors when you are not worried about it. A storm that is about to take
+  // your lights out is not that. Locrian has no stable fifth to sit on, the
+  // arp jitters more than any other theme's, and the bass moves on every
+  // other step, so nothing here settles.
   storm: {
-    bpm: 72, root: -24, scale: 'dorian', chords: [0, 5, 3, 5],
-    pad: { gain: 0.055, cutoff: 520 },
-    bass: { gain: 0.06, every: 8 },
+    bpm: 128, root: -24, scale: 'locrian', chords: [0, 1, 4, 6, 0, 3],
+    pad: { gain: 0.05, cutoff: 620, detune: 22 },
+    bass: { gain: 0.075, every: 2 },
+    arp: { gain: 0.042, every: 1, span: 9, jitter: 0.85, cutoff: 2600 },
+    perc: { gain: 0.026, hat: 2, kick: 8 },
+  },
+  // The lights are out and something is in the room with you. Almost
+  // nothing: a low drone and a heartbeat, which is what your ears do with
+  // silence when you are already braced for a fright.
+  outage: {
+    bpm: 54, root: -27, scale: 'locrian', chords: [0, 0, 1, 0],
+    pad: { gain: 0.07, cutoff: 210, detune: 30 },
+    bass: { gain: 0.05, every: 8 },
     arp: null,
-    perc: { gain: 0.01, hat: 8, kick: 16 },
+    // Nothing but the low hit: a heartbeat, on every half bar.
+    perc: { gain: 0.03, hat: null, kick: 8 },
+  },
+  // You won. Major, unhurried, and the only theme that gets a bell arp on
+  // top of a full pad -- it should sound like the thing you were playing for.
+  victory: {
+    bpm: 96, root: -21, scale: 'major', chords: [0, 4, 5, 3],
+    pad: { gain: 0.06, cutoff: 2600 },
+    bass: { gain: 0.06, every: 4 },
+    arp: { gain: 0.055, every: 2, span: 9, jitter: 0.2, cutoff: 4600, bell: true },
+    perc: { gain: 0.02, hat: 4, kick: 8 },
+  },
+  // You did not. Minor and slow, but deliberately not miserable -- there is
+  // another match in a minute, and a dirge would make losing one round of a
+  // word game feel like more than it is.
+  defeat: {
+    bpm: 70, root: -24, scale: 'minor', chords: [0, 5, 3, 4],
+    pad: { gain: 0.055, cutoff: 900 },
+    bass: { gain: 0.05, every: 8 },
+    arp: { gain: 0.03, every: 4, span: 5, jitter: 0.3, cutoff: 1700 },
+    perc: null,
   },
   // The word is up. Held, resolved, and out of the way of the reveal cue.
   reveal: {
@@ -294,8 +333,11 @@ function scheduleStep(n, at) {
   }
 
   if (theme.perc) {
+    // Kick wins where they coincide. `hat: null` means a theme wants the
+    // low hit and nothing else -- saying so beats encoding it as a
+    // divisibility that happens to make the hat never fire.
     if (inBar % theme.perc.kick === 0) percHit({ at, kick: true });
-    else if (inBar % theme.perc.hat === 0) percHit({ at, kick: false });
+    else if (theme.perc.hat && inBar % theme.perc.hat === 0) percHit({ at, kick: false });
   }
 }
 

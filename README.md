@@ -176,17 +176,24 @@ distractions at different moments, and neither can see the other's.
 
 | Event | What it does |
 | --- | --- |
-| 🐈 Cat | Walks the desk in front of the screen — a real SVG model with four animated legs, a swinging tail and a proper meow. It genuinely gets between you and the board, which is the whole cost. Click to shoo it. |
+| 🐈 Cat | Jumps up, crosses the desk and **sits down in front of the monitor**, covering the bottom rows of the board until you move it. Then it washes a paw, because it is not in a hurry. Drawn front-on: a profile cat is carried entirely by its outline and getting any of it slightly wrong makes it read as a generic quadruped, which is what happened to the first one. |
 | 🦋 Moth | Comes in past the lamp and settles on the board, sitting over one already-revealed letter and blurring it out. The only room event that actually costs you something — swat it to get the letter back. |
 | 📱 Phone | Buzzes face-up on the desk, screen lit. Click to silence it. |
-| 🐁 Mouse | Darts along the front edge of the desk. Deliberately the *small* one — it never crosses the screen, so what it costs you is movement in the corner of your eye. Click to scare it off. |
 | ✈️ Paper plane | Sails across the front of the room on an arc. The only room event with a window on it: catch it in flight, or it glides on and lands off-screen. |
 | 🕷 Spider | Comes down on a thread from above the monitor and hangs in front of the screen. The only event that moves *vertically*, which is most of why it registers — everything else in this room travels sideways. Click it and it climbs back up. |
 | 🐦 Bird | Lands on the sill outside, hops about, and goes. Purely ambient: it is across the room, behind glass, and there is nothing to click. |
 | 🔊 Neighbour | Someone through the wall puts music on, and the soundtrack swaps to a muffled four-on-the-floor with the top end gone — what actually makes it through plasterboard. Bang on the wall to stop it. One bang is rude, not effective; the second one works. |
 | 💡 Lamp flicker | The desk lamp stutters and the warm half of the room drops out with it. |
 | 🔌 Power flicker | The monitor, not the lamp: the board dims and stutters for a beat. The most intrusive thing in here, so also the shortest and the rarest — and never dark enough to actually hide a letter, because room events do not carry penalties. |
+| 🔌 Power cut | One strike per storm trips the breaker — see below. |
 | ⛈ Thunderstorm | Rain streaks the window, and every few seconds lightning strikes: the room flashes white, the lamp cuts out with it, and for a beat the monitor is the only light left. Thunder trails the flash the way it does outdoors. |
+
+**Every one of them has to cost something.** The first version of the cat
+walked past below the screen and could be ignored completely, and so could
+the mouse that followed it; both are gone in that form. The moth works
+because it takes a letter away from you, so the cat — a much bigger animal —
+takes several rows, and the mouse was cut rather than kept as a smaller,
+more ignorable version of the same idea.
 
 There is no bonus attached to any of them, and that is deliberate: a
 client-rolled *bonus* would be trivially cheatable, whereas a client-rolled
@@ -232,7 +239,7 @@ progression walking through its chords with a little controlled randomness
 in the arp stops being something you notice and turns into room tone, which
 is the entire job.
 
-**Thirteen themes, and the game picks between them.**
+**Sixteen themes, and the game picks between them.**
 
 | Theme | When | What it is |
 | --- | --- | --- |
@@ -243,8 +250,11 @@ is the entire job.
 | `blackout` | 🙈 | Everything shuts down to a low murmur, the way the legend has |
 | `jackpot` | 🎰 | The only theme allowed to be loud |
 | `letter_swap` | 🔀 | Whole-tone: nothing resolves, which is the joke |
-| `storm` / `neighbour` | Room events | Player-sided, so only you hear them |
+| `storm` | ⛈ | Locrian at 128bpm with the most jittered arp of any theme — a storm about to take your lights out is not moody, it is chaotic |
+| `outage` | 🔌 | The lights are out. A drone and a heartbeat, and nothing else |
+| `neighbour` | 🔊 | Player-sided, so only you hear it |
 | `arcade` | Minigames | Brighter and busier than the menus it sits between |
+| `victory` / `defeat` | Match over | Win and lose end differently — the match used to finish on the same fanfare either way, which made losing feel like nothing had happened |
 | `reveal` / `standings` | Between rounds | Held and resolved, out of the way of the reveal cue |
 
 `game.js` has a single `musicTheme()` rather than a `music.set()` at every
@@ -311,6 +321,40 @@ the only thing kept is a personal best in `localStorage`. That is the same
 reasoning as the room events: a client-side thing that hands out a reward is
 a client-side thing worth cheating at, and a leaderboard nobody else can see
 is not a leaderboard. It is something to do while you wait.
+
+## The power cut
+
+The one thing in here allowed to be genuinely disruptive.
+
+There is a consumer unit on the wall to your right with two indicator
+lights. Green, and completely inert, for as long as nothing is wrong with
+it — clicking scenery should do nothing. One lightning strike per storm
+trips it, and then the room goes: the desk, the monitor, the board, all of
+it, opaque and above the app overlay, because a breaker that only dimmed
+things would not be a breaker. What is left is the red light.
+
+Throw it back on and the round carries on where it was. Leave it ten
+seconds and a bat fills the screen, after which the power comes back by
+itself — the bat is the punishment, not being stuck in the dark.
+
+Three things make this safe rather than a trap:
+
+- **The way out is findable.** With the power off the box has nothing
+  lighting it either, so it goes almost black and its own red LED picks out
+  the shape. The whole box is the click target, not the small switch.
+- **It is bounded either way.** Ten seconds, then the bat, then the lights.
+  There is no state in which you are left in the dark.
+- **Nothing survives the round.** `stopRoomEvents()` restores power, clears
+  the blackout and removes the bat, so a round that ends mid-outage cannot
+  leave the next one dark.
+
+Like the rest of the room events it is player-sided and touches no game
+state. The round clock keeps running, which *is* the cost — the same deal as
+the cat sitting on your board. The server never knows it happened.
+
+Exactly one strike per storm trips it, and never the first: tripping on
+every strike would make a storm four blackouts in a row, and tripping on the
+first gives no warning that a storm is even what is happening.
 
 ## The room
 
@@ -533,8 +577,8 @@ js/sfx.js             synthesised WebAudio cues; no audio files
 js/music.js           the generative soundtrack, one theme per situation
 js/arcade.js          Word Hunt, Chain and Moth Swat, for the dead time
 js/screen-fit.js      pins the flat overlay to the monitor's measured rect
-js/room-events.js     the player-sided room: cat, moth, mouse, plane, spider,
-                      bird, phone, lamp, neighbour, storm, power cut
+js/room-events.js     the player-sided room: cat, moth, plane, spider, bird,
+                      phone, lamp, neighbour, storm, and the power cut
 js/game.js            phase clock, round settlement, input, scoring display
 js/ui.js               DOM rendering: tile grid, legend, rails, standings
 js/main.js            wires the buttons up and listens for physical keydown

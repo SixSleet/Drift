@@ -14,6 +14,9 @@
 // The monitor is face-on (no rotateY), so the hole is always an axis-aligned
 // rectangle and a plain left/top/width/height fit is exact.
 
+/** Panel height under which the title screen tightens up. */
+const SHORT_PANEL_PX = 545;
+
 const screenEl = () => document.getElementById('monitor-screen');
 const overlayEl = () => document.getElementById('app-overlay');
 
@@ -30,6 +33,7 @@ function fit() {
     if (last !== 'flat') {
       last = 'flat';
       app.style.cssText = '';
+      app.classList.remove('is-short');
     }
     return;
   }
@@ -55,6 +59,12 @@ function fit() {
   // The tile grid sizes itself against the panel's real height (see
   // --tile in app.css), which only this module knows.
   app.style.setProperty('--panel-h', `${height}px`);
+  // ...and so does the title screen, which is the tallest thing in the app.
+  // On a small display the monitor shrinks with the viewport and the title
+  // stack stops fitting -- it has always been scrollable, but a primary
+  // button you have to scroll to find is a button nobody presses. Below
+  // this the screen drops its decoration rather than its actions.
+  app.classList.toggle('is-short', height < SHORT_PANEL_PX);
 }
 
 export function startScreenFit() {

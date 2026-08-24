@@ -76,8 +76,16 @@
           </div>
 
           <button class="btn btn-primary btn-lg" id="btn-create">Play solo</button>
-          <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
-          <button class="btn btn-quiet" id="btn-arcade-title" type="button">Warm up first</button>
+          <!-- Side by side: three full-width buttons pushed the last one
+               below the fold on a 1440 screen, and a button you cannot see
+               is the problem this was meant to fix. -->
+          <div class="btn-row">
+            <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
+            <button class="btn btn-arcade btn-lg" id="btn-arcade-title" type="button">
+              <span class="btn-arcade-name">Minigames</span>
+              <span class="btn-arcade-sub">Word Hunt · Chain · Moth Swat</span>
+            </button>
+          </div>
           <button class="btn btn-quiet" id="btn-settings-title" type="button" aria-expanded="false" aria-controls="settings-panel">Sound settings</button>
         </div>
 
@@ -129,7 +137,10 @@
 
         <button class="btn btn-primary btn-lg" id="btn-start" hidden>Start game</button>
         <p class="note" id="lobby-note"></p>
-        <button class="btn btn-quiet" id="btn-arcade-lobby" type="button">Play something while you wait</button>
+        <button class="btn btn-arcade btn-lg" id="btn-arcade-lobby" type="button">
+          <span class="btn-arcade-name">Minigames</span>
+          <span class="btn-arcade-sub">Something to do while you wait</span>
+        </button>
       </div>
     </section>
 
@@ -339,8 +350,10 @@
     </div>
 
     <div class="prop mug" aria-hidden="true">
-      <i class="mug-body"></i>
       <i class="mug-handle"></i>
+      <i class="mug-body"></i>
+      <i class="mug-base"></i>
+      <i class="mug-rim"></i>
       <i class="mug-brew"></i>
       <i class="steam steam-1"></i>
       <i class="steam steam-2"></i>
@@ -392,6 +405,75 @@
   <div class="room-stage">
     <div class="room-3d-fx" id="room-3d-fx" aria-live="off"></div>
   </div>
+
+  <!-- The consumer unit, on the wall to your right. Flat rather than a plane
+       in the 3D stage for the same reason the neighbour's wall is: the right
+       wall is far too oblique from this camera to hold anything you have to
+       find and click. It lives in the FRONT stage so that when the power
+       goes it is above the blackout, which is the whole point -- the red
+       light has to be the only thing left in the room. -->
+  <div class="fusebox" id="fusebox" aria-hidden="true">
+    <i class="fuse-body"></i>
+    <i class="fuse-label"></i>
+    <span class="fuse-leds">
+      <i class="fuse-led fuse-led-green" id="fuse-led-green"></i>
+      <i class="fuse-led fuse-led-red" id="fuse-led-red"></i>
+    </span>
+    <button class="fuse-switch" id="fuse-switch" type="button" tabindex="-1"
+            aria-label="Reset the breaker"><i class="fuse-lever"></i></button>
+  </div>
+
+  <!-- Everything off. Opaque, and above the app overlay, so a tripped
+       breaker really does leave you looking at nothing. -->
+  <i class="blackout" id="blackout" hidden aria-hidden="true"></i>
+</div>
+
+<!-- The bat. Full screen, and deliberately the only thing in this app that
+     is allowed to be startling. -->
+<div class="jumpscare" id="jumpscare" hidden aria-hidden="true">
+  <svg viewBox="0 0 900 620" aria-hidden="true">
+    <defs>
+      <radialGradient id="batEye" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#fff3b0"/>
+        <stop offset=".45" stop-color="#e8a33c"/>
+        <stop offset="1" stop-color="#7a2408"/>
+      </radialGradient>
+    </defs>
+    <!-- Wings, with finger bones -- the struts are what stop a bat wing
+         reading as a cape. -->
+    <path class="bat-wing" d="M448 300 C 350 210, 250 150, 120 130
+      C 150 190, 128 214, 60 216 C 128 250, 120 292, 44 320
+      C 132 330, 156 366, 130 434 C 250 396, 356 356, 448 336 Z"/>
+    <path class="bat-bone" d="M430 300 L120 132 M430 306 L58 218 M432 314 L46 320 M436 324 L132 432"/>
+    <path class="bat-wing" d="M452 300 C 550 210, 650 150, 780 130
+      C 750 190, 772 214, 840 216 C 772 250, 780 292, 856 320
+      C 768 330, 744 366, 770 434 C 650 396, 544 356, 452 336 Z"/>
+    <path class="bat-bone" d="M470 300 L780 132 M470 306 L842 218 M468 314 L854 320 M464 324 L768 432"/>
+
+    <ellipse class="bat-body" cx="450" cy="392" rx="66" ry="98"/>
+
+    <!-- Ears above the skull, not into it. -->
+    <path class="bat-ear" d="M382 172 L352 40 L446 140 Z"/>
+    <path class="bat-ear" d="M518 172 L548 40 L454 140 Z"/>
+    <path class="bat-ear-in" d="M392 160 L374 74 L432 142 Z"/>
+    <path class="bat-ear-in" d="M508 160 L526 74 L468 142 Z"/>
+
+    <ellipse class="bat-head" cx="450" cy="252" rx="104" ry="94"/>
+    <ellipse class="bat-eye" cx="412" cy="234" rx="27" ry="25"/>
+    <ellipse class="bat-eye" cx="488" cy="234" rx="27" ry="25"/>
+    <ellipse class="bat-pupil" cx="412" cy="236" rx="9" ry="13"/>
+    <ellipse class="bat-pupil" cx="488" cy="236" rx="9" ry="13"/>
+    <ellipse class="bat-snout" cx="450" cy="294" rx="40" ry="30"/>
+
+    <!-- Open. A closed mouth with two fangs stuck under it reads as a
+         cartoon; the dark of an open one is what actually lands. -->
+    <path class="bat-maw" d="M410 302 C 424 296, 476 296, 490 302
+      C 486 344, 470 366, 450 366 C 430 366, 414 344, 410 302 Z"/>
+    <path class="bat-fang" d="M418 304 L428 340 L436 304 Z"/>
+    <path class="bat-fang" d="M482 304 L472 340 L464 304 Z"/>
+    <path class="bat-fang bat-fang-small" d="M441 306 L446 326 L451 306 Z"/>
+    <path class="bat-fang bat-fang-small" d="M453 306 L458 326 L463 306 Z"/>
+  </svg>
 </div>
 
 <!-- Flat, viewport-coordinate layer above everything, for the one event that

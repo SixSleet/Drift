@@ -184,6 +184,19 @@ export const sfx = {
     chime({ freq: PENTA[5], dur: 1.1, gain: 0.13, delay: 0.55 });
   },
 
+  /**
+   * The match ending badly. Not a buzzer and not a joke: the same falling
+   * shape as `lost()` but longer and lower, so it reads as the end of
+   * something rather than one bad guess.
+   */
+  matchLost() {
+    [523.25, 440, 349.23, 261.63].forEach((f, i) =>
+      tone({ freq: f, dur: 0.9, type: 'sine', gain: 0.1, delay: i * 0.22,
+             cutoff: 1200, attack: 0.05 }));
+    tone({ freq: 130.81, dur: 1.6, type: 'sine', gain: 0.07, delay: 0.66,
+           cutoff: 500, attack: 0.12 });
+  },
+
   /** A round's random event, announced at round start. One stinger per kind. */
   event(kind) {
     if (kind === 'double_points') {
@@ -362,39 +375,6 @@ export const sfx = {
     tone({ freq: PENTA[3], to: PENTA[1], dur: 0.16, type: 'sine', gain: 0.07, cutoff: 1800, attack: 0.004 });
   },
 
-  /**
-   * A mouse on a wooden desk. Not footsteps -- claws: a scatter of very
-   * short, very high ticks in an uneven burst, because a mouse moves in
-   * darts rather than at a steady pace.
-   */
-  mouseSkitter() {
-    const c = ensure();
-    if (!c) return;
-    let t = c.currentTime;
-    const ticks = 9 + Math.floor(Math.random() * 6);
-    for (let i = 0; i < ticks; i++) {
-      const src = noise(c);
-      const bp = c.createBiquadFilter();
-      const env = c.createGain();
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(3400 + Math.random() * 2600, t);
-      bp.Q.setValueAtTime(3.2, t);
-      env.gain.setValueAtTime(0.0001, t);
-      env.gain.linearRampToValueAtTime(0.02 + Math.random() * 0.014, t + 0.001);
-      env.gain.exponentialRampToValueAtTime(0.0001, t + 0.012);
-      src.connect(bp).connect(env).connect(buses.sfx);
-      src.start(t); src.stop(t + 0.02);
-      // Bursts of three or four, then a pause -- a mouse stops to listen.
-      t += (i % 4 === 3) ? 0.12 + Math.random() * 0.14 : 0.028 + Math.random() * 0.02;
-    }
-  },
-
-  /** Startled. Short, very high, and up -- a squeak is a rising glide. */
-  mouseSqueak() {
-    tone({ freq: 1900, to: 3100, dur: 0.09, type: 'sine', gain: 0.055, cutoff: 6000, attack: 0.004 });
-    tone({ freq: 2600, to: 3600, dur: 0.06, type: 'sine', gain: 0.03, cutoff: 7000, delay: 0.08 });
-  },
-
   /** Paper moving through air: a soft band of noise that swells and passes. */
   paperGlide() {
     const c = ensure();
@@ -508,6 +488,106 @@ export const sfx = {
       tone({ freq: base * 1.5, to: base * 0.85, dur: 0.05, type: 'sine',
              gain: 0.022, cutoff: 7000, attack: 0.004, delay: delay + 0.042 });
     }
+  },
+
+  /**
+   * A breaker tripping: a hard mechanical clack, then everything the room
+   * was humming winding down at once. The wind-down is what sells it --
+   * silence arriving is more convincing than a noise.
+   */
+  breakerTrip() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    // The clack.
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1800, t0);
+    bp.Q.setValueAtTime(1.4, t0);
+    env.gain.setValueAtTime(0.16, t0);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.07);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + 0.09);
+    // Mains hum falling away.
+    tone({ freq: 100, to: 24, dur: 1.1, type: 'sawtooth', gain: 0.07, cutoff: 400, attack: 0.005 });
+    tone({ freq: 50, to: 14, dur: 1.3, type: 'sine', gain: 0.06, cutoff: 200, attack: 0.005 });
+  },
+
+  /** Breaker back up: the clack again, then everything spooling back. */
+  breakerReset() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(2200, t0);
+    bp.Q.setValueAtTime(1.6, t0);
+    env.gain.setValueAtTime(0.14, t0);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + 0.08);
+    tone({ freq: 26, to: 100, dur: 0.7, type: 'sawtooth', gain: 0.06, cutoff: 420, attack: 0.01, delay: 0.04 });
+    chime({ freq: PENTA[2], dur: 0.4, gain: 0.08, delay: 0.18 });
+  },
+
+  /**
+   * The bat. The one cue in this app allowed to be unpleasant, so it is
+   * built out of the three things that actually make a sound frightening:
+   * a broadband transient with no warning, a cluster of close, deliberately
+   * dissonant pitches (minor seconds -- the interval a scream lives on),
+   * and a sub-bass drop you feel rather than hear.
+   *
+   * Loud, but still on the effects bus, so the volume slider and mute
+   * govern it like everything else.
+   */
+  screech() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+
+    // The transient: full-spectrum, instant, no attack at all.
+    const hit = noise(c);
+    const hp = c.createBiquadFilter();
+    const he = c.createGain();
+    hp.type = 'highpass';
+    hp.frequency.setValueAtTime(300, t0);
+    he.gain.setValueAtTime(0.34, t0);
+    he.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
+    hit.connect(hp).connect(he).connect(buses.sfx);
+    hit.start(t0); hit.stop(t0 + 0.55);
+
+    // The scream: four sawtooths a semitone apart, sliding down together.
+    for (const [i, mult] of [1, 1.06, 1.12, 1.19].entries()) {
+      const osc = c.createOscillator();
+      const bp = c.createBiquadFilter();
+      const env = c.createGain();
+      const vib = c.createOscillator();
+      const vibAmt = c.createGain();
+      const base = 1500 * mult;
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(base, t0);
+      osc.frequency.exponentialRampToValueAtTime(base * 0.42, t0 + 0.75);
+      vib.type = 'sine';
+      vib.frequency.setValueAtTime(38 + i * 9, t0);
+      vibAmt.gain.setValueAtTime(base * 0.06, t0);
+      vib.connect(vibAmt).connect(osc.frequency);
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(base * 1.4, t0);
+      bp.Q.setValueAtTime(2.2, t0);
+      env.gain.setValueAtTime(0.11, t0);
+      env.gain.setValueAtTime(0.11, t0 + 0.4);
+      env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.8);
+      osc.connect(bp).connect(env).connect(buses.sfx);
+      osc.start(t0); vib.start(t0);
+      osc.stop(t0 + 0.85); vib.stop(t0 + 0.85);
+    }
+
+    // The drop underneath it.
+    tone({ freq: 150, to: 28, dur: 0.9, type: 'sine', gain: 0.22, cutoff: 300, attack: 0.002 });
   },
 
   /** The desk lamp stuttering -- a dry electrical tick. */
