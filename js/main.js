@@ -4,13 +4,13 @@ import { Game } from './game.js';
 import { startScreenFit } from './screen-fit.js';
 import { DEFAULT_ROUNDS, DEFAULT_WORD_LENGTH, WORD_LENGTH_CHOICES } from './config.js';
 import { sfx } from './sfx.js';
-import { music } from './music.js';
 import {
   $, showScreen, toast, buildKeypad, setCodeDisplay, flashKey, setMuteButton,
   chipGroup, showError, CODE_ALPHABET, buildSettings,
 } from './ui.js';
 import { volume } from './audio.js';
 import { GAMES, startArcade, stopArcade, bestScore } from './arcade.js';
+import { music } from './music.js';
 
 const game = new Game();
 // Exposed so the browser test harness can inspect the live simulation.
@@ -248,12 +248,17 @@ function openArcade(from) {
   $('#arcade-result').hidden = true;
   showScreen('screen-arcade');
   showPicker();
+  // The arcade gets its own bed. It sits between two menus and is the one
+  // place here you are meant to be going fast; the title theme undercuts
+  // that. Same key, so coming back out is not a lurch.
+  music.override('arcade');
 }
 
 $('#btn-arcade-title')?.addEventListener('click', () => openArcade('screen-title'));
 $('#btn-arcade-lobby')?.addEventListener('click', () => openArcade('screen-lobby'));
 $('#btn-arcade-back')?.addEventListener('click', () => {
   stopArcade();
+  music.release('arcade');
   showScreen(cameFrom);
 });
 
@@ -264,6 +269,10 @@ $('#btn-arcade-back')?.addEventListener('click', () => {
 new MutationObserver(() => {
   if ($('#screen-arcade[data-active]')) return;
   stopArcade();
+  // A round starting is also the arcade's music ending. Releasing an
+  // override that is not held is a no-op, so this is safe on every screen
+  // change, not just the ones that came from the arcade.
+  music.release('arcade');
 }).observe($('#app'), { attributes: true, attributeFilter: ['data-active'], subtree: true });
 
 $('#btn-again').addEventListener('click', () => { location.href = location.pathname; });

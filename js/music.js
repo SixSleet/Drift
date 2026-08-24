@@ -135,6 +135,17 @@ const THEMES = {
     arp: null,
     perc: null,
   },
+  // The dead-time games. Brighter and busier than the menus it sits between
+  // -- the arcade is the one place in this app you are supposed to be going
+  // fast, and a bed that stays as still as the title screen's undercuts
+  // that. Same key as everything else, so leaving it is not a lurch.
+  arcade: {
+    bpm: 104, root: -21, scale: 'penta', chords: [0, 4, 2, 5],
+    pad: { gain: 0.038, cutoff: 1700 },
+    bass: { gain: 0.06, every: 2 },
+    arp: { gain: 0.045, every: 2, span: 8, jitter: 0.35, cutoff: 3800 },
+    perc: { gain: 0.022, hat: 2, kick: 8 },
+  },
   // Someone else's music, through a wall. A room event rather than anything
   // the game did -- and the reason the engine has an override layer at all.
   // Four-on-the-floor with the top end taken off: what you actually hear

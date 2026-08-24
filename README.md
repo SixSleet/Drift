@@ -232,7 +232,7 @@ progression walking through its chords with a little controlled randomness
 in the arp stops being something you notice and turns into room tone, which
 is the entire job.
 
-**Twelve themes, and the game picks between them.**
+**Thirteen themes, and the game picks between them.**
 
 | Theme | When | What it is |
 | --- | --- | --- |
@@ -244,6 +244,7 @@ is the entire job.
 | `jackpot` | 🎰 | The only theme allowed to be loud |
 | `letter_swap` | 🔀 | Whole-tone: nothing resolves, which is the joke |
 | `storm` / `neighbour` | Room events | Player-sided, so only you hear them |
+| `arcade` | Minigames | Brighter and busier than the menus it sits between |
 | `reveal` / `standings` | Between rounds | Held and resolved, out of the way of the reveal cue |
 
 `game.js` has a single `musicTheme()` rather than a `music.set()` at every
