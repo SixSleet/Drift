@@ -10,7 +10,7 @@ import {
 } from './ui.js';
 import { volume } from './audio.js';
 import { GAMES, startArcade, stopArcade, bestScore } from './arcade.js';
-import { music } from './music.js';
+import { music, tracks } from './music.js';
 
 const game = new Game();
 // Exposed so the browser test harness can inspect the live simulation.
@@ -256,6 +256,81 @@ document.addEventListener('keydown', (e) => {
   if (ch && /^[A-Z]$/.test(ch)) { e.preventDefault(); game.handleKey(ch); }
 });
 
+// ── The jukebox ────────────────────────────────────────────────────────
+//
+// Every theme in the game, playable from the lobby. It holds the music the
+// same way the arcade does -- an override taken by name -- so handing it back
+// cannot cancel somebody else's takeover.
+
+const juke = {
+  panel: $('#jukebox-panel'),
+  list: $('#jukebox-list'),
+  held: null,
+  poll: null,
+};
+
+if (juke.panel) {
+  for (const t of tracks()) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'jukebox-track';
+    b.dataset.track = t.id;
+    b.innerHTML = '<span></span><span class="jukebox-bpm"></span>';
+    b.firstChild.textContent = t.name;
+    b.lastChild.textContent = `${t.bpm}`;
+    b.addEventListener('click', () => {
+      // Starting audio needs a gesture, and this is one -- so a player who
+      // has not clicked anything else yet still gets sound out of it.
+      if (!music.running) music.start(game.musicTheme());
+      juke.held = t.id;
+      music.cue(t.id);
+      paintJukebox();
+    });
+    juke.list.appendChild(b);
+  }
+}
+
+/** Mark which track is playing, and which is still waiting for the bar. */
+function paintJukebox() {
+  if (!juke.panel || juke.panel.hidden) return;
+  const playing = music.running ? music.theme : null;
+  const wanted = music.running ? music.target : null;
+  for (const b of juke.list.children) {
+    const id = b.dataset.track;
+    const state = id === playing && id === wanted ? 'playing'
+      : id === wanted ? 'cued'
+      : '';
+    if (state) b.dataset.state = state; else delete b.dataset.state;
+  }
+}
+
+function showJukebox(show) {
+  if (!juke.panel) return;
+  juke.panel.hidden = !show;
+  $('#btn-jukebox')?.setAttribute('aria-expanded', String(show));
+  clearInterval(juke.poll);
+  juke.poll = null;
+  if (show) {
+    paintJukebox();
+    // The engine has no "theme changed" event -- it swaps inside the audio
+    // scheduler -- so the panel watches instead. Only while it is open.
+    juke.poll = setInterval(paintJukebox, 200);
+  }
+}
+
+$('#btn-jukebox')?.addEventListener('click', () => showJukebox(juke.panel.hidden));
+$('#btn-jukebox-close')?.addEventListener('click', () => showJukebox(false));
+$('#btn-jukebox-stop')?.addEventListener('click', () => {
+  if (juke.held) { music.release(juke.held); juke.held = null; }
+  paintJukebox();
+});
+// Leaving the lobby by any route takes the jukebox and its music with it.
+$('#btn-leave-lobby')?.addEventListener('click', () => showJukebox(false));
+$('#btn-arcade-lobby')?.addEventListener('click', () => {
+  if (juke.held) { music.release(juke.held); juke.held = null; }
+  showJukebox(false);
+});
+
 // ── Arcade ─────────────────────────────────────────────────────────────
 //
 // The two entry points are the two places you wait: the title screen, and
@@ -366,6 +441,12 @@ $('#btn-arcade-back')?.addEventListener('click', () => {
 // its spawn timers would carry on underneath. Watching the screen rather
 // than hooking the phase keeps this true for every route into the game.
 new MutationObserver(() => {
+  // The jukebox only belongs to the lobby, so any screen change closes it and
+  // gives the music back -- including a round starting under it.
+  if (!$('#screen-lobby[data-active]')) {
+    showJukebox(false);
+    if (juke.held) { music.release(juke.held); juke.held = null; }
+  }
   if ($('#screen-arcade[data-active]')) return;
   stopArcade();
   // A round starting is also the arcade's music ending. Released by the name

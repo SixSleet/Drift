@@ -303,6 +303,21 @@ function mothSwat(root, api) {
       score += 1;
       api.setScore(score);
       sfx.reveal('hit');
+
+      // Pin it where it actually is before swapping animations.
+      //
+      // `swat-cross` animates `left` across the arena, and `is-swatted`
+      // replaces that animation with `swat-hit`. The moment it does, `left`
+      // stops being animated and falls back to the static `left: 0` in the
+      // rule -- so the moth jumped to the arena's left edge and died there,
+      // however far across it had got. Same for the vertical drift, which
+      // rides on `transform`. Writing both as inline styles first means the
+      // fallback value IS where it was standing.
+      const a = arena.getBoundingClientRect();
+      const r = m.getBoundingClientRect();
+      m.style.left = `${r.left - a.left}px`;
+      m.style.top = `${r.top - a.top}px`;
+
       m.classList.add('is-swatted');
       setTimeout(() => m.remove(), 260);
     });

@@ -155,6 +155,8 @@
           <span class="btn-arcade-name">Minigames</span>
           <span class="btn-arcade-sub">Something to do while you wait</span>
         </button>
+        <button class="btn btn-ghost" id="btn-jukebox" type="button"
+                aria-expanded="false" aria-controls="jukebox-panel">Soundtrack</button>
         <div class="btn-row">
           <button class="btn btn-ghost" id="btn-rename" type="button">Change your name</button>
           <button class="btn btn-ghost btn-leave" id="btn-leave-lobby" type="button">Leave room</button>
@@ -245,6 +247,25 @@
       <p class="hint hint-inline">Typing, tiles flipping, the timer, and everything the room does.</p>
 
       <button class="btn btn-ghost" id="btn-mute-all" type="button" aria-pressed="false">Mute everything</button>
+    </div>
+
+    <!-- The jukebox. Every piece of music in the game, playable from the one
+         place you are sitting doing nothing: waiting in a lobby.
+
+         A pick does not take effect instantly -- the engine swaps themes on
+         the next bar line, which is what makes every transition in the game
+         sound deliberate rather than like a playlist skipping. At 54bpm that
+         is four seconds, long enough to look broken, so a queued track says
+         so until it starts. -->
+    <div class="jukebox-panel" id="jukebox-panel" hidden role="dialog"
+         aria-modal="false" aria-label="Soundtrack">
+      <div class="settings-head">
+        <p class="label">Soundtrack</p>
+        <button class="btn-icon settings-close" id="btn-jukebox-close" type="button"
+                aria-label="Close the soundtrack list">&#10005;</button>
+      </div>
+      <div class="jukebox-list" id="jukebox-list"></div>
+      <button class="btn btn-ghost" id="btn-jukebox-stop" type="button">Back to the lobby music</button>
     </div>
 
     <!-- The one modal in the app. window.confirm() is a browser chrome
@@ -464,11 +485,26 @@
 
     <!-- ── The player, closest to camera ────────────────────────────── -->
     <div class="room-character" aria-hidden="true">
+      <!-- The person comes FIRST, so the chair draws over them. The camera is
+           behind the chair, which means the chair is between you and whoever
+           is sitting in it -- painting the person on top, as this did, is a
+           view from the front pasted into a view from the back. All you can
+           actually see of them is shoulders either side of the backrest and
+           a neck through the gap under the headrest. The head is behind the
+           headrest, where a head would be. -->
+      <i class="character-shoulders"></i>
+      <i class="character-neck"></i>
       <i class="chair-back"></i>
+      <!-- Headrest and its two posts are real elements rather than
+           pseudo-elements on .chair-back. Inside a preserve-3d parent every
+           ELEMENT is sorted into the scene on its own; a pseudo-element
+           paints with the box it belongs to, and .chair-back's box stops
+           well below where the headrest sits, so the headrest ended up
+           behind the desk while the neck beside it drew in front. -->
+      <i class="chair-post"></i>
+      <i class="chair-headrest"></i>
       <i class="chair-arm chair-arm-left"></i>
       <i class="chair-arm chair-arm-right"></i>
-      <i class="character-head"><i class="character-hair"></i></i>
-      <i class="character-shoulders"></i>
     </div>
 
   </div>

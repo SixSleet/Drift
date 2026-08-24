@@ -103,6 +103,7 @@ const THEMES = {
   // four notes with long tails, once every two bars. A title screen that is
   // only texture gives you nothing to remember the game by.
   title: {
+    name: 'Title',
     bpm: 66, root: -21, scale: 'penta', chords: [0, 3, 4, 2],
     pad: { gain: 0.045, cutoff: 1100, wave: 'triangle' },
     bass: { gain: 0.05, wave: 'sine', cutoff: 300, octave: -1, legato: 1.8,
@@ -117,6 +118,7 @@ const THEMES = {
   // Waiting for people. The title's key, given a pulse and a walking bass:
   // the room is filling up and something is about to start.
   lobby: {
+    name: 'Lobby',
     bpm: 82, root: -21, scale: 'penta', chords: [0, 4, 3, 4],
     pad: { gain: 0.038, cutoff: 1250, wave: 'triangle' },
     bass: { gain: 0.056, wave: 'sine', cutoff: 340, octave: -1,
@@ -137,6 +139,7 @@ const THEMES = {
   // Deliberately left alone in the rewrite. It is not a weak theme, it is a
   // bed, and those are different jobs.
   live: {
+    name: 'Solo',
     bpm: 84, root: -21, scale: 'penta', chords: [0, 2, 3, 4],
     pad: { gain: 0.05, cutoff: 900, wave: 'triangle' },
     bass: { gain: 0.05, wave: 'sine', cutoff: 420, octave: -1, legato: 1.4,
@@ -158,6 +161,7 @@ const THEMES = {
   // twice per cycle over different harmony each time -- often enough to be a
   // hook, never twice identically.
   live_pvp: {
+    name: 'Duel',
     bpm: 146, root: -21, scale: 'minor', chords: [0, 0, 5, 6],
     pad: { gain: 0.026, cutoff: 640, wave: 'sawtooth', detune: 9 },
     bass: { gain: 0.07, wave: 'sawtooth', cutoff: 300, q: 4, sweep: 3, octave: -1,
@@ -176,6 +180,7 @@ const THEMES = {
   // that, a dub bass with a long tail, a rimshot where a snare would be, and
   // a bell line sparse enough to read as space rather than movement.
   live_coop: {
+    name: 'Together',
     bpm: 76, root: -21, scale: 'dorian', chords: [0, 3, 5, 4], swing: 0.22,
     pad: { gain: 0.05, cutoff: 1050, wave: 'triangle', detune: 6 },
     bass: { gain: 0.058, wave: 'sine', cutoff: 250, octave: -1, legato: 1.6,
@@ -194,6 +199,7 @@ const THEMES = {
   // on every sixteenth, and a bass that never lets a bar breathe. Square
   // rather than saw, so it does not just sound like PvP in a hurry.
   blitz: {
+    name: 'Blitz',
     bpm: 138, root: -21, scale: 'minor', chords: [0, 5, 3, 4],
     pad: { gain: 0.026, cutoff: 780, wave: 'sawtooth' },
     bass: { gain: 0.066, wave: 'square', cutoff: 340, q: 3, sweep: 2.5, octave: -1,
@@ -208,6 +214,7 @@ const THEMES = {
   // Double Points. Warm and major, with a bell hook that keeps climbing --
   // it should sound like good news arriving.
   double_points: {
+    name: 'Double Points',
     bpm: 96, root: -21, scale: 'major', chords: [0, 3, 5, 4],
     pad: { gain: 0.052, cutoff: 1700, wave: 'triangle' },
     bass: { gain: 0.055, wave: 'sine', cutoff: 380, octave: -1,
@@ -223,6 +230,7 @@ const THEMES = {
   // all, a sub you feel more than hear, and one slow pulse. The only theme
   // with nothing on the beat except that pulse.
   blackout: {
+    name: 'Blackout',
     bpm: 68, root: -24, scale: 'minor', chords: [0, 1, 0, 4],
     pad: { gain: 0.06, cutoff: 340, wave: 'triangle', detune: 12 },
     bass: { gain: 0.062, wave: 'sine', cutoff: 160, octave: -1, legato: 2,
@@ -234,6 +242,7 @@ const THEMES = {
   // Jackpot. The one theme allowed to be loud, and the only one that gets a
   // clap. Bouncing bass, bell hook, hats wide open: a machine paying out.
   jackpot: {
+    name: 'Jackpot',
     bpm: 118, root: -21, scale: 'major', chords: [0, 4, 5, 4],
     pad: { gain: 0.044, cutoff: 2600, wave: 'sawtooth', detune: 7 },
     bass: { gain: 0.07, wave: 'square', cutoff: 420, q: 3, sweep: 2.5, octave: -1,
@@ -256,6 +265,7 @@ const THEMES = {
   // after the other are the two that must not be confusable. Measured on
   // the music bus the pair used to sit almost on top of each other.
   letter_swap: {
+    name: 'Letter Swap',
     bpm: 92, root: -22, scale: 'whole', chords: [0, 2, 4, 1],
     pad: { gain: 0.044, cutoff: 1500, wave: 'sawtooth', detune: 20 },
     bass: { gain: 0.058, wave: 'square', cutoff: 320, q: 3, sweep: 2.5, octave: -1,
@@ -275,6 +285,7 @@ const THEMES = {
   // stable fifth to sit on, the bass moves on every other step, and the lead
   // is a figure that keeps trying to land and cannot.
   storm: {
+    name: 'Storm',
     bpm: 128, root: -24, scale: 'locrian', chords: [0, 1, 4, 6, 0, 3],
     pad: { gain: 0.05, cutoff: 600, wave: 'sawtooth', detune: 24 },
     bass: { gain: 0.072, wave: 'sawtooth', cutoff: 260, q: 5, sweep: 3, octave: -1,
@@ -292,6 +303,7 @@ const THEMES = {
   // silence when you are already braced for a fright. Two kicks close
   // together and then a long gap -- a heartbeat, not a pulse.
   outage: {
+    name: 'Power Cut',
     bpm: 54, root: -27, scale: 'locrian', chords: [0, 0, 1, 0],
     pad: { gain: 0.07, cutoff: 200, wave: 'triangle', detune: 32 },
     bass: { gain: 0.05, wave: 'sine', cutoff: 140, octave: -1, legato: 2,
@@ -306,6 +318,7 @@ const THEMES = {
   // through plasterboard is the kick and the bass and nothing else, so there
   // are no hats here at all. Those are the first thing a wall eats.
   neighbour: {
+    name: 'Next Door',
     bpm: 126, root: -24, scale: 'minor', chords: [0, 0, 5, 3],
     pad: { gain: 0.045, cutoff: 190, wave: 'sawtooth' },
     bass: { gain: 0.075, wave: 'square', cutoff: 200, octave: -1,
@@ -321,6 +334,7 @@ const THEMES = {
   // this plays for a few seconds and hands back, so it is a chord and a
   // breath rather than a piece of music.
   reveal: {
+    name: 'The Word',
     bpm: 60, root: -21, scale: 'major', chords: [0, 4],
     pad: { gain: 0.05, cutoff: 1500, wave: 'triangle' },
     bass: { gain: 0.045, wave: 'sine', cutoff: 300, octave: -1, legato: 2,
@@ -333,6 +347,7 @@ const THEMES = {
   // not playing, so this is one of the few places a tune can have your
   // attention without costing you anything.
   standings: {
+    name: 'Standings',
     bpm: 90, root: -21, scale: 'penta', chords: [0, 4, 2, 3],
     pad: { gain: 0.04, cutoff: 1500, wave: 'triangle' },
     bass: { gain: 0.058, wave: 'sine', cutoff: 360, octave: -1,
@@ -348,6 +363,7 @@ const THEMES = {
   // rising figure that lands on the octave and stays there. It should sound
   // like the thing you were playing for.
   victory: {
+    name: 'Victory',
     bpm: 100, root: -21, scale: 'major', chords: [0, 4, 5, 3],
     pad: { gain: 0.058, cutoff: 2600, wave: 'triangle' },
     bass: { gain: 0.062, wave: 'sine', cutoff: 400, octave: -1,
@@ -364,6 +380,7 @@ const THEMES = {
   // word game feel like more than it is. The line falls, then turns back up
   // at the end of every phrase.
   defeat: {
+    name: 'Defeat',
     bpm: 74, root: -24, scale: 'minor', chords: [0, 5, 3, 4],
     pad: { gain: 0.055, cutoff: 900, wave: 'triangle' },
     bass: { gain: 0.05, wave: 'sine', cutoff: 280, octave: -1, legato: 1.6,
@@ -384,6 +401,7 @@ const THEMES = {
   // Choosing a game. Bright and busy and going somewhere -- but nothing has
   // started yet, so no snare.
   arcade: {
+    name: 'Arcade',
     bpm: 108, root: -21, scale: 'penta', chords: [0, 4, 2, 5],
     pad: { gain: 0.034, cutoff: 1700, wave: 'triangle' },
     bass: { gain: 0.06, wave: 'square', cutoff: 380, q: 3, sweep: 2, octave: -1,
@@ -400,6 +418,7 @@ const THEMES = {
   // and putting them back. Major pentatonic, so it is still friendly at
   // minute four of a session.
   arcade_hunt: {
+    name: 'Word Hunt',
     bpm: 114, root: -21, scale: 'penta', chords: [0, 2, 4, 2],
     pad: { gain: 0.03, cutoff: 1900, wave: 'triangle' },
     bass: { gain: 0.062, wave: 'sine', cutoff: 400, octave: -1,
@@ -416,6 +435,7 @@ const THEMES = {
   // finished on, over a bass that never stops moving forward. Dorian,
   // because it is the mode that sounds like it is on its way somewhere.
   arcade_chain: {
+    name: 'Chain',
     bpm: 124, root: -21, scale: 'dorian', chords: [0, 3, 5, 3],
     pad: { gain: 0.03, cutoff: 1200, wave: 'sawtooth', detune: 6 },
     bass: { gain: 0.068, wave: 'sawtooth', cutoff: 320, q: 4, sweep: 2.5, octave: -1,
@@ -432,6 +452,7 @@ const THEMES = {
   // stabs rather than lines, and a snare that keeps arriving a sixteenth
   // early so you never quite settle into the bar.
   arcade_swat: {
+    name: 'Moth Swat',
     bpm: 152, root: -21, scale: 'phryg', chords: [0, 0, 1, 0],
     pad: { gain: 0.024, cutoff: 700, wave: 'sawtooth', detune: 11 },
     bass: { gain: 0.072, wave: 'sawtooth', cutoff: 280, q: 5, sweep: 3, octave: -1,
@@ -462,6 +483,11 @@ let pending = null;     // theme queued for the next bar boundary
 let base = 'live';
 let override = null;
 const wanted = () => override ?? base;
+// A jukebox pick lands on the next BEAT rather than the next bar. The bar
+// wait is right for the game -- a modifier landing on a downbeat reads as the
+// music responding -- but after clicking a track in a list, up to four
+// seconds of the old theme reads as a broken button.
+let swapOnBeat = false;
 let step = 0;           // 16th notes since the theme started
 let nextStepTime = 0;
 let noiseBuf = null;
@@ -701,10 +727,11 @@ function tick() {
   while (nextStepTime < ctx.currentTime + HORIZON_S) {
     // A theme swap waits for the top of a bar. Cutting mid-bar is audible as
     // a mistake; landing on the downbeat reads as the music responding.
-    if (pending && step % STEPS_PER_BAR === 0) {
+    if (pending && step % (swapOnBeat ? 4 : STEPS_PER_BAR) === 0) {
       theme = THEMES[pending] ?? THEMES.live;
       themeName = pending;
       pending = null;
+      swapOnBeat = false;
       step = 0;
       if (out) {
         const now = ctx.currentTime;
@@ -793,6 +820,18 @@ export const music = {
     apply();
   },
 
+  /**
+   * Like override(), but it takes effect on the next beat instead of the
+   * next bar. For the jukebox, where the wait is a click's response time
+   * rather than a musical transition.
+   */
+  cue(name) {
+    if (!THEMES[name]) return;
+    swapOnBeat = true;
+    override = name;
+    apply();
+  },
+
   release(name) {
     // Only the event that took it may hand it back, so a storm ending
     // cannot cancel a takeover that started after it.
@@ -819,6 +858,15 @@ export const music = {
     out = null;
   },
 };
+
+/**
+ * Every theme, in the order they are written, for the jukebox in the lobby.
+ * Ordered rather than sorted: written order is roughly the order you meet
+ * them playing, which is more use than alphabetical.
+ */
+export function tracks() {
+  return Object.entries(THEMES).map(([id, t]) => ({ id, name: t.name, bpm: t.bpm }));
+}
 
 // Named for the tests, and for anyone wanting to hear a theme in isolation
 // from the console.

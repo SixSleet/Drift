@@ -154,7 +154,7 @@ html, body {
      the camera than the right wall's, so any floor drawn beyond the wall
      would be painted straight over it. */
   width: 3150px; height: 2800px;
-  transform: translate(-50%, -50%) translateX(-225px) translateY(800px) translateZ(-800px) rotateX(90deg);
+  transform: translate(-50%, -50%) translateX(-325px) translateY(800px) translateZ(-800px) rotateX(90deg);
   background:
     radial-gradient(900px 620px at 50% 22%, rgba(169, 196, 214, .05), transparent 70%),
     linear-gradient(0deg, #1a1510 0%, var(--room-floor) 55%, #2b231b 100%);
@@ -170,9 +170,9 @@ html, body {
 
 .rug {
   position: absolute;
-  /* The floor's own centre is now 225 left of the room's, so anything that
+  /* The floor's own centre is now 325 left of the room's, so anything that
      wants to sit on the room's centre line adds it back. */
-  left: calc(50% + 225px); top: 34%;
+  left: calc(50% + 325px); top: 34%;
   width: 1850px; height: 1100px;
   transform: translateX(-50%);
   border-radius: 22px;
@@ -189,13 +189,13 @@ html, body {
   background: radial-gradient(closest-side, rgba(255, 183, 101, .16), transparent 72%);
 }
 .floor-light-screen {
-  left: calc(50% + 225px); top: 8%; width: 1500px; height: 900px; transform: translateX(-50%);
+  left: calc(50% + 325px); top: 8%; width: 1500px; height: 900px; transform: translateX(-50%);
   background: radial-gradient(closest-side, rgba(169, 196, 214, .10), transparent 74%);
 }
 
 .ceiling {
   width: 3150px; height: 2800px;
-  transform: translate(-50%, -50%) translateX(-225px) translateY(-800px) translateZ(-800px) rotateX(-90deg);
+  transform: translate(-50%, -50%) translateX(-325px) translateY(-800px) translateZ(-800px) rotateX(-90deg);
   background: linear-gradient(0deg, #100d0a 0%, #191410 100%);
 }
 
@@ -207,7 +207,7 @@ html, body {
    fine until the fuse box needed a side wall to hang on. */
 .wall-back {
   width: 3150px; height: 1600px;
-  transform: translate(-50%, -50%) translateX(-225px) translateZ(-2200px);
+  transform: translate(-50%, -50%) translateX(-325px) translateZ(-2200px);
 }
 /* Light falls off toward the corners — cheap ambient occlusion. */
 /* The lamp sits at x = -640 of a 3200 room (30%) and around y = +200
@@ -263,7 +263,7 @@ html, body {
 .prop { position: absolute; }
 
 .window {
-  left: 6.9%; top: 16%;
+  left: 10%; top: 16%;
   width: 470px; height: 360px;
   border-radius: 6px;
   background: #0f1620;
@@ -483,35 +483,54 @@ html, body {
 }
 .lamp-arm {
   position: absolute; left: 50%; bottom: 18px;
-  width: 12px; height: 300px; border-radius: 6px;
+  width: 12px; height: 316px; border-radius: 6px;
   transform: translateX(-50%) rotate(9deg); transform-origin: bottom center;
   background: linear-gradient(90deg, #251e18, #5b4b3c 40%, #241d16);
 }
+/* The arm leans 9deg, so its top lands at about x = 227, y = 186 in the
+   lamp's own 360x500 box -- and the shade has to be where the arm ends
+   rather than where it looks tidy in the markup. Placed so its rotated
+   bottom-centre comes out at (225, 181), a few units above the arm's top, so
+   the two overlap instead of nearly meeting. */
 .lamp-shade {
-  position: absolute; left: 26%; top: 30px;
+  position: absolute; left: 36%; top: 62px;
   width: 210px; height: 120px;
   clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%);
   background: linear-gradient(178deg, #d99a4e 0%, #b97a36 60%, #8d5a26 100%);
   box-shadow: 0 22px 60px rgba(255, 170, 80, .45);
   transform: rotate(9deg);
 }
+/* Sitting in the shade's opening, not floating under it. */
 .lamp-bulb {
-  position: absolute; left: 40%; top: 142px;
+  position: absolute; left: 50%; top: 166px;
   width: 90px; height: 26px; border-radius: 50%;
   background: radial-gradient(circle, var(--lamp-soft), rgba(255, 183, 101, .3) 70%, transparent);
   filter: blur(2px);
 }
-/* The cone of light itself, thrown down and to the right toward the desk. */
+/* The cone of light itself, thrown down and to the right toward the desk.
+   It starts at the shade's opening rather than inside the shade -- the old
+   one began 50 units higher, so the top of the cone poked out from under the
+   shade's bottom-right corner and read as a second, smaller shade.
+   
+   The sides are masked rather than clipped. A clip-path alone gives the cone
+   two dead-straight translucent edges, which is what light does not have;
+   `filter: blur()` cannot fix that because clip-path is applied after the
+   filter, so the mask is what actually softens it. */
 .lamp-cone {
-  position: absolute; left: 8%; top: 130px;
-  width: 420px; height: 420px;
-  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
-  background: linear-gradient(180deg, rgba(255, 183, 101, .28) 0%, rgba(255, 183, 101, 0) 82%);
-  transform: rotate(11deg);
+  position: absolute; left: 50%; top: 178px;
+  width: 470px; height: 400px;
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, rgba(255, 183, 101, .26) 0%, rgba(255, 183, 101, 0) 88%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 36%, #000 64%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 36%, #000 64%, transparent 100%);
+  transform: translateX(-50%) translateX(45px) rotate(8deg);
+  transform-origin: 50% 0;
   pointer-events: none;
 }
+/* Centred on the shade rather than on the lamp's box. */
 .lamp-halo {
-  position: absolute; left: 50%; top: 60px; transform: translateX(-50%);
+  position: absolute; left: 50%; top: -158px;
+  transform: translateX(-50%) translateX(45px);
   width: 620px; height: 560px; border-radius: 50%;
   background: radial-gradient(closest-side, rgba(255, 183, 101, .20), transparent 70%);
   pointer-events: none;
@@ -682,7 +701,11 @@ html, body {
 .room-character {
   position: absolute; left: 50%; top: 50%;
   width: 1000px; height: 480px;
-  transform: translate(-50%, -50%) translateY(402px) translateZ(-150px);
+  /* 428 rather than 402: the headrest is the tallest thing on the chair now,
+     and at 402 its top came 4px over the bottom of the monitor's screen --
+     the chair sits between the camera and the monitor, so anything of it
+     that rises that far is covering the board. */
+  transform: translate(-50%, -50%) translateY(428px) translateZ(-150px);
   transform-style: preserve-3d;
   pointer-events: none;
 }
@@ -691,8 +714,8 @@ html, body {
    ~780. Only the top of them is in frame -- the rest runs off the bottom
    of the shot, the way it would in an actual over-the-shoulder take. */
 .chair-back {
-  position: absolute; left: 50%; top: 140px; transform: translateX(-50%);
-  width: 720px; height: 340px;
+  position: absolute; left: 50%; top: 170px; transform: translateX(-50%);
+  width: 720px; height: 310px;
   border-radius: 220px 220px 30px 30px;
   /* Padded panels, not a plain dome. Three layers, camera-facing side only:
      the vertical seams between the cushions, a soft horizontal bulge across
@@ -711,12 +734,23 @@ html, body {
      is what lets the silhouette read at all. */
   box-shadow: inset 0 7px 11px -7px rgba(255, 200, 140, .40), 0 -30px 70px rgba(0, 0, 0, .5);
 }
-/* Headrest: a separate, slightly proud pad on top of the backrest, which is
-   what actually tells you this is a chair rather than a wall. */
-.chair-back::after {
-  content: ''; position: absolute;
-  left: 50%; top: -34px; transform: translateX(-50%);
-  width: 330px; height: 96px;
+/* Headrest, floated clear of the backrest on two posts -- which is what a
+   real office chair does, and is what leaves a gap for the neck to come
+   through. Without the gap the person is completely hidden behind the chair
+   and the whole thing is one brown lump.
+   
+   Positioned against .room-character (1000x480, chair backrest starting at
+   y = 170) rather than against .chair-back, since these are now siblings of
+   it rather than its pseudo-elements. */
+.chair-post {
+  position: absolute; left: 50%; top: 122px; transform: translateX(-50%);
+  width: 300px; height: 56px;
+  background: linear-gradient(90deg,
+    transparent 0 7%, #33281f 7% 21%, transparent 21% 79%, #33281f 79% 93%, transparent 93%);
+}
+.chair-headrest {
+  position: absolute; left: 50%; top: 34px; transform: translateX(-50%);
+  width: 330px; height: 92px;
   border-radius: 54px 54px 22px 22px;
   background: linear-gradient(188deg, #574538 0%, #33291f 60%, #1c1712 100%);
   box-shadow: inset 0 6px 9px -6px rgba(255, 205, 150, .5), 0 9px 18px rgba(0, 0, 0, .45);
@@ -731,7 +765,10 @@ html, body {
 .chair-arm-right { right: calc(50% - 415px); }
 .character-shoulders {
   position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
-  width: 700px; height: 300px;
+  /* 860 against the backrest's 720, so a shoulder shows either side of it.
+     At 700 the person was narrower than the chair and vanished entirely
+     once the chair was painted in front. */
+  width: 860px; height: 300px;
   clip-path: polygon(0% 100%, 0% 34%, 17% 2%, 83% 2%, 100% 34%, 100% 100%);
   /* Cool, where the chair is warm. A rim light alone was not enough to tell
      these two apart -- it only draws one edge, and everywhere else they were
@@ -746,25 +783,16 @@ html, body {
   box-shadow: inset 0 12px 18px -13px rgba(178, 208, 238, .6),
               0 0 30px rgba(0, 0, 0, .6);
 }
-.character-head {
-  position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
-  width: 220px; height: 240px;
-  border-radius: 50% 50% 44% 44%;
-  background: linear-gradient(196deg, #2d3742 0%, #12171d 78%);
-  /* Cool rim along the top curve, thrown by the monitor they're facing.
-     Inset rather than a separate overlay so it follows the head's actual
-     shape instead of floating at a guessed offset. Brighter and a touch
-     wider than it was: it is the only thing separating the head from the
-     headrest directly behind it. */
-  box-shadow: inset 0 14px 18px -12px rgba(198, 224, 248, .62),
-              0 0 26px rgba(0, 0, 0, .65);
+/* A neck, not a head. From behind a chair with a headrest on it, the head is
+   the one part of a person you would not see. */
+.character-neck {
+  position: absolute; left: 50%; bottom: 300px; transform: translateX(-50%);
+  width: 130px; height: 90px;
+  border-radius: 26px 26px 10px 10px;
+  background: linear-gradient(186deg, #2a323d 0%, #141a21 82%);
+  box-shadow: inset 0 8px 12px -8px rgba(198, 224, 248, .5);
 }
-.character-hair {
-  position: absolute; inset: -4px -4px 42% -4px;
-  border-radius: 50% 50% 0 0;
-  background: linear-gradient(196deg, #1b2129 0%, #0a0d11 92%);
-}
-.room-character.is-typing .character-head { animation: typing-nod 2.6s ease-in-out infinite; }
+.room-character.is-typing .character-neck { animation: typing-nod 2.6s ease-in-out infinite; }
 .room-character.is-typing .character-shoulders { animation: typing-sway 2.6s ease-in-out infinite; }
 @keyframes typing-nod {
   0%, 100% { translate: 0 0; rotate: 0deg; }
@@ -1804,6 +1832,69 @@ html, body {
 }
 .mid-banner-blurb { font-size: 12.5px; font-weight: 600; color: var(--ink-dim); }
 
+/* ── The jukebox ───────────────────────────────────────────────────────
+   Same furniture as the settings panel -- it is the same kind of thing, a
+   small panel over the lobby -- but centred and taller, because it is a list
+   you scroll rather than three controls. */
+
+.jukebox-panel {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 90;
+  width: min(340px, calc(100% - 28px));
+  max-height: min(420px, calc(100% - 40px));
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #2b241c, #201a15);
+  border: 1px solid rgba(226, 162, 89, .22);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, .62);
+  /* Its own keyframes rather than the settings panel's: that one ends on
+     `transform: none`, and with fill-mode both it keeps that value -- which
+     wipes the translate doing the centring and leaves the panel hanging off
+     the middle of the screen. */
+  animation: jukebox-in .16s cubic-bezier(.2, 1, .3, 1) both;
+}
+@keyframes jukebox-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.97); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+.jukebox-list {
+  display: flex; flex-direction: column; gap: 3px;
+  overflow-y: auto;
+  /* Its own scroller, so the panel stays put and only the list moves. */
+  min-height: 0;
+  margin: 2px -4px;
+  padding: 0 4px;
+}
+.jukebox-track {
+  appearance: none; border: 1px solid transparent; background: transparent;
+  color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 650;
+  text-align: left; cursor: pointer;
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 7px 9px; border-radius: 8px;
+}
+.jukebox-track:hover { background: rgba(226, 162, 89, .10); }
+.jukebox-bpm {
+  margin-left: auto;
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--ink-faint);
+}
+/* Queued, and then playing. Two states rather than one because the swap
+   waits for the next bar line. */
+.jukebox-track[data-state="cued"] {
+  border-color: rgba(226, 162, 89, .30);
+  color: var(--accent);
+}
+.jukebox-track[data-state="cued"] .jukebox-bpm::before { content: 'cueing '; }
+.jukebox-track[data-state="playing"] {
+  background: rgba(226, 162, 89, .16);
+  border-color: rgba(226, 162, 89, .42);
+  color: var(--accent);
+}
+.jukebox-track[data-state="playing"] .jukebox-bpm { color: var(--accent); }
+.jukebox-track[data-state="playing"] .jukebox-bpm::before { content: 'playing '; }
+
 /* ── The confirm modal ─────────────────────────────────────────────────
    Sits inside the app overlay, so it lands on the monitor's screen with
    everything else rather than over the whole browser window -- which is
@@ -2346,9 +2437,12 @@ html, body {
 .swat-moth .moth-antenna { stroke: #7a6549; }
 .swat-moth:hover .moth-wing path { fill: #fff4dd; }
 .swat-moth.is-swatted { animation: swat-hit .26s ease-out forwards; }
+/* Keeps the facing it was flying in -- swat-cross carried scaleX(var(--dir))
+   on every keyframe, and dropping it here flipped a right-to-left moth round
+   for its own death. */
 @keyframes swat-hit {
-  0%   { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.9) rotate(28deg); }
+  0%   { opacity: 1; transform: scaleX(var(--dir)) scale(1); }
+  100% { opacity: 0; transform: scaleX(var(--dir)) scale(1.9) rotate(28deg); }
 }
 
 /* Chain */
