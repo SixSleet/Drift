@@ -9,6 +9,19 @@ share one board with your whole team.
 Built for a desktop screen. Guesses are typed on your own keyboard; there is
 nothing on screen to click.
 
+<p align="center">
+  <img src="assets/screenshots/01-menu.jpg" width="49%" alt="The main menu, in the room the whole game is staged in.">
+  <img src="assets/screenshots/04-gameplay.jpg" width="49%" alt="A round in progress.">
+  <img src="assets/screenshots/03-lobby.jpg" width="49%" alt="Waiting in a Co-op lobby, room code up.">
+  <img src="assets/screenshots/07-arcade.jpg" width="49%" alt="Moth Swat, one of the three minigames.">
+  <img src="assets/screenshots/08-standings.jpg" width="49%" alt="Standings between rounds.">
+  <img src="assets/screenshots/09-victory.jpg" width="49%" alt="A completed run.">
+</p>
+<p align="center">
+  <img src="assets/screenshots/02-jukebox.jpg" width="49%" alt="The soundtrack picker, playable from the main menu.">
+  <img src="assets/screenshots/06-blackout.jpg" width="49%" alt="The fuse box, the only thing visible in a power cut.">
+</p>
+
 ---
 
 ## The basics
@@ -71,16 +84,16 @@ starts with that letter, the constraint quietly drops for that round.
 
 ## Round events
 
-About two rounds in three roll one, announced full-screen for the whole
+About one round in two rolls one, announced full-screen for the whole
 5-second countdown so nobody misses it.
 
 | Event | Odds | What it does |
 | --- | --- | --- |
-| 💰 Double Points | 20% | The round pays double |
-| ⚡ Blitz | 20% | The clock is cut to 90 seconds |
-| 🙈 Blackout | 20% | The legend stops greying out letters you have ruled out |
+| 💰 Double Points | 15% | The round pays double |
+| ⚡ Blitz | 15% | The clock is cut to 90 seconds |
+| 🙈 Blackout | 15% | The legend stops greying out letters you have ruled out |
 | 🎰 **Jackpot** | 5% | An extra guess **and** double points |
-| *(none)* | 35% | An ordinary round |
+| *(none)* | 50% | An ordinary round |
 
 ## Mid-round modifiers
 
