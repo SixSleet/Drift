@@ -150,8 +150,9 @@ blitz clock, a blackout, a jackpot, a letter swap, the storm, the power going
 out, the neighbour's stereo, the standings between rounds, and winning or
 losing. Twenty-one pieces of music in all, none of them the same as another.
 
-**Play any of it from the lobby** — "Soundtrack" lists every track in the
-game and plays whichever you pick while you wait.
+**Play any of it from the main menu** — "Soundtrack" lists every track in
+the game and plays whichever you pick. It hands the music straight back the
+moment you leave the menu, so a lobby and a match sound like they should.
 
 Music and effects have **separate volume sliders**, under the ⚙ in the HUD or
 "Sound settings" on the title screen, and both are remembered.

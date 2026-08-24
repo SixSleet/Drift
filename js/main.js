@@ -258,9 +258,10 @@ document.addEventListener('keydown', (e) => {
 
 // ── The jukebox ────────────────────────────────────────────────────────
 //
-// Every theme in the game, playable from the lobby. It holds the music the
-// same way the arcade does -- an override taken by name -- so handing it back
-// cannot cancel somebody else's takeover.
+// Every theme in the game, playable from the main menu. It holds the music
+// the same way the arcade does -- an override taken by name -- so handing it
+// back cannot cancel somebody else's takeover, and so the moment you leave
+// the menu the game's own music is exactly what it would have been.
 
 const juke = {
   panel: $('#jukebox-panel'),
@@ -320,13 +321,18 @@ function showJukebox(show) {
 
 $('#btn-jukebox')?.addEventListener('click', () => showJukebox(juke.panel.hidden));
 $('#btn-jukebox-close')?.addEventListener('click', () => showJukebox(false));
+// Clicking the backdrop closes it, same as the confirm dialog. Without this
+// the only way out is a small x, and the card covers the menu behind it.
+juke.panel?.addEventListener('mousedown', (e) => { if (e.target === juke.panel) showJukebox(false); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && juke.panel && !juke.panel.hidden) { e.stopPropagation(); showJukebox(false); }
+}, true);
 $('#btn-jukebox-stop')?.addEventListener('click', () => {
   if (juke.held) { music.release(juke.held); juke.held = null; }
   paintJukebox();
 });
-// Leaving the lobby by any route takes the jukebox and its music with it.
-$('#btn-leave-lobby')?.addEventListener('click', () => showJukebox(false));
-$('#btn-arcade-lobby')?.addEventListener('click', () => {
+// Opening the arcade from the menu hands the music straight over to it.
+$('#btn-arcade-title')?.addEventListener('click', () => {
   if (juke.held) { music.release(juke.held); juke.held = null; }
   showJukebox(false);
 });
@@ -441,9 +447,10 @@ $('#btn-arcade-back')?.addEventListener('click', () => {
 // its spawn timers would carry on underneath. Watching the screen rather
 // than hooking the phase keeps this true for every route into the game.
 new MutationObserver(() => {
-  // The jukebox only belongs to the lobby, so any screen change closes it and
-  // gives the music back -- including a round starting under it.
-  if (!$('#screen-lobby[data-active]')) {
+  // The jukebox belongs to the main menu and nowhere else, so leaving that
+  // screen closes it and hands the music back. Everything from the lobby
+  // onwards then plays whatever the game says it should, untouched.
+  if (!$('#screen-title[data-active]')) {
     showJukebox(false);
     if (juke.held) { music.release(juke.held); juke.held = null; }
   }

@@ -181,15 +181,23 @@ const THEMES = {
   // a bell line sparse enough to read as space rather than movement.
   live_coop: {
     name: 'Together',
-    bpm: 76, root: -21, scale: 'dorian', chords: [0, 3, 5, 4], swing: 0.22,
-    pad: { gain: 0.05, cutoff: 1050, wave: 'triangle', detune: 6 },
-    bass: { gain: 0.058, wave: 'sine', cutoff: 250, octave: -1, legato: 1.6,
-      pattern: [0, _, _, _, _, _, 4, _, _, _, 0, _, _, 7, _, _] },
-    lead: { gain: 0.026, wave: 'sine', bell: true, cutoff: 3000, octave: 1,
-      pattern: [_, _, 4, _, _, 2, _, _, 0, H, _, _, _, _, _, _,
-                _, _, 7, _, _, 4, _, _, 2, H, H, _, _, _, _, _] },
-    drums: { gain: 0.013, kick: 'x.......x.......', rim: '....x.......x...',
-             hat: '..x...x...x...x.' },
+    bpm: 80, root: -21, scale: 'dorian', chords: [0, 3, 5, 4], swing: 0.2,
+    pad: { gain: 0.046, cutoff: 1150, wave: 'triangle', detune: 6 },
+    // Walking, rather than one note every other bar. The old bass had four
+    // notes in sixteen steps and the lead had five in thirty-two, which is
+    // not "chill", it is "not much happening" -- there is a difference, and
+    // the first version was the second thing.
+    bass: { gain: 0.058, wave: 'sine', cutoff: 260, octave: -1, legato: 1.2,
+      pattern: [0, _, _, 4, _, _, 2, _, 0, _, _, 4, _, 7, _, 5] },
+    // A shimmer under the tune. Slow enough not to pull at you, and the one
+    // layer that makes the gaps in the melody feel like space rather than
+    // like silence.
+    arp: { gain: 0.022, every: 4, span: 6, jitter: 0.25, cutoff: 2600 },
+    lead: { gain: 0.03, wave: 'sine', bell: true, cutoff: 3200, octave: 1,
+      pattern: [_, _, 4, _, 5, _, 7, H, _, 4, _, 2, _, _, _, _,
+                _, _, 7, _, 9, _, 7, H, _, 5, _, 4, 2, _, _, _] },
+    drums: { gain: 0.016, kick: 'x.....x.x.......', rim: '....x.......x...',
+             hat: '..x...x...x...x.', open: '..............x.' },
   },
 
   // ── Round modifiers ────────────────────────────────────────────────────
@@ -254,28 +262,28 @@ const THEMES = {
              hat: 'x.x.x.x.x.x.x.x.', open: '......x.......x.' },
   },
 
-  // Letter Swap. Whole-tone: six equal steps, no leading note, nothing that
-  // resolves. The lead climbs a ladder with no top and no bottom and slides
-  // into every note of it -- your letters just moved and so did the tune.
+  // Letter Swap. Your letters have moved, so the tune's do too: the second
+  // bar of the hook is the first bar with every note shifted up two degrees.
+  // Same shape, different places, which is the event.
   //
-  // It is a detuned saw with a wide spread rather than a polite triangle,
-  // and it has a clap and a moving bass under it, because this had to be
-  // audibly further from the Co-op bed than it was: Co-op is the theme a
-  // letter swap most often lands on top of, and two things you hear one
-  // after the other are the two that must not be confusable. Measured on
-  // the music bus the pair used to sit almost on top of each other.
+  // It used to be whole-tone -- six equal steps, no leading note, nothing
+  // that resolves -- with a chromatic ladder sliding through it on a detuned
+  // saw. That is a good description of "disorienting" and a bad piece of
+  // music: with no stable note anywhere it does not sound wrong on purpose,
+  // it just sounds wrong. A plain minor key can carry the joke on its own,
+  // because a shape you recognise arriving somewhere unexpected is the whole
+  // point, and you cannot recognise a shape in a scale with no landmarks.
   letter_swap: {
     name: 'Letter Swap',
-    bpm: 92, root: -22, scale: 'whole', chords: [0, 2, 4, 1],
-    pad: { gain: 0.044, cutoff: 1500, wave: 'sawtooth', detune: 20 },
-    bass: { gain: 0.058, wave: 'square', cutoff: 320, q: 3, sweep: 2.5, octave: -1,
-      pattern: [0, _, 0, _, 3, _, 0, _, 0, _, 5, _, 3, _, 0, _] },
-    lead: { gain: 0.036, wave: 'sawtooth', cutoff: 3000, q: 5, sweep: 3,
-      spread: 22, octave: 1, glide: 0.06,
-      pattern: [0, _, 1, _, 2, _, 3, _, 4, _, 5, _, 6, _, 7, _,
-                6, _, 5, _, 4, _, 3, _, 2, _, 1, _, 0, _, -1, _] },
-    drums: { gain: 0.022, kick: 'x...x...x...x...', clap: '....x.......x...',
-             hat: 'x.x.x.x.x.x.x.x.' },
+    bpm: 106, root: -21, scale: 'minor', chords: [0, 5, 3, 4],
+    pad: { gain: 0.04, cutoff: 1400, wave: 'triangle', detune: 6 },
+    bass: { gain: 0.062, wave: 'sine', cutoff: 340, octave: -1,
+      pattern: [0, _, _, 0, _, 4, _, _, 0, _, _, 2, _, 4, _, _] },
+    lead: { gain: 0.038, wave: 'triangle', cutoff: 3000, octave: 1,
+      pattern: [0, _, 2, _, 4, H, _, 2, 0, _, _, _, 4, _, 2, _,
+                2, _, 4, _, 6, H, _, 4, 2, _, _, _, 6, _, 4, _] },
+    drums: { gain: 0.02, kick: 'x...x...x...x...', snare: '....x.......x...',
+             hat: '..x...x...x...x.', rim: '..............x.' },
   },
 
   // ── The room ───────────────────────────────────────────────────────────
@@ -402,11 +410,15 @@ const THEMES = {
   // started yet, so no snare.
   arcade: {
     name: 'Arcade',
-    bpm: 108, root: -21, scale: 'penta', chords: [0, 4, 2, 5],
+    // Major and square-wave, not pentatonic and triangle. Measured against
+    // the menu theme it comes straight off, the two were sitting closer
+    // together than any other pair the game plays back to back -- same mode,
+    // same waveform, only the tempo apart.
+    bpm: 108, root: -21, scale: 'major', chords: [0, 4, 5, 3],
     pad: { gain: 0.034, cutoff: 1700, wave: 'triangle' },
     bass: { gain: 0.06, wave: 'square', cutoff: 380, q: 3, sweep: 2, octave: -1,
       pattern: [0, _, 0, _, _, 4, _, _, 0, _, 0, _, _, 5, _, _] },
-    lead: { gain: 0.036, wave: 'triangle', cutoff: 3400, octave: 1,
+    lead: { gain: 0.034, wave: 'square', cutoff: 3400, q: 3, sweep: 2, octave: 1,
       pattern: [0, _, 2, _, 4, _, _, 2, _, 4, _, 5, 4, _, 2, _,
                 7, _, 5, _, 4, _, _, 5, _, 4, _, 2, 0, _, _, _] },
     drums: { gain: 0.02, kick: 'x.......x...x...', hat: '..x...x...x...x.',
