@@ -52,14 +52,15 @@ export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
                                              // (a blitz event shortens it)
 
 // ── Round-start events ──────────────────────────────────────────────────
-// Picked server-side in wf_next_round (35% none, 20% each of three, 5%
-// jackpot) — this is display metadata only, any *numeric* effect (blitz's
-// clock, jackpot's guess budget) already happened by the time the client
-// ever sees the round row. `fx` names the per-event presentation treatment
-// in game.js/app.css: 'coins' rains money, 'siren' strobes the flash and
-// shakes the screen, 'eclipse' dims the letter legend's hint colours, and
-// 'jackpot' stacks all of it. `rule` ('blackout') is read directly by
-// game.js to change how a round is actually played, not just how it looks.
+// Picked server-side in wf_next_round (see the odds table right above the
+// roll itself, in that function) — this is display metadata only, any
+// *numeric* effect (blitz/marathon's clock, jackpot/bonus_guess/mega_jackpot's
+// guess budget) already happened by the time the client ever sees the round
+// row. `fx` names the per-event presentation treatment in game.js/app.css:
+// 'coins' rains money, 'siren' strobes the flash and shakes the screen,
+// 'eclipse' dims the letter legend's hint colours, and 'jackpot' stacks all
+// of it. `rule` ('blackout') is read directly by game.js to change how a
+// round is actually played, not just how it looks.
 export const EVENTS = Object.freeze({
   none: null,
   double_points: { label: 'Double Points', emoji: '💰', tint: '#dfae52', blurb: 'This round pays double.',                                       midBlurb: 'Points doubled, from here on.',      fx: 'coins' },
@@ -68,6 +69,12 @@ export const EVENTS = Object.freeze({
   jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#dfae52', blurb: 'Extra guess AND double points!',                                  midBlurb: 'Extra guess AND double points!',    fx: 'jackpot', rare: true },
   // Coop-only, and mid-round only -- it needs guesses on the board to swap.
   letter_swap:   { label: 'Letter Swap',   emoji: '🔀', tint: '#cf8465', blurb: 'Two guesses just got their tiles mixed up.',                      midBlurb: 'Two guesses just traded tiles.',    fx: 'siren' },
+  // Round-start only, added alongside the original four: no mid-round pool
+  // in wf_next_round ever rolls these, matching how jackpot already worked.
+  marathon:      { label: 'Marathon',      emoji: '⏳', tint: '#7f9bb5', blurb: 'The clock is extended to 8 minutes.',                              midBlurb: 'The clock just got a lot longer.',   fx: null },
+  bonus_guess:   { label: 'Bonus Guess',   emoji: '🎁', tint: '#94b073', blurb: 'Two extra guesses, no strings attached.',                          midBlurb: 'Two extra guesses just landed.',     fx: null },
+  triple_points: { label: 'Triple Points', emoji: '🔥', tint: '#f2b705', blurb: 'This round pays TRIPLE.',                                          midBlurb: 'Points just tripled, from here on.', fx: 'coins', rare: true },
+  mega_jackpot:  { label: 'MEGA JACKPOT',  emoji: '💎', tint: '#dfae52', blurb: 'Two extra guesses AND triple points!',                             midBlurb: 'Two extra guesses AND triple points!', fx: 'jackpot', rare: true },
 });
 
 // ── Mid-round modifiers ──────────────────────────────────────────────────

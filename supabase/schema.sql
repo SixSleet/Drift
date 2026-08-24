@@ -20,15 +20,13 @@
 --     (rejects a late guess) and wf_check_settle (time running out is
 --     itself a completion condition, in every mode) — not just a
 --     client-side display.
---   * wf_next_round also rolls a random party-game `event` for the round —
---     25% none, 14% each of double_points, blitz (shortens time_limit_ms to
---     90s), blackout, shuffle and bullseye (the latter three are pure
---     client-side rule changes with no server-side numeric effect), plus a
---     rare 5% jackpot (double_points + one extra guess, at once). Whatever
---     has a numeric effect is baked into that round's guess budget/time
---     limit at mint time, so the client only ever reads it off the round
---     row rather than re-deriving it. Every round's countdown is 5 seconds
---     (`starts_at`), long enough to read a full-screen event announcement.
+--   * wf_next_round also rolls a random party-game `event` for the round — see
+--     the odds table right above the roll itself, in wf_next_round. Whatever
+--     has a numeric effect (blitz/marathon's clock, jackpot/bonus_guess/
+--     mega_jackpot's guess budget) is baked into that round's row at mint
+--     time, so the client only ever reads it off the round row rather than
+--     re-deriving it. Every round's countdown is 5 seconds (`starts_at`),
+--     long enough to read a full-screen event announcement.
 --
 -- Three modes share this schema:
 --
@@ -162,8 +160,10 @@ create table public.wf_rounds (
   pool_used          int  not null default 0,                  -- coop only
   event              text not null default 'none'
                        check (event in ('none', 'double_points', 'blitz', 'blackout', 'jackpot',
-                                        'extra_guess', 'sudden_death', 'shuffle', 'bullseye')), -- last four
-                                        -- retired (in roll order), kept legal so an old row stays valid
+                                        'extra_guess', 'sudden_death', 'shuffle', 'bullseye', -- retired
+                                        'triple_points', 'marathon', 'bonus_guess', 'mega_jackpot')),
+                                        -- 'extra_guess'..'bullseye' are retired (in original roll
+                                        -- order), kept legal so an old row stays valid
   time_limit_ms      int  not null default 300000 check (time_limit_ms > 0), -- blitz shortens this
   -- A *second*, global modifier that strikes partway through live play
   -- instead of being announced before the round. 'cat'/'phone' are retired
@@ -797,27 +797,50 @@ begin
   v_max_guesses := v_len + case when v_room.mode = 'coop' then 3 else 2 end;
   v_time_limit_ms := 300000;
 
-  -- Round-start modifier, announced full-screen before the round begins: 50%
-  -- nothing, 15% each of double_points/blitz/blackout, 5% jackpot (extra
-  -- guess + double points). Was 35% none / 20/20/20/5 -- a modifier landing
-  -- on most rounds stopped reading as an event and started reading as the
-  -- normal state of the game, with "none" the surprise. One shared roll
-  -- against cumulative thresholds (NOT one random() per WHEN -- that
-  -- silently skews the odds, since each branch would draw its own
-  -- independent number).
+  -- Round-start modifier, announced full-screen before the round begins.
+  -- Nine possible outcomes, weighted so an ordinary round is still the
+  -- single most common thing that happens even though there are now more
+  -- ways for a round to be unusual than there used to be:
+  --
+  --   40% none            -- an ordinary round
+  --   12% double_points   -- pays double
+  --   12% blitz           -- clock cut to 90s
+  --   10% blackout        -- legend stops greying out known letters
+  --    7% marathon        -- clock extended to 8 minutes
+  --    7% bonus_guess     -- +2 guesses, no change to scoring
+  --    5% triple_points   -- pays triple
+  --    4% jackpot         -- +1 guess AND double points
+  --    3% mega_jackpot    -- +2 guesses AND triple points -- the rarest
+  --                          thing that can happen at round start
+  --
+  -- One shared roll against cumulative thresholds (NOT one random() per
+  -- WHEN -- that silently skews the odds, since each branch would draw its
+  -- own independent number).
   v_roll := random();
   v_event := case
-    when v_roll < 0.50 then 'none'
-    when v_roll < 0.65 then 'double_points'
-    when v_roll < 0.80 then 'blitz'
-    when v_roll < 0.95 then 'blackout'
-    else 'jackpot'
+    when v_roll < 0.40 then 'none'
+    when v_roll < 0.52 then 'double_points'
+    when v_roll < 0.64 then 'blitz'
+    when v_roll < 0.74 then 'blackout'
+    when v_roll < 0.81 then 'marathon'
+    when v_roll < 0.88 then 'bonus_guess'
+    when v_roll < 0.93 then 'triple_points'
+    when v_roll < 0.97 then 'jackpot'
+    else 'mega_jackpot'
   end;
 
+  -- Guess-budget bumps are capped at 12, wf_rounds' own ceiling on
+  -- max_guesses -- a length-7 Coop round already starts at 10, so an
+  -- uncapped +2 here would throw a constraint violation and fail the round
+  -- outright instead of just capping the bonus.
   if v_event = 'blitz' then
     v_time_limit_ms := 90000;
+  elsif v_event = 'marathon' then
+    v_time_limit_ms := 480000;
   elsif v_event = 'jackpot' then
-    v_max_guesses := v_max_guesses + 1;
+    v_max_guesses := least(12, v_max_guesses + 1);
+  elsif v_event in ('bonus_guess', 'mega_jackpot') then
+    v_max_guesses := least(12, v_max_guesses + 2);
   end if;
 
   -- Mid-round modifier: a *second*, independent global roll that lands
@@ -971,10 +994,18 @@ begin
 
   v_all_hit := array_fill('hit'::text, array[v_round.word_length]);
   v_time_up := now() >= v_round.starts_at + make_interval(secs => v_round.time_limit_ms / 1000.0);
-  v_mult := case when v_round.event in ('double_points', 'jackpot')
-                   or (v_round.mid_modifier_fired
-                       and v_round.mid_modifier in ('double_points', 'jackpot'))
-                 then 2 else 1 end;
+  -- triple_points/mega_jackpot pay 3x; double_points/jackpot (round-start or
+  -- fired mid-round) pay 2x; everything else is 1x. Never additive -- a
+  -- round that opens triple_points and also fires a mid-round double_points
+  -- still pays 3x, not 6x, the same "one shared multiplier" rule the
+  -- original double_points/jackpot pairing already used.
+  v_mult := case
+    when v_round.event in ('triple_points', 'mega_jackpot') then 3
+    when v_round.event in ('double_points', 'jackpot')
+      or (v_round.mid_modifier_fired and v_round.mid_modifier in ('double_points', 'jackpot'))
+      then 2
+    else 1
+  end;
 
   if v_mode = 'coop' then
     v_done := v_time_up

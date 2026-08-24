@@ -83,16 +83,20 @@ starts with that letter, the constraint quietly drops for that round.
 
 ## Round events
 
-About one round in two rolls one, announced full-screen for the whole
+About three rounds in five roll one, announced full-screen for the whole
 5-second countdown so nobody misses it.
 
 | Event | Odds | What it does |
 | --- | --- | --- |
-| 💰 Double Points | 15% | The round pays double |
-| ⚡ Blitz | 15% | The clock is cut to 90 seconds |
-| 🙈 Blackout | 15% | The legend stops greying out letters you have ruled out |
-| 🎰 **Jackpot** | 5% | An extra guess **and** double points |
-| *(none)* | 50% | An ordinary round |
+| 💰 Double Points | 12% | The round pays double |
+| ⚡ Blitz | 12% | The clock is cut to 90 seconds |
+| 🙈 Blackout | 10% | The legend stops greying out letters you have ruled out |
+| ⏳ Marathon | 7% | The clock is extended to 8 minutes |
+| 🎁 Bonus Guess | 7% | Two extra guesses, no strings attached |
+| 🔥 **Triple Points** | 5% | The round pays TRIPLE |
+| 🎰 **Jackpot** | 4% | An extra guess **and** double points |
+| 💎 **Mega Jackpot** | 3% | Two extra guesses **and** triple points |
+| *(none)* | 40% | An ordinary round |
 
 ## Mid-round modifiers
 
@@ -112,11 +116,16 @@ Meanwhile the room you are sitting in carries on without you.
 | --- | --- |
 | 🐈 **Cat** | Climbs onto the desk and sits down in front of the monitor, covering the bottom of the board. Click to move it |
 | 🦋 **Moth** | Settles on a letter you have already earned and blurs it out. Swat it to get the letter back |
+| 🐭 **Field mouse** | Darts across the floor. Click to shoo it, or it's gone in a couple of seconds regardless |
 | 🕷 **Spider** | Comes down on a thread in front of the screen. Click and it climbs back up |
 | 📱 **Phone** | Buzzes on the desk. Click to silence it |
 | ✈️ **Paper plane** | Sails across the room. Catch it in flight, or it lands off screen |
+| 🍃 **Falling leaf** | Drifts down off the desk plant. Catch it before it lands, or it settles and fades |
 | 🔊 **Neighbour** | Music through the wall, and the soundtrack changes with it. Bang on the wall twice to stop it |
 | 💡 **Lamp** | The desk lamp stutters |
+| 🖼 **Crooked frame** | One of the wall frames goes crooked for a while, then straightens itself out |
+| ✨ **Firefly** | A mote of light wanders through the lamp's glow and out again |
+| 🚗 **Headlights** | A car passes outside; its lights sweep the back wall for a moment |
 | 🐦 **Bird** | Lands on the sill outside. Nothing to do; it is just there |
 | ⛈ **Thunderstorm** | Rain, lightning, and the lights going with it |
 

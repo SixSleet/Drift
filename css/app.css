@@ -220,6 +220,26 @@ html, body {
     radial-gradient(1100px 620px at 57.1% 88%, rgba(169, 196, 214, .13), transparent 72%),
     linear-gradient(90deg, rgba(0, 0, 0, .42), transparent 26%, transparent 74%, rgba(0, 0, 0, .46));
 }
+/* Room event: a car passing outside sweeps its headlights across this wall
+   -- see room-events.js headlights(). Idle at opacity 0, so this costs
+   nothing when the event isn't running. */
+.wall-wash::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(100deg,
+    transparent 0%, transparent 38%,
+    rgba(255, 244, 214, .35) 46%, rgba(255, 244, 214, .55) 50%, rgba(255, 244, 214, .35) 54%,
+    transparent 62%, transparent 100%);
+}
+.room.is-headlights .wall-wash::after { animation: headlight-sweep 2.2s ease-out; }
+@keyframes headlight-sweep {
+  0%   { opacity: 0; transform: translateX(-70%); }
+  15%  { opacity: 1; }
+  75%  { opacity: .8; }
+  100% { opacity: 0; transform: translateX(70%); }
+}
 
 /* The room is deliberately not symmetrical about the camera. The left wall
    stays out at x = -1900, off the side of the frame at every supported
@@ -327,9 +347,14 @@ html, body {
   border: 10px solid #3d3128;
   background: linear-gradient(150deg, #55402f, #2c2119);
   box-shadow: 0 14px 30px rgba(0, 0, 0, .4);
+  transition: transform .6s cubic-bezier(.34, .6, .4, 1);
 }
 .frame-a { left: 33%; top: 20%; width: 190px; height: 240px; }
 .frame-b { left: 33%; top: 56%; width: 190px; height: 150px; }
+/* Room event: one frame goes crooked for a while, ambient, nothing to
+   click -- see room-events.js frameTilt(). --tilt is set per-occurrence so
+   it isn't the same lean every time. */
+.frame.is-crooked { transform: rotate(var(--tilt, 8deg)); }
 
 /* ── Desk ──────────────────────────────────────────────────────────────
    Top spans z -1400 (back) to -520 (front lip); 2200 wide, at y = +400.
@@ -2584,6 +2609,90 @@ html, body {
 .bird-rig.is-away { animation: bird-away .85s ease-in forwards; }
 @keyframes bird-away {
   to { transform: translate(70px, -90px) scale(.5) rotate(-16deg); opacity: 0; }
+}
+
+/* ── The firefly ───────────────────────────────────────────────────────
+   A single mote of light, wandering near the lamp. Purely ambient -- no
+   button, no aria-label, pointer-events off, since there is nothing to do
+   about it and nothing to miss. */
+.firefly-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 10px; height: 10px; border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 244, 190, .95), rgba(255, 210, 120, .5) 55%, transparent 75%);
+  box-shadow: 0 0 14px 4px rgba(255, 214, 130, .55);
+  animation: firefly-drift 10s ease-in-out forwards;
+}
+@keyframes firefly-drift {
+  0%   { transform: translate(-50%, -50%) translateY(60px) translateZ(-1050px) translateX(-780px); opacity: 0; }
+  8%   { opacity: .9; }
+  30%  { transform: translate(-50%, -50%) translateY(calc(60px + var(--fy1))) translateZ(-1050px) translateX(calc(-780px + var(--fx1))); }
+  55%  { transform: translate(-50%, -50%) translateY(calc(60px + var(--fy2))) translateZ(-1050px) translateX(calc(-780px + var(--fx2))); }
+  80%  { transform: translate(-50%, -50%) translateY(calc(60px + var(--fy3))) translateZ(-1050px) translateX(calc(-780px + var(--fx3))); opacity: .9; }
+  100% { transform: translate(-50%, -50%) translateY(calc(60px + var(--fy3))) translateZ(-1050px) translateX(calc(-780px + var(--fx3))); opacity: 0; }
+}
+.firefly-rig.is-gone { animation: firefly-fade .9s ease-out forwards; }
+@keyframes firefly-fade { to { opacity: 0; } }
+
+/* ── The field mouse ───────────────────────────────────────────────────
+   Darts along the floor, low and fast, front of the desk -- z close to the
+   camera, well clear of the monitor. */
+.mouse-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 90px; height: 46px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: mouse-dash 2.6s linear forwards;
+}
+@keyframes mouse-dash {
+  0%   { transform: translate(-50%, -50%) translateY(640px) translateZ(-380px) translateX(calc(-900px * var(--dir))) scaleX(var(--dir)); }
+  100% { transform: translate(-50%, -50%) translateY(640px) translateZ(-380px) translateX(calc(900px * var(--dir))) scaleX(var(--dir)); }
+}
+.mouse-rig.is-gone { animation: mouse-off .3s ease-in forwards; }
+@keyframes mouse-off { to { opacity: 0; transform: scale(.7); } }
+.mouse-rig svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.mouse-tail    { fill: none; stroke: #6b5644; stroke-width: 5; stroke-linecap: round; }
+.mouse-body    { fill: #8a7660; }
+.mouse-ear     { fill: #6b5644; }
+.mouse-ear-in  { fill: #c99a86; }
+.mouse-eye     { fill: #16130f; }
+.mouse-nose    { fill: #c98a86; }
+.mouse-whisker { fill: none; stroke: rgba(236, 226, 212, .5); stroke-width: 1.6; stroke-linecap: round; }
+
+/* ── The falling leaf ──────────────────────────────────────────────────
+   Lets go of the desk plant (see .desk-plant's own translateY/Z/X -- this
+   spawns at the same translateZ/translateX, higher up, and drifts down
+   toward desk height) and sways down toward the desk. --sway is randomised
+   per occurrence so it never falls the same way twice. */
+.falling-leaf-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 34px; height: 40px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: leaf-fall 3.6s ease-in forwards;
+}
+.falling-leaf-rig::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg, #8fb06a, #4a6636);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .35);
+}
+@keyframes leaf-fall {
+  0%   { transform: translate(-50%, -50%) translateY(150px) translateZ(-1300px) translateX(800px) rotate(0deg); opacity: 1; }
+  30%  { transform: translate(-50%, -50%) translateY(220px) translateZ(-1300px) translateX(calc(800px + var(--sway))) rotate(70deg); }
+  65%  { transform: translate(-50%, -50%) translateY(300px) translateZ(-1300px) translateX(800px) rotate(-50deg); }
+  100% { transform: translate(-50%, -50%) translateY(378px) translateZ(-1300px) translateX(calc(800px + var(--sway) * .4)) rotate(20deg); opacity: 1; }
+}
+.falling-leaf-rig.is-landed { animation: leaf-land .5s ease-out forwards; }
+@keyframes leaf-land {
+  to { opacity: 0; transform: translate(-50%, -50%) translateY(380px) translateZ(-1300px) translateX(800px) rotate(15deg); }
+}
+.falling-leaf-rig.is-caught { animation: leaf-caught .4s ease-in forwards; }
+@keyframes leaf-caught {
+  to { opacity: 0; transform: translate(-50%, -50%) translateY(200px) translateZ(-1250px) translateX(820px) scale(.4) rotate(180deg); }
 }
 
 /* The way into the minigames. It was a small underlined link under two big

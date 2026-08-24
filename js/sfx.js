@@ -221,6 +221,35 @@ export const sfx = {
       }
       PENTA.forEach((f, i) => chime({ freq: f, dur: 0.5, gain: 0.12, delay: 0.4 + i * 0.065 }));
       chime({ freq: PENTA[7] * 2, dur: 1.4, gain: 0.1, delay: 0.95 });
+    } else if (kind === 'triple_points') {
+      // double_points' fanfare, but a third voice stacked on top of every
+      // chime -- three notes ringing at once is what actually says "triple"
+      // rather than just "louder double".
+      [659.25, 880, 1046.50, 1318.51].forEach((f, i) => {
+        chime({ freq: f, dur: 0.45, gain: 0.1, delay: i * 0.07 });
+        chime({ freq: f * 1.5, dur: 0.4, gain: 0.06, delay: i * 0.07 + 0.02 });
+      });
+    } else if (kind === 'marathon') {
+      // A slow, spacious two-note swell -- the opposite gesture of blitz's
+      // clipped triangle stabs, because this modifier is giving time back.
+      tone({ freq: 392, to: 587.33, dur: 1.1, type: 'sine', gain: 0.09, cutoff: 1800, attack: 0.2 });
+      tone({ freq: 587.33, to: 880, dur: 1.4, type: 'sine', gain: 0.07, cutoff: 1800, attack: 0.3, delay: 0.35 });
+    } else if (kind === 'bonus_guess') {
+      // Two friendly rising chimes -- a small gift arriving, not a fanfare.
+      chime({ freq: 783.99, dur: 0.4, gain: 0.1 });
+      chime({ freq: 1046.50, dur: 0.5, gain: 0.11, delay: 0.14 });
+    } else if (kind === 'mega_jackpot') {
+      // The jackpot fanfare, doubled in length and a fifth higher at the
+      // peak, plus a low sub hit under the first reel spin -- the biggest
+      // thing that can happen at round start gets the biggest cue.
+      tone({ freq: 90, dur: 0.5, type: 'sine', gain: 0.14, cutoff: 300, attack: 0.003 });
+      for (let i = 0; i < 14; i++) {
+        tone({ freq: PENTA[i % PENTA.length], dur: 0.055, type: 'triangle',
+               gain: 0.065, delay: i * 0.032, cutoff: 2800 });
+      }
+      PENTA.forEach((f, i) => chime({ freq: f, dur: 0.55, gain: 0.13, delay: 0.5 + i * 0.06 }));
+      chime({ freq: PENTA[7] * 2, dur: 1.8, gain: 0.12, delay: 1.15 });
+      chime({ freq: PENTA[7] * 3, dur: 1.4, gain: 0.07, delay: 1.3 });
     }
   },
 
@@ -488,6 +517,98 @@ export const sfx = {
       tone({ freq: base * 1.5, to: base * 0.85, dur: 0.05, type: 'sine',
              gain: 0.022, cutoff: 7000, attack: 0.004, delay: delay + 0.042 });
     }
+  },
+
+  /** A picture frame settling crooked: a short dry wood creak. */
+  frameCreak() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(900, t0);
+    bp.frequency.exponentialRampToValueAtTime(420, t0 + 0.3);
+    bp.Q.setValueAtTime(3.5, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.045, t0 + 0.03);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + 0.35);
+  },
+
+  /** A single, very quiet firefly twinkle -- barely there on purpose. */
+  fireflyTwinkle() {
+    const base = 1800 + Math.random() * 900;
+    chime({ freq: base, dur: 0.5, gain: 0.028 });
+  },
+
+  /**
+   * Headlights sweeping past outside: a car passing at speed, heard through
+   * a wall rather than seen -- a band of noise that rises then falls away,
+   * with the pitch drifting down through it the way an engine does as it
+   * passes and recedes (the poor man's Doppler shift).
+   */
+  headlightPass() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const dur = 2.2;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(280, t0);
+    bp.frequency.linearRampToValueAtTime(520, t0 + dur * 0.4);
+    bp.frequency.linearRampToValueAtTime(160, t0 + dur);
+    bp.Q.setValueAtTime(0.8, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.05, t0 + dur * 0.35);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
+
+  /** A field mouse's startled squeak, plus tiny scampering feet. */
+  mouseSqueak() {
+    tone({ freq: 2600, to: 1900, dur: 0.09, type: 'triangle', gain: 0.07, cutoff: 6000, attack: 0.003 });
+    for (let i = 0; i < 5; i++) {
+      blip({ freq: 900 + Math.random() * 500, dur: 0.02, type: 'triangle', gain: 0.04, delay: 0.06 + i * 0.045 });
+    }
+  },
+
+  /** Shooed: a sharper squeak and a quick scatter of footsteps fleeing. */
+  mouseScatter() {
+    tone({ freq: 3000, to: 2100, dur: 0.11, type: 'triangle', gain: 0.08, cutoff: 6500, attack: 0.002 });
+    for (let i = 0; i < 8; i++) {
+      blip({ freq: 800 + Math.random() * 600, dur: 0.016, type: 'triangle', gain: 0.045, delay: i * 0.028 });
+    }
+  },
+
+  /** A leaf drifting down: a soft, brief papery rustle. */
+  leafRustle() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const dur = 1.3;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1800, t0);
+    bp.frequency.linearRampToValueAtTime(1200, t0 + dur);
+    bp.Q.setValueAtTime(0.9, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.014, t0 + 0.15);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
+
+  /** Caught the leaf: a light, dry tap -- much softer than paperCatch's crumple. */
+  leafCatch() {
+    chime({ freq: PENTA[4], dur: 0.28, gain: 0.06 });
   },
 
   /**

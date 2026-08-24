@@ -613,6 +613,139 @@ function neighbour(done) {
   };
 }
 
+/* ── The crooked frame ─────────────────────────────────────────────────────
+   One of the two picture frames on the back wall goes crooked, holds for a
+   while, then straightens itself back out. Purely ambient -- it lives in the
+   BACK room stage with everything else on that wall, which is pointer-events:
+   none for the whole layer, so it is not something to click. The nuisance is
+   entirely visual: a small wrongness sitting in your peripheral vision for
+   ten seconds. */
+function frameTilt(done) {
+  const which = Math.random() < 0.5 ? '.frame-a' : '.frame-b';
+  const el = document.querySelector(which);
+  if (!el) return done();
+  const angle = (6 + Math.random() * 7) * (Math.random() < 0.5 ? 1 : -1);
+  el.style.setProperty('--tilt', `${angle.toFixed(1)}deg`);
+  el.classList.add('is-crooked');
+  sfx.frameCreak();
+  const t = setTimeout(() => {
+    el.classList.remove('is-crooked');
+    done();
+  }, 9000);
+  return () => { clearTimeout(t); el.classList.remove('is-crooked'); };
+}
+
+/* ── The firefly ──────────────────────────────────────────────────────────
+   A single mote of light wanders through the lamp's glow and out again.
+   Nothing to click, nothing to miss -- it is there for the same reason the
+   bird is: the room going on being a room whether or not you are watching
+   it. */
+function firefly(done) {
+  const el = document.createElement('i');
+  el.className = 'firefly-rig';
+  // Wanders near the lamp, roughly desk height, well clear of the board.
+  el.style.setProperty('--fx1', `${-60 + Math.random() * 40}px`);
+  el.style.setProperty('--fy1', `${-40 + Math.random() * 80}px`);
+  el.style.setProperty('--fx2', `${40 + Math.random() * 60}px`);
+  el.style.setProperty('--fy2', `${-90 + Math.random() * 60}px`);
+  el.style.setProperty('--fx3', `${-20 + Math.random() * 50}px`);
+  el.style.setProperty('--fy3', `${20 + Math.random() * 50}px`);
+  layer().appendChild(el);
+
+  sfx.fireflyTwinkle();
+  const again = setInterval(() => sfx.fireflyTwinkle(), 2600 + Math.random() * 1400);
+  const t = setTimeout(() => {
+    clearInterval(again);
+    el.classList.add('is-gone');
+    el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
+    setTimeout(() => { if (el.isConnected) { el.remove(); done(); } }, 900);
+  }, 10000);
+  return () => { clearInterval(again); clearTimeout(t); el.remove(); };
+}
+
+/* ── Passing headlights ───────────────────────────────────────────────────
+   A car passes outside, out of frame, and its headlights sweep across the
+   back wall for a couple of seconds. Ambient, like the storm's rain -- a
+   single CSS class toggled on the room itself, same trick as lampFlicker. */
+function headlights(done) {
+  const room = $('#room-scene');
+  if (!room) return done();
+  sfx.headlightPass();
+  room.classList.add('is-headlights');
+  const t = setTimeout(() => { room.classList.remove('is-headlights'); done(); }, 2200);
+  return () => { clearTimeout(t); room.classList.remove('is-headlights'); };
+}
+
+/* ── The field mouse ──────────────────────────────────────────────────────
+   Darts along the floor in front of the desk, low and quick -- gone almost
+   as soon as it registers unless you catch it. Click shoos it off early;
+   ignored, it simply finishes its dash and is gone regardless. Built on the
+   same translate/--dir arc as the paper plane, just lower and much faster. */
+function fieldMouse(done) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'mouse-rig';
+  el.setAttribute('aria-label', 'Shoo the mouse');
+  el.style.setProperty('--dir', Math.random() < 0.5 ? 1 : -1);
+  el.innerHTML = `
+    <svg viewBox="0 0 90 46" aria-hidden="true">
+      <path class="mouse-tail" d="M14 26 C -6 20, -14 34, -4 42"/>
+      <ellipse class="mouse-body" cx="46" cy="26" rx="34" ry="17"/>
+      <circle class="mouse-ear" cx="70" cy="10" r="9"/>
+      <circle class="mouse-ear-in" cx="70" cy="10" r="4.5"/>
+      <circle class="mouse-eye" cx="76" cy="21" r="2.4"/>
+      <path class="mouse-nose" d="M88 25 L78 21 L78 29 Z"/>
+      <path class="mouse-whisker" d="M80 26 L90 22 M80 28 L91 28 M80 30 L90 34"/>
+    </svg>`;
+  layer().appendChild(el);
+  sfx.mouseSqueak();
+
+  let over = false;
+  const finish = (shooed) => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    if (shooed) sfx.mouseScatter();
+    el.classList.add('is-gone');
+    el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
+    setTimeout(() => { if (el.isConnected) { el.remove(); done(); } }, 500);
+  };
+  const timer = setTimeout(() => finish(false), 2600);
+  el.addEventListener('click', () => finish(true));
+  return () => { clearTimeout(timer); over = true; el.remove(); };
+}
+
+/* ── The falling leaf ─────────────────────────────────────────────────────
+   One leaf lets go of the desk plant and drifts down, swaying, toward the
+   desk. Catch it before it lands, or it settles and fades on its own --
+   the same "window" mechanic as the paper plane, on a much shorter fuse and
+   a much gentler fall. Spawned at the plant's own coordinates (see
+   .desk-plant in app.css) so it genuinely leaves the plant rather than
+   appearing from nowhere. */
+function fallingLeaf(done) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'falling-leaf-rig';
+  el.setAttribute('aria-label', 'Catch the leaf');
+  el.style.setProperty('--sway', `${(Math.random() < 0.5 ? 1 : -1) * (40 + Math.random() * 50)}px`);
+  layer().appendChild(el);
+  sfx.leafRustle();
+
+  let over = false;
+  const finish = (caught) => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    if (caught) sfx.leafCatch();
+    el.classList.add(caught ? 'is-caught' : 'is-landed');
+    el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
+    setTimeout(() => { if (el.isConnected) { el.remove(); done(); } }, 900);
+  };
+  const timer = setTimeout(() => finish(false), 3400);
+  el.addEventListener('click', () => finish(true));
+  return () => { clearTimeout(timer); over = true; el.remove(); };
+}
+
 // Weights, not equal odds: the cat is the headline act, ambience is filler.
 const KINDS = [
   { run: cat,          weight: 24 },
@@ -624,6 +757,11 @@ const KINDS = [
   { run: spider,       weight: 11 },
   { run: bird,         weight: 10 },
   { run: storm,        weight: 10 },
+  { run: fieldMouse,   weight: 10 },
+  { run: fallingLeaf,  weight: 9 },
+  { run: frameTilt,    weight: 9 },
+  { run: firefly,      weight: 8 },
+  { run: headlights,   weight: 8 },
   // The most intrusive one in here, so the rarest.
   { run: powerCut,     weight: 6 },
 ];
@@ -646,6 +784,7 @@ const between = ([lo, hi]) => lo + Math.random() * (hi - lo);
 export const __events = {
   cat, moth, phone, paperPlane, spider, bird,
   lampFlicker, neighbour, storm, powerCut,
+  fieldMouse, fallingLeaf, frameTilt, firefly, headlights,
 };
 /** The blackout is reached through the storm, so the tests need it directly. */
 export const __power = { cutPower, jumpscare, restorePower, BLACKOUT_GRACE_MS };
@@ -684,12 +823,15 @@ export function startRoomEvents() {
     if (l) l.innerHTML = '';
     const room = $('#room-scene');
     if (room) room.classList.remove('is-flickering', 'is-storm', 'is-lightning',
-                                    'is-neighbour', 'is-powercut');
+                                    'is-neighbour', 'is-powercut', 'is-headlights');
     $('#app-overlay')?.classList.remove('is-powercut');
     // Any event that took the music has to hand it back, even if the round
     // ended mid-storm -- otherwise the standings play thunder.
     music.release();
     document.querySelectorAll('.bird-rig').forEach((b) => b.remove());
+    // frame-a/frame-b live outside #room-3d-fx (they're back-wall props), so
+    // clearing that layer below does not reach a crooked one.
+    document.querySelectorAll('.frame.is-crooked').forEach((f) => f.classList.remove('is-crooked'));
     // A round that ends mid-blackout must not leave the next one in the
     // dark, and must certainly not leave a bat on screen.
     restorePower();
