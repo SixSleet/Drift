@@ -67,19 +67,57 @@ function fit() {
   app.classList.toggle('is-short', height < SHORT_PANEL_PX);
 }
 
+/**
+ * The consumer unit hangs under the shelf on the back wall.
+ *
+ * It cannot simply BE on the back wall, because during a power cut it has
+ * to be the one thing still visible -- and the blackout sits above the whole
+ * room. So it lives in the front layer, flat, and is pinned here to the spot
+ * on the wall where it belongs.
+ *
+ * Under the shelf rather than on a side wall because at 16:9 the side walls
+ * are entirely out of frame (see .wall-left): there is no right wall to
+ * hang it on at the resolution most people are using.
+ */
+function fitFuseBox() {
+  const box = document.getElementById('fusebox');
+  const shelf = document.querySelector('.shelf');
+  if (!box || !shelf) return;
+
+  const room = document.getElementById('room-scene');
+  if (room && getComputedStyle(room).perspective === 'none') {
+    // Flat fallback: no room, no wall, nothing to hang it from.
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = '';
+
+  const r = shelf.getBoundingClientRect();
+  if (r.width < 2) return;
+  // Sized off the shelf so it stays in proportion as the room zooms, and
+  // centred under it with a gap that reads as wall.
+  const width = Math.round(Math.max(46, Math.min(96, r.width * 0.24)));
+  box.style.width = `${width}px`;
+  box.style.left = `${Math.round(r.left + r.width / 2 - width / 2)}px`;
+  box.style.top = `${Math.round(r.bottom + r.height * 0.42)}px`;
+  box.style.right = 'auto';
+}
+
 export function startScreenFit() {
   fit();
+  fitFuseBox();
   // The hole moves whenever the room is re-laid-out: viewport resize, a zoom
   // breakpoint, fonts finishing. A ResizeObserver on the screen catches the
   // size changes; resize covers the rest.
+  const both = () => { fit(); fitFuseBox(); };
   if (window.ResizeObserver) {
-    const ro = new ResizeObserver(fit);
+    const ro = new ResizeObserver(both);
     const scr = screenEl();
     if (scr) ro.observe(scr);
     ro.observe(document.documentElement);
   }
-  window.addEventListener('resize', fit, { passive: true });
-  document.fonts?.ready.then(fit).catch(() => {});
+  window.addEventListener('resize', both, { passive: true });
+  document.fonts?.ready.then(both).catch(() => {});
   // One more pass after first paint: the 3D stage settles a frame late.
-  requestAnimationFrame(() => requestAnimationFrame(fit));
+  requestAnimationFrame(() => requestAnimationFrame(both));
 }

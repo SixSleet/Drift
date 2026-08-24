@@ -147,7 +147,7 @@ html, body {
    standing on it is measured from. */
 
 .floor {
-  width: 3200px; height: 2800px;
+  width: 3600px; height: 2800px;
   transform: translate(-50%, -50%) translateY(800px) translateZ(-800px) rotateX(90deg);
   background:
     radial-gradient(900px 620px at 50% 22%, rgba(169, 196, 214, .05), transparent 70%),
@@ -186,15 +186,17 @@ html, body {
 }
 
 .ceiling {
-  width: 3200px; height: 2800px;
+  width: 3600px; height: 2800px;
   transform: translate(-50%, -50%) translateY(-800px) translateZ(-800px) rotateX(-90deg);
   background: linear-gradient(0deg, #100d0a 0%, #191410 100%);
 }
 
 .wall { background: linear-gradient(180deg, var(--room-wall) 0%, var(--room-wall-lo) 100%); }
 
+/* Wide enough to fill the frame on its own at 16:9, which is what lets the
+   side walls move out of shot entirely -- see .wall-left. */
 .wall-back {
-  width: 3200px; height: 1600px;
+  width: 3600px; height: 1600px;
   transform: translate(-50%, -50%) translateZ(-2200px);
 }
 /* Light falls off toward the corners — cheap ambient occlusion. */
@@ -209,14 +211,27 @@ html, body {
     linear-gradient(90deg, rgba(0, 0, 0, .42), transparent 26%, transparent 74%, rgba(0, 0, 0, .46));
 }
 
+/* Out at x = +/-1800, which puts them off the side of the frame at every
+   supported viewport, and running only as far forward as z = -400.
+   
+   They were at +/-1600 and 2800 deep centred on z = -800 -- so their near
+   ends sat at z = +600, BEHIND the camera. A plane that crosses the camera
+   plane projects outward without limit, and each wall ended up overlapping
+   the desk's near corner at the edge of the frame. CSS 3D sorts whole
+   elements rather than pixels, so even though the desk corner is much
+   nearer, the wall won and cut a hard vertical band across it. That was the
+   "bugged corners": not the desk at all, but a wall drawn over it.
+   
+   They only ever contributed a ~25px sliver at 1920 anyway; the back wall
+   now carries the frame by itself and these close the corners behind it. */
 .wall-left {
-  width: 2800px; height: 1600px;
-  transform: translate(-50%, -50%) translateX(-1600px) translateZ(-800px) rotateY(90deg);
+  width: 1800px; height: 1600px;
+  transform: translate(-50%, -50%) translateX(-1800px) translateZ(-1300px) rotateY(90deg);
   filter: brightness(.72);
 }
 .wall-right {
-  width: 2800px; height: 1600px;
-  transform: translate(-50%, -50%) translateX(1600px) translateZ(-800px) rotateY(-90deg);
+  width: 1800px; height: 1600px;
+  transform: translate(-50%, -50%) translateX(1800px) translateZ(-1300px) rotateY(-90deg);
   filter: brightness(.58);
 }
 
@@ -330,7 +345,7 @@ html, body {
 }
 .contact-monitor { left: 50%;   top: 57%; width: 800px; height: 200px; transform: translate(-50%, -50%); opacity: .6; }
 .contact-lamp    { left: 21%;   top: 17%; width: 340px; height: 160px; transform: translate(-50%, -50%); }
-.contact-mug     { left: 78%;   top: 71%; width: 168px; height: 74px;  transform: translate(-50%, -50%); }
+.contact-mug     { left: 84%;   top: 74%; width: 168px; height: 74px;  transform: translate(-50%, -50%); }
 
 /* The lip you'd see edge-on from this camera. */
 /* The front face of the desk. Two things were wrong with it: it was 60px
@@ -477,7 +492,13 @@ html, body {
 .mug {
   left: 50%; top: 50%;
   width: 130px; height: 150px;
-  transform: translate(-50%, -50%) translateY(325px) translateZ(-800px) translateX(540px);
+  /* Clear of the monitor. The bezel's bottom edge sits almost on the desk,
+     so a mug inside its width has its rim clipped by it -- and since the
+     mug is at z = -800 against the monitor's -900, that occlusion is
+     backwards. CSS 3D sorts whole elements rather than pixels and gets it
+     wrong here, so the fix is to stand the mug on desk you can actually
+     see rather than to fight the sort. */
+  transform: translate(-50%, -50%) translateY(325px) translateZ(-760px) translateX(760px);
   transform-style: preserve-3d;
 }
 /* A mug is a cylinder seen slightly from above, which needs three things
@@ -496,14 +517,6 @@ html, body {
   box-shadow: inset 0 -16px 22px rgba(0, 0, 0, .3);
 }
 /* The near half of the base, which is the only part of it you can see. */
-/* Just enough curve to round off the bottom. It was taller and darker, and
-   at that weight it read as a shadow *under* the mug -- which made the mug
-   look lifted off the desk rather than standing on it. */
-.mug-base {
-  position: absolute; left: 4px; bottom: 1px; width: 110px; height: 13px;
-  border-radius: 50%;
-  background: linear-gradient(90deg, #5c2513 0%, #86391b 42%, #63290f 100%);
-}
 /* The lip: a bright ellipse edge, which is what makes the opening read as a
    hole rather than a dark patch painted on the front. */
 .mug-rim {
@@ -669,18 +682,23 @@ html, body {
      the vertical seams between the cushions, a soft horizontal bulge across
      each panel, then the base shading. Without the seams this whole shape
      read as one featureless dark blob taking up a quarter of the frame. */
+  /* The chair is lit; the person is not. That is the whole basis for
+     telling them apart -- the chair sits out to the sides where the lamp
+     reaches it, while the person is directly between you and the screen
+     and reads as a silhouette. They used to be within a few percent of
+     each other in value, so the person disappeared into the chair. */
   background:
     repeating-linear-gradient(90deg,
       transparent 0 96px,
-      rgba(0, 0, 0, .34) 96px 101px,
-      rgba(255, 210, 160, .05) 101px 105px,
+      rgba(0, 0, 0, .30) 96px 101px,
+      rgba(255, 214, 168, .06) 101px 105px,
       transparent 105px 200px),
-    linear-gradient(0deg, rgba(0, 0, 0, .3) 0%, transparent 26%, rgba(255, 205, 150, .05) 47%, transparent 62%),
-    linear-gradient(190deg, #3d322a 0%, #241d17 52%, #12100c 100%);
+    linear-gradient(0deg, rgba(0, 0, 0, .32) 0%, transparent 26%, rgba(255, 210, 158, .06) 47%, transparent 62%),
+    linear-gradient(190deg, #4c3d2e 0%, #322718 52%, #1c1610 100%);
   /* Warm rim: the lamp is the only thing lighting the chair's camera-facing
      side. Keeps the chair a distinctly lighter mass than the person, which
      is what lets the silhouette read at all. */
-  box-shadow: inset 0 7px 11px -7px rgba(255, 200, 140, .40), 0 -30px 70px rgba(0, 0, 0, .5);
+  box-shadow: inset 0 7px 11px -7px rgba(255, 208, 152, .55), 0 -30px 70px rgba(0, 0, 0, .5);
 }
 /* Headrest: a separate, slightly proud pad on top of the backrest, which is
    what actually tells you this is a chair rather than a wall. */
@@ -689,14 +707,14 @@ html, body {
   left: 50%; top: -34px; transform: translateX(-50%);
   width: 330px; height: 96px;
   border-radius: 54px 54px 22px 22px;
-  background: linear-gradient(188deg, #47392f 0%, #2a221b 60%, #171310 100%);
-  box-shadow: inset 0 6px 9px -6px rgba(255, 205, 150, .5), 0 9px 18px rgba(0, 0, 0, .45);
+  background: linear-gradient(188deg, #55442f 0%, #382c20 60%, #1e1811 100%);
+  box-shadow: inset 0 6px 9px -6px rgba(255, 212, 160, .6), 0 9px 18px rgba(0, 0, 0, .5);
 }
 .chair-arm {
   position: absolute; bottom: 0; width: 60px; height: 150px;
   border-radius: 18px 18px 0 0;
-  background: linear-gradient(180deg, #2a221b, #120e0a);
-  box-shadow: inset 0 4px 7px -4px rgba(255, 200, 140, .3);
+  background: linear-gradient(180deg, #3e3122, #1c1610);
+  box-shadow: inset 0 4px 7px -4px rgba(255, 208, 150, .45);
 }
 .chair-arm-left  { left:  calc(50% - 415px); }
 .chair-arm-right { right: calc(50% - 415px); }
@@ -704,23 +722,28 @@ html, body {
   position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
   width: 700px; height: 300px;
   clip-path: polygon(0% 100%, 0% 34%, 17% 2%, 83% 2%, 100% 34%, 100% 100%);
-  background: linear-gradient(182deg, #241d17 0%, #0d0a08 84%);
-  box-shadow: inset 0 11px 15px -10px rgba(200, 222, 240, .5);
+  /* Nearly black, and cool rather than warm: they are between you and the
+     monitor, so almost none of the lamp reaches them. */
+  background: linear-gradient(182deg, #14161c 0%, #05060a 84%);
+  box-shadow: inset 0 11px 15px -10px rgba(190, 218, 242, .85),
+              0 0 26px rgba(0, 0, 0, .55);
 }
 .character-head {
   position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
   width: 220px; height: 240px;
   border-radius: 50% 50% 44% 44%;
-  background: linear-gradient(196deg, #262019 0%, #100d0a 78%);
+  background: linear-gradient(196deg, #171a20 0%, #06070b 78%);
   /* Cool rim along the top curve, thrown by the monitor they're facing.
      Inset rather than a separate overlay so it follows the head's actual
-     shape instead of floating at a guessed offset. */
-  box-shadow: inset 0 13px 17px -10px rgba(200, 222, 240, .62);
+     shape instead of floating at a guessed offset. Stronger than it was:
+     it is the only thing separating the head from the chair behind it. */
+  box-shadow: inset 0 13px 17px -10px rgba(200, 226, 248, .95),
+              0 0 22px rgba(0, 0, 0, .6);
 }
 .character-hair {
   position: absolute; inset: -4px -4px 42% -4px;
   border-radius: 50% 50% 0 0;
-  background: linear-gradient(196deg, #221a13 0%, #0d0a07 92%);
+  background: linear-gradient(196deg, #10131a 0%, #04050a 92%);
 }
 .room-character.is-typing .character-head { animation: typing-nod 2.6s ease-in-out infinite; }
 .room-character.is-typing .character-shoulders { animation: typing-sway 2.6s ease-in-out infinite; }
@@ -2302,10 +2325,14 @@ html, body {
    scenery should do nothing. A lightning strike trips it, and then it is
    the only thing you can see. */
 
-/* Below the shelf: at 26% it sat straight on top of it. */
+/* Position and size come from js/screen-fit.js, which pins it to the wall
+   under the shelf -- the same trick the app overlay uses to sit on the
+   monitor. It has to be a flat element in the front layer rather than a
+   plane on the wall itself, because during a power cut it must be the one
+   thing still visible and the blackout covers the whole room. */
 .fusebox {
-  position: fixed; right: clamp(14px, 2.4vw, 44px); top: 42%;
-  width: clamp(58px, 5.4vw, 84px);
+  position: fixed; left: 0; top: 0;
+  width: 78px;
   aspect-ratio: 3 / 4;
   z-index: 6;
   pointer-events: none;      /* scenery, until it trips */
