@@ -19,7 +19,6 @@ nothing on screen to click.
 </p>
 <p align="center">
   <img src="assets/screenshots/02-jukebox.jpg" width="49%" alt="The soundtrack picker, playable from the main menu.">
-  <img src="assets/screenshots/06-blackout.jpg" width="49%" alt="The fuse box, the only thing visible in a power cut.">
 </p>
 
 ---
