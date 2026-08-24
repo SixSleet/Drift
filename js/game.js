@@ -24,7 +24,8 @@ export class Game {
   constructor() {
     this.roomId = null;
     this.room = null;
-    this.players = [];
+    this.players = [];      // still here
+    this.everyone = [];     // ...plus anyone who left mid-match
     this.me = null;
     this.round = null;
     this.guessesByRound = new Map(); // round_id -> guess[]
@@ -113,7 +114,10 @@ export class Game {
   #applyState(state) {
     if (!state) return;
     this.me = state.me ?? this.me;
-    this.players = state.players ?? [];
+    // `players` is who is still here; `everyone` includes those who left, so
+    // the standings can still show a score they earned before going.
+    this.everyone = state.players ?? [];
+    this.players = this.everyone.filter((p) => !p.left_at);
     this.results = state.results ?? [];
     this.leaderboard = state.leaderboard ?? [];
 
@@ -548,6 +552,39 @@ export class Game {
     this.channel?.poke();
   }
 
+  /** Rename yourself. Lobby only -- the server enforces that too. */
+  async rename(name) {
+    const res = await api.rename(this.roomId, name);
+    await this.refreshState();
+    return res?.name ?? name;
+  }
+
+  /**
+   * Leave. Tells the server first so the other players find out, then tears
+   * this client down locally -- polling and realtime included, or a room we
+   * are no longer in keeps being fetched.
+   */
+  async leave() {
+    try { await api.leaveRoom(this.roomId); }
+    catch { /* already gone, or the room is finished; leaving is still fine */ }
+    this.teardown();
+  }
+
+  /** Stop talking to the server, whatever the reason. */
+  teardown() {
+    clearInterval(this._poll);
+    this._poll = null;
+    this.stopRoomEvents?.();
+    this.stopRoomEvents = null;
+    this.channel?.close?.();
+    this.channel = null;
+    this.roomId = null;
+    this.room = null;
+    this.round = null;
+    this.phase = 'idle';
+    music.set('title');
+  }
+
   // ── Results ──────────────────────────────────────────────────────────
 
   #standings() {
@@ -568,11 +605,11 @@ export class Game {
       f.played += 1;
       if (r.solved) { f.solved += 1; f.guesses += r.guesses_used ?? 0; }
     }
-    return this.players
+    return (this.everyone ?? this.players)
       .map((p) => {
         const f = form.get(p.id);
         return {
-          name: p.name, color: p.color,
+          name: p.name, color: p.color, left: !!p.left_at,
           total: byId.get(p.id) ?? 0,
           delta: lastRound.get(p.id)?.points ?? 0,
           isMe: p.id === this.me?.id,
@@ -694,7 +731,11 @@ export class Game {
       const fired = this.local?.midModifierShown || this.round?.mid_modifier_fired;
       const mid = fired ? this.round?.mid_modifier : null;
       const kind = mid && mid !== 'none' ? mid : this.round?.event;
-      return music.knows(kind) ? kind : 'live';
+      if (music.knows(kind)) return kind;
+      // No event: the bed is the mode's own. A duel and a shared board are
+      // not the same room to be sitting in.
+      const bed = `live_${this.mode}`;
+      return music.knows(bed) ? bed : 'live';
     }
     return 'lobby';
   }

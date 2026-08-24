@@ -157,7 +157,14 @@ export function renderBoard(rows) {
     li.appendChild(dot);
 
     const who = el('span', 'board-who');
-    who.appendChild(el('span', 'board-name', r.name));
+    const nameEl = el('span', 'board-name', r.name);
+    if (r.left) {
+      // They are still in the table because they earned those points, but
+      // they are not in the room any more.
+      nameEl.classList.add('has-left');
+      nameEl.append(el('i', 'left-tag', 'left'));
+    }
+    who.appendChild(nameEl);
     if (r.played) {
       const bits = [`solved ${r.solved}/${r.played}`];
       if (r.avgGuesses) bits.push(`${r.avgGuesses.toFixed(1)} guesses avg`);

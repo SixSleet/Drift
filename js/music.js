@@ -80,6 +80,30 @@ const THEMES = {
     arp: null,
     perc: { gain: 0.012, hat: 8, kick: 16 },
   },
+  // PvP. Someone else is racing you through the same word right now, and the
+  // bed should not let you forget it: faster, minor, and a bass on every
+  // other step that behaves like a pulse rather than a note. Still no arp --
+  // whatever the mood, a moving line over the top pulls your eye off the
+  // board, and that is true in a duel as much as anywhere. The adrenaline
+  // comes from tempo and insistence, not from melody.
+  live_pvp: {
+    bpm: 108, root: -21, scale: 'minor', chords: [0, 0, 5, 4],
+    pad: { gain: 0.042, cutoff: 850 },
+    bass: { gain: 0.072, every: 2 },
+    arp: null,
+    perc: { gain: 0.024, hat: 2, kick: 8 },
+  },
+  // Co-op. Nobody is racing anybody -- you are all looking at one board --
+  // so this stays calm, but it should not just be Solo's bed again. Dorian
+  // gives it a colour of its own, and a bell every half bar is the one arp
+  // slow enough not to distract: it reads as space rather than movement.
+  live_coop: {
+    bpm: 74, root: -21, scale: 'dorian', chords: [0, 3, 5, 2],
+    pad: { gain: 0.055, cutoff: 1150 },
+    bass: { gain: 0.05, every: 8 },
+    arp: { gain: 0.03, every: 8, span: 5, jitter: 0.45, cutoff: 2400, bell: true },
+    perc: { gain: 0.011, hat: 8, kick: 16 },
+  },
   // ⚡ Blitz. Faster, minor, and the hats close up -- the clock is the point.
   blitz: {
     bpm: 138, root: -21, scale: 'minor', chords: [0, 5, 3, 4],

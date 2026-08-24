@@ -127,6 +127,12 @@ create table public.wf_players (
   is_host     boolean not null default false,
   joined_at   timestamptz not null default now(),
   last_seen   timestamptz not null default now(),
+  -- Set when someone leaves a match already in progress. The row stays,
+  -- because wf_guesses and wf_results cascade on delete and their score is
+  -- part of a history the other players are still looking at. Leaving from
+  -- the LOBBY deletes the row instead -- nothing has happened yet, and the
+  -- seat should go back into the pool.
+  left_at     timestamptz,
   unique (room_id, seat),
   unique (room_id, token_hash)
 );
@@ -575,12 +581,121 @@ as $$
 declare
   v_room public.wf_rooms := public.wf_host_room(p_token, p_room);
 begin
-  if v_room.mode <> 'solo' and (select count(*) from public.wf_players where room_id = p_room) < 2 then
+  -- Only players who are still here count toward the minimum.
+  if v_room.mode <> 'solo' and (select count(*) from public.wf_players
+                                 where room_id = p_room and left_at is null) < 2 then
     raise exception 'wordforge: need at least 2 players' using errcode = 'P0005';
   end if;
   update public.wf_rooms
      set status = 'playing', current_round = 0, updated_at = now()
    where id = p_room;
+end;
+$$;
+
+-- Change your display name. Lobby only: once a match starts the name is
+-- attached to guesses other people have already read, and letting it change
+-- underneath them is confusing rather than useful.
+create or replace function public.wf_rename(p_token text, p_room uuid, p_name text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_hash text := public.wf_hash(p_token);
+  v_room public.wf_rooms;
+  v_name text;
+begin
+  select * into v_room from public.wf_rooms where id = p_room;
+  if not found then
+    raise exception 'wordforge: no such room' using errcode = 'P0002';
+  end if;
+  if v_room.status <> 'lobby' then
+    raise exception 'wordforge: the game has already started' using errcode = 'P0003';
+  end if;
+
+  -- Collapse whitespace, then keep only characters that render predictably
+  -- in a name badge. Everything else is stripped rather than rejected, so a
+  -- pasted emoji trims down instead of erroring.
+  v_name := regexp_replace(coalesce(p_name, ''), '[^A-Za-z0-9 ''._-]', '', 'g');
+  v_name := btrim(regexp_replace(v_name, '\s+', ' ', 'g'));
+  if length(v_name) < 1 then
+    raise exception 'wordforge: that name is empty' using errcode = 'P0016';
+  end if;
+  v_name := left(v_name, 14);
+
+  update public.wf_players
+     set name = v_name, last_seen = now()
+   where room_id = p_room and token_hash = v_hash;
+  if not found then
+    raise exception 'wordforge: not a member of this room' using errcode = '42501';
+  end if;
+
+  return jsonb_build_object('name', v_name);
+end;
+$$;
+
+-- Leave a room. Two different things depending on when -- see wf_players.left_at.
+create or replace function public.wf_leave_room(p_token text, p_room uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_hash    text := public.wf_hash(p_token);
+  v_me      public.wf_players;
+  v_room    public.wf_rooms;
+  v_left    int;
+  v_ended   boolean := false;
+begin
+  select * into v_room from public.wf_rooms where id = p_room for update;
+  if not found then
+    raise exception 'wordforge: no such room' using errcode = 'P0002';
+  end if;
+  select * into v_me from public.wf_players
+   where room_id = p_room and token_hash = v_hash;
+  if not found then
+    -- Already gone. Leaving twice is not an error.
+    return jsonb_build_object('left', true, 'room_status', v_room.status);
+  end if;
+
+  -- In the LOBBY nothing has happened yet, so the row goes and the seat is
+  -- freed. Once a match is under way the row STAYS and is only marked:
+  -- wf_guesses and wf_results cascade on delete, so removing it would erase
+  -- the player from a history other people are still looking at.
+  if v_room.status = 'lobby' then
+    delete from public.wf_players where id = v_me.id;
+  else
+    update public.wf_players set left_at = now() where id = v_me.id;
+  end if;
+
+  select count(*) into v_left
+    from public.wf_players
+   where room_id = p_room and left_at is null;
+
+  -- Hand the room over rather than leaving it hostless: only the host can
+  -- start a game or advance a round.
+  if v_me.is_host and v_left > 0 then
+    update public.wf_players set is_host = true
+     where id = (select id from public.wf_players
+                  where room_id = p_room and left_at is null
+                  order by seat limit 1);
+  end if;
+
+  -- An empty room is over. So is a duel with one player left in it: they
+  -- cannot race nobody, and leaving them waiting on a rival who is not
+  -- coming back is worse than showing them the standings.
+  if v_left = 0 or (v_room.mode = 'pvp' and v_room.status = 'playing' and v_left < 2) then
+    update public.wf_rooms set status = 'finished', updated_at = now()
+     where id = p_room and status <> 'finished';
+    v_ended := true;
+  end if;
+
+  return jsonb_build_object(
+    'left', true,
+    'room_status', case when v_ended then 'finished' else v_room.status end,
+    'remaining', v_left);
 end;
 $$;
 
@@ -1143,6 +1258,8 @@ begin
     'wf_join_room(text, text)',
     'wf_heartbeat(text, uuid)',
     'wf_start_game(text, uuid)',
+    'wf_rename(text, uuid, text)',
+    'wf_leave_room(text, uuid)',
     'wf_finish_game(text, uuid)',
     'wf_next_round(text, uuid)',
     'wf_submit_guess(text, uuid, text)',

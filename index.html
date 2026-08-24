@@ -137,10 +137,28 @@
 
         <button class="btn btn-primary btn-lg" id="btn-start" hidden>Start game</button>
         <p class="note" id="lobby-note"></p>
+
+        <!-- Only ever shown on the lobby screen. A text input anywhere the
+             game is listening for letters would fight the board. -->
+        <form class="rename-row" id="rename-row" hidden>
+          <!-- Roomier than the 14-character limit on the *stored* name:
+               the server collapses whitespace and strips anything it will
+               not render, so a hard cap on keystrokes would eat the budget
+               before any of that happened. -->
+          <input class="rename-input" id="rename-input" type="text" maxlength="24"
+                 autocomplete="off" spellcheck="false" aria-label="Your name"
+                 placeholder="Your name">
+          <button class="btn btn-primary" id="btn-rename-save" type="submit">Save</button>
+          <button class="btn btn-ghost" id="btn-rename-cancel" type="button">Cancel</button>
+        </form>
         <button class="btn btn-arcade btn-lg" id="btn-arcade-lobby" type="button">
           <span class="btn-arcade-name">Minigames</span>
           <span class="btn-arcade-sub">Something to do while you wait</span>
         </button>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btn-rename" type="button">Change your name</button>
+          <button class="btn btn-ghost btn-leave" id="btn-leave-lobby" type="button">Leave room</button>
+        </div>
       </div>
     </section>
 
@@ -161,6 +179,7 @@
           <span class="pill" id="hud-you"></span>
           <button class="btn-icon" id="btn-mute" type="button" aria-pressed="false" aria-label="Mute sound">🔊</button>
           <button class="btn-icon" id="btn-settings" type="button" aria-expanded="false" aria-controls="settings-panel" aria-label="Sound settings">⚙</button>
+          <button class="btn-icon btn-leave-icon" id="btn-leave-game" type="button" aria-label="Leave the game">⏻</button>
         </div>
       </header>
 
@@ -349,11 +368,56 @@
       <i class="lamp-halo"></i>
     </div>
 
+    <!-- Drawn rather than stacked. A mug is a tapered cylinder with an
+         elliptical lip and a handle that leaves the body and comes back to
+         it, and none of those are shapes a div can make -- the previous
+         version was a rounded rectangle with a ring pasted on the side. -->
     <div class="prop mug" aria-hidden="true">
-      <i class="mug-handle"></i>
-      <i class="mug-body"></i>
-      <i class="mug-rim"></i>
-      <i class="mug-brew"></i>
+      <svg viewBox="0 0 200 220" aria-hidden="true">
+        <defs>
+          <linearGradient id="mugGlaze" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0"    stop-color="#6b2b12"/>
+            <stop offset=".16"  stop-color="#a2492a"/>
+            <stop offset=".36"  stop-color="#c8613a"/>
+            <stop offset=".62"  stop-color="#a54a29"/>
+            <stop offset=".85"  stop-color="#6d2c13"/>
+            <stop offset="1"    stop-color="#4a1c0b"/>
+          </linearGradient>
+          <linearGradient id="mugLip" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0"   stop-color="#8a3a1e"/>
+            <stop offset=".38" stop-color="#d97a4b"/>
+            <stop offset="1"   stop-color="#7c3319"/>
+          </linearGradient>
+          <radialGradient id="mugBrew" cx=".38" cy=".3" r=".8">
+            <stop offset="0"   stop-color="#54301c"/>
+            <stop offset=".55" stop-color="#33190d"/>
+            <stop offset="1"   stop-color="#1d0d06"/>
+          </radialGradient>
+          <linearGradient id="mugHandle" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0"   stop-color="#8e3d20"/>
+            <stop offset=".45" stop-color="#b85631"/>
+            <stop offset="1"   stop-color="#5d2410"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Handle first, so the body covers where it meets the wall and it
+             reads as attached rather than stuck on. -->
+        <path class="mug-handle" d="M150 74 C 196 76, 198 148, 146 148"/>
+
+        <!-- Body: narrower at the base than the lip, which is what stops it
+             reading as a tin can. -->
+        <path class="mug-body" d="M40 52 C 40 52, 46 150, 52 176
+          C 55 190, 145 190, 148 176 C 154 150, 160 52, 160 52 Z"/>
+        <!-- Specular band down the left, where the lamp is. -->
+        <path class="mug-shine" d="M58 62 C 60 108, 64 150, 70 172
+          C 74 180, 84 180, 86 172 C 80 148, 76 106, 74 62 Z"/>
+
+        <!-- The lip, then the opening inside it. Two ellipses rather than one
+             is what makes the top read as a hole with a wall around it. -->
+        <ellipse class="mug-lip"  cx="100" cy="52" rx="60" ry="17"/>
+        <ellipse class="mug-bore" cx="100" cy="54" rx="51" ry="13"/>
+        <ellipse class="mug-brew" cx="100" cy="57" rx="45" ry="11"/>
+      </svg>
       <i class="steam steam-1"></i>
       <i class="steam steam-2"></i>
       <i class="steam steam-3"></i>
@@ -405,21 +469,34 @@
     <div class="room-3d-fx" id="room-3d-fx" aria-live="off"></div>
   </div>
 
-  <!-- The consumer unit, on the wall to your right. Flat rather than a plane
-       in the 3D stage for the same reason the neighbour's wall is: the right
-       wall is far too oblique from this camera to hold anything you have to
-       find and click. It lives in the FRONT stage so that when the power
-       goes it is above the blackout, which is the whole point -- the red
-       light has to be the only thing left in the room. -->
-  <div class="fusebox" id="fusebox" aria-hidden="true">
-    <i class="fuse-body"></i>
-    <i class="fuse-label"></i>
-    <span class="fuse-leds">
-      <i class="fuse-led fuse-led-green" id="fuse-led-green"></i>
-      <i class="fuse-led fuse-led-red" id="fuse-led-red"></i>
-    </span>
-    <button class="fuse-switch" id="fuse-switch" type="button" tabindex="-1"
-            aria-label="Reset the breaker"><i class="fuse-lever"></i></button>
+  <!-- The consumer unit, on the back wall under the shelf.
+
+       A real box in the room's perspective, not a rectangle pasted on the
+       screen: it has a front face and two side faces, so the side you can
+       see is whichever one the camera is actually to the side of, at
+       whatever angle the wall gives it. That comes out of the geometry
+       rather than being drawn in.
+
+       It lives in its own stage rather than in the room proper because when
+       the power goes it has to be the one thing left visible, and the
+       blackout covers the whole room -- so this stage sits above it while
+       still sharing the room's perspective. -->
+  <div class="room-stage fuse-stage" aria-hidden="true">
+    <div class="fusebox" id="fusebox">
+      <i class="fuse-side fuse-side-l"></i>
+      <i class="fuse-side fuse-side-r"></i>
+      <i class="fuse-side fuse-side-t"></i>
+      <i class="fuse-side fuse-side-b"></i>
+      <div class="fuse-face">
+        <i class="fuse-label"></i>
+        <span class="fuse-leds">
+          <i class="fuse-led fuse-led-green" id="fuse-led-green"></i>
+          <i class="fuse-led fuse-led-red" id="fuse-led-red"></i>
+        </span>
+        <button class="fuse-switch" id="fuse-switch" type="button" tabindex="-1"
+                aria-label="Reset the breaker"><i class="fuse-lever"></i></button>
+      </div>
+    </div>
   </div>
 
   <!-- Everything off. Opaque, and above the app overlay, so a tripped

@@ -123,6 +123,70 @@ $('#btn-start').addEventListener('click', async (e) => {
   catch (err) { toast(String(err.message || err)); e.target.disabled = false; }
 });
 
+// ── Leaving, and renaming ──────────────────────────────────────────────
+
+function backToMenu() {
+  // A fresh load rather than showScreen('screen-title'): the game object
+  // holds a room's worth of state, and half-clearing it is how you end up
+  // joining your next room with the last one's leftovers.
+  location.href = location.pathname;
+}
+
+async function leave(btn) {
+  if (btn) btn.disabled = true;
+  try { await game.leave(); }
+  catch (err) { toast(String(err.message || err)); }
+  backToMenu();
+}
+
+$('#btn-leave-lobby')?.addEventListener('click', (e) => leave(e.currentTarget));
+$('#btn-leave-game')?.addEventListener('click', (e) => {
+  // Mid-match, so make them mean it.
+  if (!window.confirm('Leave this game? You will not be able to rejoin it.')) return;
+  leave(e.currentTarget);
+});
+
+const renameRow = $('#rename-row');
+const renameInput = $('#rename-input');
+
+function showRename(show) {
+  if (!renameRow) return;
+  renameRow.hidden = !show;
+  $('#btn-rename').hidden = show;
+  if (show) {
+    renameInput.value = game.me?.name ?? '';
+    renameInput.focus();
+    renameInput.select();
+  }
+}
+
+$('#btn-rename')?.addEventListener('click', () => showRename(true));
+$('#btn-rename-cancel')?.addEventListener('click', () => showRename(false));
+renameRow?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const wanted = renameInput.value;
+  const save = $('#btn-rename-save');
+  save.disabled = true;
+  try {
+    const got = await game.rename(wanted);
+    // The server strips what it will not render, so tell them if what they
+    // get back is not what they typed.
+    if (got !== wanted.trim()) toast(`Saved as "${got}".`);
+    showRename(false);
+  } catch (err) {
+    const msg = String(err.message || err);
+    toast(/empty/i.test(msg) ? 'That name has nothing in it.' : msg);
+  } finally {
+    save.disabled = false;
+  }
+});
+// The lobby is a screen with a text input on it, so the code-entry and game
+// key listeners must not see anything typed in here.
+renameRow?.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { showRename(false); return; }
+  e.stopPropagation();
+});
+
 $('#btn-copy').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(location.href);

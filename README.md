@@ -139,16 +139,37 @@ no effect on any match — beyond a personal best kept in your own browser.
 ## Sound
 
 Everything you hear is generated as you play — there are no audio files.
-The soundtrack changes with what is happening: the blitz clock, a blackout,
-a jackpot, the storm, the neighbour's stereo, winning, losing.
+
+**Each mode has its own soundtrack**: Solo is quiet and unhurried, PvP is
+faster and more insistent because somebody is racing you, and Co-op has its
+own calm one. On top of that the music changes with what is happening — the
+blitz clock, a blackout, a jackpot, the storm, the neighbour's stereo, and
+winning or losing.
 
 Music and effects have **separate volume sliders**, under the ⚙ in the HUD or
 "Sound settings" on the title screen, and both are remembered.
 
-## Joining a game
+## Joining, renaming and leaving
 
 Create a room and share the four-character code, or the link — anyone
 opening it drops straight into the code screen. Solo needs no room at all.
+
+You get a name when you join. **Change it in the lobby** with "Change your
+name" — up to 14 characters, and everyone else in the room sees it straight
+away. It is fixed once the match starts, since by then it is attached to
+guesses other people have already read.
+
+**Leave** from the lobby, or with the ⏻ button in the HUD mid-match. What
+happens to everyone else depends on when:
+
+- **From the lobby**, your seat goes back into the pool for someone else.
+- **Mid-match**, you keep your place in the standings — you earned those
+  points — but you are marked as having left.
+- **If you were the host**, the room is handed to whoever has been there
+  longest, so it can still be started and advanced.
+- **In a duel**, the remaining player is taken to the final standings rather
+  than left waiting for a rival who is not coming back.
+- **In Co-op**, the match carries on with whoever is left.
 
 ## Licence
 

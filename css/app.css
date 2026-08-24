@@ -491,7 +491,7 @@ html, body {
 
 .mug {
   left: 50%; top: 50%;
-  width: 130px; height: 150px;
+  width: 150px; height: 165px;
   /* Clear of the monitor. The bezel's bottom edge sits almost on the desk,
      so a mug inside its width has its rim clipped by it -- and since the
      mug is at z = -800 against the monitor's -900, that occlusion is
@@ -507,41 +507,22 @@ html, body {
    light and dark edges are what say "round" -- and a handle that is behind
    the body on one side and in front on the other, because that is what a
    loop attached to a cylinder does. */
-.mug-body {
-  position: absolute; left: 0; bottom: 6px; width: 118px; height: 116px;
-  /* Straight sides, and a bottom curved to match .mug-base's ellipse. */
-  border-radius: 6px 6px 46px 46px / 6px 6px 20px 20px;
-  background:
-    linear-gradient(90deg,
-      #7d3519 0%, #a94c29 16%, #c86038 34%, #b1522c 56%, #83381c 78%, #56230f 100%);
-  box-shadow: inset 0 -16px 22px rgba(0, 0, 0, .3);
-}
-/* The near half of the base, which is the only part of it you can see. */
-/* The lip: a bright ellipse edge, which is what makes the opening read as a
-   hole rather than a dark patch painted on the front. */
-.mug-rim {
-  position: absolute; left: 2px; top: 20px; width: 114px; height: 30px;
-  border-radius: 50%;
-  background: linear-gradient(90deg, #8e3d21, #d2703f 42%, #9c4524);
-  box-shadow: 0 1px 0 rgba(255, 200, 150, .3);
-}
-/* Behind the body, so only the outer arc of the loop shows -- a handle
-   pasted flat on the front was the single thing making this read as a
-   sticker rather than a mug. */
+.mug svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* Shaded ACROSS rather than along: the light and dark edges are what say
+   "round". The old one had a top-to-bottom gradient, which says "flat". */
+.mug-body   { fill: url(#mugGlaze); }
+.mug-lip    { fill: url(#mugLip); }
+.mug-bore   { fill: #2a1207; }
+.mug-brew   { fill: url(#mugBrew); }
+.mug-shine  { fill: rgba(255, 216, 176, .16); }
+/* Stroked, not a bordered box: a handle is a line of clay leaving the wall
+   and coming back to it. */
 .mug-handle {
-  position: absolute; right: -20px; bottom: 40px;
-  width: 52px; height: 60px;
-  border-radius: 50%;
-  border: 12px solid #8e4022;
-  border-left-color: transparent;
-  box-shadow: inset -2px 0 5px rgba(0, 0, 0, .35), 2px 2px 7px rgba(0, 0, 0, .35);
+  fill: none; stroke: url(#mugHandle);
+  stroke-width: 17; stroke-linecap: round;
 }
-.mug-brew {
-  position: absolute; left: 12px; top: 26px; width: 94px; height: 22px;
-  border-radius: 50%;
-  background: radial-gradient(closest-side at 42% 36%, #4b2b18, #2a1509 78%);
-  box-shadow: inset 0 3px 7px rgba(0, 0, 0, .65);
-}
+
 .steam {
   position: absolute; bottom: 118px;
   width: 12px; height: 46px; border-radius: 50%;
@@ -682,23 +663,18 @@ html, body {
      the vertical seams between the cushions, a soft horizontal bulge across
      each panel, then the base shading. Without the seams this whole shape
      read as one featureless dark blob taking up a quarter of the frame. */
-  /* The chair is lit; the person is not. That is the whole basis for
-     telling them apart -- the chair sits out to the sides where the lamp
-     reaches it, while the person is directly between you and the screen
-     and reads as a silhouette. They used to be within a few percent of
-     each other in value, so the person disappeared into the chair. */
   background:
     repeating-linear-gradient(90deg,
       transparent 0 96px,
-      rgba(0, 0, 0, .30) 96px 101px,
-      rgba(255, 214, 168, .06) 101px 105px,
+      rgba(0, 0, 0, .34) 96px 101px,
+      rgba(255, 210, 160, .05) 101px 105px,
       transparent 105px 200px),
-    linear-gradient(0deg, rgba(0, 0, 0, .32) 0%, transparent 26%, rgba(255, 210, 158, .06) 47%, transparent 62%),
-    linear-gradient(190deg, #4c3d2e 0%, #322718 52%, #1c1610 100%);
+    linear-gradient(0deg, rgba(0, 0, 0, .3) 0%, transparent 26%, rgba(255, 205, 150, .05) 47%, transparent 62%),
+    linear-gradient(190deg, #3d322a 0%, #241d17 52%, #12100c 100%);
   /* Warm rim: the lamp is the only thing lighting the chair's camera-facing
      side. Keeps the chair a distinctly lighter mass than the person, which
      is what lets the silhouette read at all. */
-  box-shadow: inset 0 7px 11px -7px rgba(255, 208, 152, .55), 0 -30px 70px rgba(0, 0, 0, .5);
+  box-shadow: inset 0 7px 11px -7px rgba(255, 200, 140, .40), 0 -30px 70px rgba(0, 0, 0, .5);
 }
 /* Headrest: a separate, slightly proud pad on top of the backrest, which is
    what actually tells you this is a chair rather than a wall. */
@@ -707,14 +683,14 @@ html, body {
   left: 50%; top: -34px; transform: translateX(-50%);
   width: 330px; height: 96px;
   border-radius: 54px 54px 22px 22px;
-  background: linear-gradient(188deg, #55442f 0%, #382c20 60%, #1e1811 100%);
-  box-shadow: inset 0 6px 9px -6px rgba(255, 212, 160, .6), 0 9px 18px rgba(0, 0, 0, .5);
+  background: linear-gradient(188deg, #47392f 0%, #2a221b 60%, #171310 100%);
+  box-shadow: inset 0 6px 9px -6px rgba(255, 205, 150, .5), 0 9px 18px rgba(0, 0, 0, .45);
 }
 .chair-arm {
   position: absolute; bottom: 0; width: 60px; height: 150px;
   border-radius: 18px 18px 0 0;
-  background: linear-gradient(180deg, #3e3122, #1c1610);
-  box-shadow: inset 0 4px 7px -4px rgba(255, 208, 150, .45);
+  background: linear-gradient(180deg, #2a221b, #120e0a);
+  box-shadow: inset 0 4px 7px -4px rgba(255, 200, 140, .3);
 }
 .chair-arm-left  { left:  calc(50% - 415px); }
 .chair-arm-right { right: calc(50% - 415px); }
@@ -722,28 +698,32 @@ html, body {
   position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
   width: 700px; height: 300px;
   clip-path: polygon(0% 100%, 0% 34%, 17% 2%, 83% 2%, 100% 34%, 100% 100%);
-  /* Nearly black, and cool rather than warm: they are between you and the
-     monitor, so almost none of the lamp reaches them. */
-  background: linear-gradient(182deg, #14161c 0%, #05060a 84%);
-  box-shadow: inset 0 11px 15px -10px rgba(190, 218, 242, .85),
-              0 0 26px rgba(0, 0, 0, .55);
+  background: linear-gradient(182deg, #241d17 0%, #0d0a08 84%);
+  /* The clarity comes from HERE, not from repainting either of them. The
+     person is between you and a lit screen, so their edge catches it; the
+     chair, further out and lit only by the lamp, does not. Widening and
+     brightening that rim separates the silhouette from the chair behind it
+     while leaving both the colours they were. */
+  box-shadow: inset 0 16px 22px -14px rgba(190, 218, 244, .78),
+              0 0 30px rgba(0, 0, 0, .6);
 }
 .character-head {
   position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
   width: 220px; height: 240px;
   border-radius: 50% 50% 44% 44%;
-  background: linear-gradient(196deg, #171a20 0%, #06070b 78%);
+  background: linear-gradient(196deg, #262019 0%, #100d0a 78%);
   /* Cool rim along the top curve, thrown by the monitor they're facing.
      Inset rather than a separate overlay so it follows the head's actual
-     shape instead of floating at a guessed offset. Stronger than it was:
-     it is the only thing separating the head from the chair behind it. */
-  box-shadow: inset 0 13px 17px -10px rgba(200, 226, 248, .95),
-              0 0 22px rgba(0, 0, 0, .6);
+     shape instead of floating at a guessed offset. Brighter and a touch
+     wider than it was: it is the only thing separating the head from the
+     headrest directly behind it. */
+  box-shadow: inset 0 17px 21px -13px rgba(198, 224, 248, .85),
+              0 0 26px rgba(0, 0, 0, .65);
 }
 .character-hair {
   position: absolute; inset: -4px -4px 42% -4px;
   border-radius: 50% 50% 0 0;
-  background: linear-gradient(196deg, #10131a 0%, #04050a 92%);
+  background: linear-gradient(196deg, #221a13 0%, #0d0a07 92%);
 }
 .room-character.is-typing .character-head { animation: typing-nod 2.6s ease-in-out infinite; }
 .room-character.is-typing .character-shoulders { animation: typing-sway 2.6s ease-in-out infinite; }
@@ -2325,74 +2305,101 @@ html, body {
    scenery should do nothing. A lightning strike trips it, and then it is
    the only thing you can see. */
 
-/* Position and size come from js/screen-fit.js, which pins it to the wall
-   under the shelf -- the same trick the app overlay uses to sit on the
-   monitor. It has to be a flat element in the front layer rather than a
-   plane on the wall itself, because during a power cut it must be the one
-   thing still visible and the blackout covers the whole room. */
+/* Its own preserve-3d stage, above the blackout. Shares .room-front's
+   perspective, so the box sits in the same space as everything else. */
+.fuse-stage { z-index: 6; }
+
+/* On the back wall (z = -2200), centred under the shelf. The shelf is
+   `right: 7%` of a 3600-wide wall and 620 wide, which puts its centre at
+   x = +1238 in the wall's own centred coordinates; the numbers below are
+   read off that rather than eyeballed, so the two stay lined up. */
 .fusebox {
-  position: fixed; left: 0; top: 0;
-  width: 78px;
-  aspect-ratio: 3 / 4;
-  z-index: 6;
+  position: absolute; left: 50%; top: 50%;
+  --depth: 74px;
+  width: 176px; height: 236px;
+  transform: translate(-50%, -50%)
+             translateX(1238px) translateY(-120px) translateZ(-2200px);
+  transform-style: preserve-3d;
   pointer-events: none;      /* scenery, until it trips */
 }
-.fuse-body {
+
+/* Front face, standing --depth proud of the wall. */
+.fuse-face {
   position: absolute; inset: 0;
-  border-radius: 6px;
+  transform: translateZ(var(--depth));
+  border-radius: 5px;
   background: linear-gradient(160deg, #4a453d 0%, #35302a 46%, #241f1a 100%);
   border: 1px solid rgba(255, 236, 210, .09);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 236, 210, .13);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 210, .13);
 }
+
+/* The sides. Both are built; which one you actually see is decided by where
+   the box is relative to the camera, which is the entire point of doing
+   this in 3D rather than drawing a bevel. */
+.fuse-side { position: absolute; background: #211d19; }
+.fuse-side-l {
+  left: 0; top: 0; width: var(--depth); height: 100%;
+  transform-origin: 0 50%; transform: rotateY(-90deg);
+  background: linear-gradient(90deg, #14110f, #322c26);
+}
+.fuse-side-r {
+  right: 0; top: 0; width: var(--depth); height: 100%;
+  transform-origin: 100% 50%; transform: rotateY(90deg);
+  background: linear-gradient(90deg, #322c26, #14110f);
+}
+.fuse-side-t {
+  left: 0; top: 0; width: 100%; height: var(--depth);
+  transform-origin: 50% 0; transform: rotateX(90deg);
+  background: linear-gradient(180deg, #14110f, #3a342d);
+}
+.fuse-side-b {
+  left: 0; bottom: 0; width: 100%; height: var(--depth);
+  transform-origin: 50% 100%; transform: rotateX(-90deg);
+  background: linear-gradient(180deg, #100e0c, #201c18);
+}
+/* It hangs on the wall, so it throws a shadow onto it. */
+.fusebox::after {
+  content: ''; position: absolute;
+  left: 6%; right: -14%; top: 6%; bottom: -12%;
+  background: rgba(0, 0, 0, .5);
+  filter: blur(22px);
+  transform: translateZ(1px);
+  z-index: -1;
+}
+
 /* The printed strip you get on every one of these. */
 .fuse-label {
-  position: absolute; left: 14%; right: 14%; top: 11%; height: 13%;
+  position: absolute; left: 14%; right: 14%; top: 10%; height: 12%;
   border-radius: 2px;
   background: repeating-linear-gradient(90deg,
-    rgba(255, 240, 220, .16) 0 2px, transparent 2px 5px);
+    rgba(255, 240, 220, .16) 0 4px, transparent 4px 10px);
   opacity: .5;
 }
 .fuse-leds {
-  position: absolute; left: 0; right: 0; top: 34%;
+  position: absolute; left: 0; right: 0; top: 32%;
   display: flex; justify-content: center; gap: 22%;
 }
 .fuse-led {
-  width: 11px; height: 11px; border-radius: 50%;
+  width: 22px; height: 22px; border-radius: 50%;
   background: #1b1a18;
   border: 1px solid rgba(0, 0, 0, .6);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .12);
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, .12);
   transition: background .12s ease, box-shadow .12s ease;
 }
 .fuse-led-green {
   background: #56b25c;
-  box-shadow: 0 0 8px rgba(86, 178, 92, .75), inset 0 1px 1px rgba(255, 255, 255, .3);
+  box-shadow: 0 0 14px rgba(86, 178, 92, .75), inset 0 2px 2px rgba(255, 255, 255, .3);
 }
-/* With the power off the box has nothing lighting it either, so it goes
-   almost black -- what you can make out is the shape its own red LED picks
-   out, and nothing else in the room at all. The whole box stays clickable,
-   so finding it is about the light, not about hitting the small switch. */
-.fusebox.is-tripped .fuse-body {
-  background: #0a0908;
-  border-color: rgba(232, 64, 47, .16);
-  box-shadow: 0 0 26px rgba(232, 64, 47, .13), inset 0 0 18px rgba(232, 64, 47, .08);
-}
-.fusebox.is-tripped .fuse-label { opacity: .04; }
-.fusebox.is-tripped .fuse-switch {
-  background: #100e0c;
-  border-color: rgba(232, 64, 47, .12);
-}
-.fusebox.is-tripped .fuse-lever { background: #2a211d; }
-
 /* Both lights swap when it trips, and the red one pulses -- in a completely
    dark room it is the only thing telling you where to click. */
 .fusebox.is-tripped .fuse-led-green {
   background: #1e2a1e;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .06);
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, .06);
 }
 .fusebox.is-tripped .fuse-led-red {
   background: #e8402f;
-  box-shadow: 0 0 14px rgba(232, 64, 47, .95), 0 0 40px rgba(232, 64, 47, .45),
-              inset 0 1px 1px rgba(255, 255, 255, .35);
+  box-shadow: 0 0 26px rgba(232, 64, 47, .95), 0 0 70px rgba(232, 64, 47, .5),
+              inset 0 2px 2px rgba(255, 255, 255, .35);
   animation: fuse-alarm .9s ease-in-out infinite;
 }
 @keyframes fuse-alarm {
@@ -2401,25 +2408,42 @@ html, body {
 }
 
 .fuse-switch {
-  position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%);
   width: 46%; height: 30%;
   appearance: none; padding: 0; margin: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   border: 1px solid rgba(0, 0, 0, .55);
   background: linear-gradient(180deg, #2b2723, #1c1916);
   cursor: default;
 }
 .fuse-lever {
   position: absolute; left: 14%; right: 14%; top: 8%; height: 40%;
-  border-radius: 2px;
+  border-radius: 3px;
   background: linear-gradient(180deg, #6f685e, #4a443c);
   transition: top .14s cubic-bezier(.3, 1.6, .5, 1);
 }
 /* Thrown down, which is what a tripped breaker looks like. */
 .fusebox.is-tripped .fuse-lever { top: 52%; }
-.fusebox.is-tripped { pointer-events: auto; }
+/* The whole box is the target, so finding it in the dark is about the light
+   rather than about hitting the small switch. */
+.fusebox.is-tripped { pointer-events: auto; cursor: pointer; }
 .fusebox.is-tripped .fuse-switch { cursor: pointer; }
-.fusebox.is-tripped .fuse-switch:hover { background: linear-gradient(180deg, #3a352f, #262220); }
+
+/* With the power off the box has nothing lighting it either, so it goes
+   almost black -- what you can make out is the shape its own red LED picks
+   out, and nothing else in the room at all. */
+.fusebox.is-tripped .fuse-face {
+  background: #0a0908;
+  border-color: rgba(232, 64, 47, .16);
+  box-shadow: 0 0 26px rgba(232, 64, 47, .13), inset 0 0 18px rgba(232, 64, 47, .08);
+}
+.fusebox.is-tripped .fuse-side { background: #0b0a09; }
+.fusebox.is-tripped .fuse-label { opacity: .04; }
+.fusebox.is-tripped .fuse-switch {
+  background: #100e0c;
+  border-color: rgba(232, 64, 47, .12);
+}
+.fusebox.is-tripped .fuse-lever { background: #2a211d; }
 
 /* The room with the power off. Opaque and above the app overlay: a breaker
    that only dimmed things would not be a breaker. */
@@ -2494,3 +2518,44 @@ html, body {
 .app-overlay.is-short .btn-lg { font-size: 15px; padding: 11px 14px; }
 .app-overlay.is-short .btn-arcade-sub { display: none; }
 .app-overlay.is-short .how { display: none; }
+
+/* ── Leaving and renaming ──────────────────────────────────────────────── */
+
+.btn-leave { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+.btn-leave:hover {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 70%, transparent);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+}
+/* In the HUD, where it must not look like anything you would press by
+   accident mid-round. */
+.btn-leave-icon { color: color-mix(in srgb, var(--red) 70%, var(--ink-faint)); }
+.btn-leave-icon:hover {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+}
+
+.rename-row { display: flex; gap: 7px; align-items: center; width: 100%; }
+.rename-input {
+  flex: 1; min-width: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--accent);
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit; font-size: 15px; font-weight: 700;
+}
+.rename-input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rename-row .btn { padding: 10px 14px; font-size: 14px; }
+
+/* Someone who left mid-match keeps their score -- they earned it -- but
+   should not read as still being in the room. */
+.board-name.has-left { color: var(--ink-faint); }
+.left-tag {
+  margin-left: 7px; padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 240, 220, .07);
+  border: 1px solid rgba(255, 240, 220, .12);
+  font-size: 9.5px; font-weight: 800; font-style: normal;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint);
+}
