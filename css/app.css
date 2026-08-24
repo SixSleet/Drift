@@ -147,8 +147,14 @@ html, body {
    standing on it is measured from. */
 
 .floor {
-  width: 3600px; height: 2800px;
-  transform: translate(-50%, -50%) translateY(800px) translateZ(-800px) rotateX(90deg);
+  /* 3150 rather than 3600, shifted 225 left, so the floor stops at x = +1250
+     where the right-hand wall now stands and runs on to x = -1900 where the
+     left-hand one is still off the side of the frame. It has to stop there:
+     CSS 3D sorts whole elements by depth, and the floor's centroid is nearer
+     the camera than the right wall's, so any floor drawn beyond the wall
+     would be painted straight over it. */
+  width: 3150px; height: 2800px;
+  transform: translate(-50%, -50%) translateX(-225px) translateY(800px) translateZ(-800px) rotateX(90deg);
   background:
     radial-gradient(900px 620px at 50% 22%, rgba(169, 196, 214, .05), transparent 70%),
     linear-gradient(0deg, #1a1510 0%, var(--room-floor) 55%, #2b231b 100%);
@@ -164,7 +170,9 @@ html, body {
 
 .rug {
   position: absolute;
-  left: 50%; top: 34%;
+  /* The floor's own centre is now 225 left of the room's, so anything that
+     wants to sit on the room's centre line adds it back. */
+  left: calc(50% + 225px); top: 34%;
   width: 1850px; height: 1100px;
   transform: translateX(-50%);
   border-radius: 22px;
@@ -177,27 +185,29 @@ html, body {
 /* Where each source actually lands on the floor. */
 .floor-light { position: absolute; border-radius: 50%; pointer-events: none; }
 .floor-light-lamp {
-  left: 8%; top: 16%; width: 1000px; height: 780px;
+  left: 3%; top: 16%; width: 1000px; height: 780px;
   background: radial-gradient(closest-side, rgba(255, 183, 101, .16), transparent 72%);
 }
 .floor-light-screen {
-  left: 50%; top: 8%; width: 1500px; height: 900px; transform: translateX(-50%);
+  left: calc(50% + 225px); top: 8%; width: 1500px; height: 900px; transform: translateX(-50%);
   background: radial-gradient(closest-side, rgba(169, 196, 214, .10), transparent 74%);
 }
 
 .ceiling {
-  width: 3600px; height: 2800px;
-  transform: translate(-50%, -50%) translateY(-800px) translateZ(-800px) rotateX(-90deg);
+  width: 3150px; height: 2800px;
+  transform: translate(-50%, -50%) translateX(-225px) translateY(-800px) translateZ(-800px) rotateX(-90deg);
   background: linear-gradient(0deg, #100d0a 0%, #191410 100%);
 }
 
 .wall { background: linear-gradient(180deg, var(--room-wall) 0%, var(--room-wall-lo) 100%); }
 
-/* Wide enough to fill the frame on its own at 16:9, which is what lets the
-   side walls move out of shot entirely -- see .wall-left. */
+/* Runs from x = -1900 (off the left of the frame) to x = +1250, where it
+   meets the right-hand wall in a real corner. It used to be 3600 wide and
+   centred, which filled the frame by itself and left no corner anywhere --
+   fine until the fuse box needed a side wall to hang on. */
 .wall-back {
-  width: 3600px; height: 1600px;
-  transform: translate(-50%, -50%) translateZ(-2200px);
+  width: 3150px; height: 1600px;
+  transform: translate(-50%, -50%) translateX(-225px) translateZ(-2200px);
 }
 /* Light falls off toward the corners — cheap ambient occlusion. */
 /* The lamp sits at x = -640 of a 3200 room (30%) and around y = +200
@@ -206,33 +216,46 @@ html, body {
 .wall-wash {
   position: absolute; inset: 0;
   background:
-    radial-gradient(940px 800px at 30% 60%, rgba(255, 183, 101, .30), transparent 72%),
-    radial-gradient(1100px 620px at 50% 88%, rgba(169, 196, 214, .13), transparent 72%),
+    radial-gradient(940px 800px at 25.4% 60%, rgba(255, 183, 101, .30), transparent 72%),
+    radial-gradient(1100px 620px at 57.1% 88%, rgba(169, 196, 214, .13), transparent 72%),
     linear-gradient(90deg, rgba(0, 0, 0, .42), transparent 26%, transparent 74%, rgba(0, 0, 0, .46));
 }
 
-/* Out at x = +/-1800, which puts them off the side of the frame at every
-   supported viewport, and running only as far forward as z = -400.
+/* The room is deliberately not symmetrical about the camera. The left wall
+   stays out at x = -1900, off the side of the frame at every supported
+   viewport, because the window needs that whole stretch of back wall. The
+   right wall comes in to x = +1250, which puts the corner at about 82% of
+   the frame's width and gives the fuse box a wall to hang on.
    
-   They were at +/-1600 and 2800 deep centred on z = -800 -- so their near
-   ends sat at z = +600, BEHIND the camera. A plane that crosses the camera
-   plane projects outward without limit, and each wall ended up overlapping
-   the desk's near corner at the edge of the frame. CSS 3D sorts whole
-   elements rather than pixels, so even though the desk corner is much
-   nearer, the wall won and cut a hard vertical band across it. That was the
-   "bugged corners": not the desk at all, but a wall drawn over it.
+   Neither may cross the camera plane. An earlier pair sat at +/-1600 and ran
+   2800 deep centred on z = -800, so their near ends were at z = +600, BEHIND
+   the camera. A plane that crosses the camera plane projects outward without
+   limit, and each wall ended up overlapping the desk's near corner at the
+   edge of the frame. CSS 3D sorts whole elements rather than pixels, so even
+   though the desk corner is much nearer, the wall won and cut a hard
+   vertical band across it. That was the "bugged corners": not the desk at
+   all, but a wall drawn over it.
    
-   They only ever contributed a ~25px sliver at 1920 anyway; the back wall
-   now carries the frame by itself and these close the corners behind it. */
+   The right wall stops at z = -1250 for a related reason: past roughly
+   z = -1380 it has already left the right-hand edge of a 1920 frame, so
+   running it further forward only buys geometry that overlaps the desk on
+   screen for nothing. */
 .wall-left {
   width: 1800px; height: 1600px;
-  transform: translate(-50%, -50%) translateX(-1800px) translateZ(-1300px) rotateY(90deg);
+  transform: translate(-50%, -50%) translateX(-1900px) translateZ(-1300px) rotateY(90deg);
   filter: brightness(.72);
 }
 .wall-right {
-  width: 1800px; height: 1600px;
-  transform: translate(-50%, -50%) translateX(1800px) translateZ(-1300px) rotateY(-90deg);
-  filter: brightness(.58);
+  width: 950px; height: 1600px;
+  transform: translate(-50%, -50%) translateX(1250px) translateZ(-1725px) rotateY(-90deg);
+  filter: brightness(.66);
+}
+/* The corner itself. Two flat planes meeting at a hard edge read as a fold
+   in a backdrop; a little ambient darkness in the crease is what makes it
+   read as a corner of a room. */
+.wall-right::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, .55), transparent 42%);
 }
 
 /* ── Things on the back wall ───────────────────────────────────────── */
@@ -240,7 +263,7 @@ html, body {
 .prop { position: absolute; }
 
 .window {
-  left: 6%; top: 16%;
+  left: 6.9%; top: 16%;
   width: 470px; height: 360px;
   border-radius: 6px;
   background: #0f1620;
@@ -267,7 +290,8 @@ html, body {
   background: linear-gradient(180deg, #4a3b2e, #2c231b);
 }
 
-.shelf { right: 7%; top: 20%; width: 620px; height: 200px; }
+/* Right edge at x = +1150, just clear of the corner at +1250. */
+.shelf { right: 3.2%; top: 20%; width: 620px; height: 200px; }
 .shelf-plank {
   position: absolute; left: 0; right: 0; bottom: 0; height: 20px;
   border-radius: 3px;
@@ -326,7 +350,7 @@ html, body {
    y 0-100% spans z -1400 (back) to -520 (front lip). */
 .desk-pool { position: absolute; border-radius: 50%; pointer-events: none; }
 .desk-pool-lamp {
-  left: 21%; top: 17%; width: 1250px; height: 900px;
+  left: 8.2%; top: 17%; width: 1250px; height: 900px;
   transform: translate(-50%, -50%);
   background: radial-gradient(closest-side, rgba(255, 190, 115, .46), transparent 72%);
   mix-blend-mode: screen;
@@ -344,8 +368,8 @@ html, body {
   background: radial-gradient(closest-side, rgba(0, 0, 0, .55), transparent 74%);
 }
 .contact-monitor { left: 50%;   top: 57%; width: 800px; height: 200px; transform: translate(-50%, -50%); opacity: .6; }
-.contact-lamp    { left: 21%;   top: 17%; width: 340px; height: 160px; transform: translate(-50%, -50%); }
-.contact-mug     { left: 84%;   top: 74%; width: 168px; height: 74px;  transform: translate(-50%, -50%); }
+.contact-lamp    { left: 8.2%;  top: 17%; width: 340px; height: 160px; transform: translate(-50%, -50%); }
+.contact-mug     { left: 84.5%; top: 72.7%; width: 176px; height: 78px;  transform: translate(-50%, -50%); }
 
 /* The lip you'd see edge-on from this camera. */
 /* The front face of the desk. Two things were wrong with it: it was 60px
@@ -442,7 +466,13 @@ html, body {
 .lamp {
   left: 50%; top: 50%;
   width: 360px; height: 500px;
-  transform: translate(-50%, -50%) translateY(150px) translateZ(-1250px) translateX(-640px);
+  /* Out at x = -920 rather than -640. At -640 the lamp projected to roughly
+     x = 371..607 on a 1920 frame and the monitor's bezel starts at 430, so
+     three-quarters of it was behind the screen: all you could actually see
+     of the lamp was a sliver of shade. That is the other half of why the
+     flicker read as the game glitching -- the room's warm light was
+     stuttering with no visible source for it. */
+  transform: translate(-50%, -50%) translateY(150px) translateZ(-1250px) translateX(-920px);
   transform-style: preserve-3d;
 }
 .lamp-base {
@@ -498,7 +528,12 @@ html, body {
      backwards. CSS 3D sorts whole elements rather than pixels and gets it
      wrong here, so the fix is to stand the mug on desk you can actually
      see rather than to fight the sort. */
-  transform: translate(-50%, -50%) translateY(325px) translateZ(-760px) translateX(760px);
+  /* translateY places the element's CENTRE, but what has to meet the desk is
+     the bottom of the drawn mug -- and the SVG's base curve bottoms out at
+     y = 186.5 of a 220 viewBox, not at the foot of the box. 400 (the desk) +
+     82.5 (half the element) - 139.9 (base to centre, scaled) = 343. It was
+     325, which left the mug hanging 18 units clear of the desk. */
+  transform: translate(-50%, -50%) translateY(343px) translateZ(-760px) translateX(760px);
   transform-style: preserve-3d;
 }
 /* A mug is a cylinder seen slightly from above, which needs three things
@@ -670,7 +705,7 @@ html, body {
       rgba(255, 210, 160, .05) 101px 105px,
       transparent 105px 200px),
     linear-gradient(0deg, rgba(0, 0, 0, .3) 0%, transparent 26%, rgba(255, 205, 150, .05) 47%, transparent 62%),
-    linear-gradient(190deg, #3d322a 0%, #241d17 52%, #12100c 100%);
+    linear-gradient(190deg, #4d3d31 0%, #2e241b 52%, #17120d 100%);
   /* Warm rim: the lamp is the only thing lighting the chair's camera-facing
      side. Keeps the chair a distinctly lighter mass than the person, which
      is what lets the silhouette read at all. */
@@ -683,13 +718,13 @@ html, body {
   left: 50%; top: -34px; transform: translateX(-50%);
   width: 330px; height: 96px;
   border-radius: 54px 54px 22px 22px;
-  background: linear-gradient(188deg, #47392f 0%, #2a221b 60%, #171310 100%);
+  background: linear-gradient(188deg, #574538 0%, #33291f 60%, #1c1712 100%);
   box-shadow: inset 0 6px 9px -6px rgba(255, 205, 150, .5), 0 9px 18px rgba(0, 0, 0, .45);
 }
 .chair-arm {
   position: absolute; bottom: 0; width: 60px; height: 150px;
   border-radius: 18px 18px 0 0;
-  background: linear-gradient(180deg, #2a221b, #120e0a);
+  background: linear-gradient(180deg, #33281f, #16110c);
   box-shadow: inset 0 4px 7px -4px rgba(255, 200, 140, .3);
 }
 .chair-arm-left  { left:  calc(50% - 415px); }
@@ -698,32 +733,36 @@ html, body {
   position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
   width: 700px; height: 300px;
   clip-path: polygon(0% 100%, 0% 34%, 17% 2%, 83% 2%, 100% 34%, 100% 100%);
-  background: linear-gradient(182deg, #241d17 0%, #0d0a08 84%);
-  /* The clarity comes from HERE, not from repainting either of them. The
-     person is between you and a lit screen, so their edge catches it; the
-     chair, further out and lit only by the lamp, does not. Widening and
-     brightening that rim separates the silhouette from the chair behind it
-     while leaving both the colours they were. */
-  box-shadow: inset 0 16px 22px -14px rgba(190, 218, 244, .78),
+  /* Cool, where the chair is warm. A rim light alone was not enough to tell
+     these two apart -- it only draws one edge, and everywhere else they were
+     the same brown. They are lit by different things and now look it: the
+     person sits in front of a bright screen and takes its colour, the chair
+     is out in the lamp's light and stays warm. Same two shapes, same two
+     designs, roughly the same brightness -- the separation is hue. */
+  background: linear-gradient(182deg, #212832 0%, #0a0d12 84%);
+  /* The rim has to come down now the base underneath it is cool: over a
+     warm brown a bright blue inset read as light catching an edge, over a
+     cool slate the same value reads as a painted stripe. */
+  box-shadow: inset 0 12px 18px -13px rgba(178, 208, 238, .6),
               0 0 30px rgba(0, 0, 0, .6);
 }
 .character-head {
   position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
   width: 220px; height: 240px;
   border-radius: 50% 50% 44% 44%;
-  background: linear-gradient(196deg, #262019 0%, #100d0a 78%);
+  background: linear-gradient(196deg, #2d3742 0%, #12171d 78%);
   /* Cool rim along the top curve, thrown by the monitor they're facing.
      Inset rather than a separate overlay so it follows the head's actual
      shape instead of floating at a guessed offset. Brighter and a touch
      wider than it was: it is the only thing separating the head from the
      headrest directly behind it. */
-  box-shadow: inset 0 17px 21px -13px rgba(198, 224, 248, .85),
+  box-shadow: inset 0 14px 18px -12px rgba(198, 224, 248, .62),
               0 0 26px rgba(0, 0, 0, .65);
 }
 .character-hair {
   position: absolute; inset: -4px -4px 42% -4px;
   border-radius: 50% 50% 0 0;
-  background: linear-gradient(196deg, #221a13 0%, #0d0a07 92%);
+  background: linear-gradient(196deg, #1b2129 0%, #0a0d11 92%);
 }
 .room-character.is-typing .character-head { animation: typing-nod 2.6s ease-in-out infinite; }
 .room-character.is-typing .character-shoulders { animation: typing-sway 2.6s ease-in-out infinite; }
@@ -967,19 +1006,116 @@ html, body {
 
 /* ── Ambient events: the room itself reacting ─────────────────────────── */
 
-/* Lamp stutter -- the warm half of the lighting cuts out with it. */
-.room.is-flickering .lamp-shade,
-.room.is-flickering .lamp-bulb,
+/* The lamp gutters. This used to be six hard on/off steps applied to every
+   warm layer in the room at once, opacity 1 -> .12, INCLUDING the lamp shade
+   itself -- so the physical lamp vanished along with its light, six times, in
+   perfect rhythm, with no in-between frames. That is not what a failing bulb
+   looks like; it is what a browser dropping frames looks like, which is
+   exactly how it read.
+   
+   Four changes make it a lamp again:
+   
+     - The shade never goes anywhere. An object does not blink out because
+       its bulb did. Only the light does.
+     - It dims rather than cuts. A filament has thermal mass: it sags to
+       maybe a third and glows back, and it never reaches black.
+     - It surges. Every real dodgy bulb overshoots on the way back, which is
+       the single most recognisable thing about one, and no amount of
+       dimming reads as electrical without it.
+     - It cools off. The beats are violent at the start, shallower each time,
+       and it settles instead of stopping dead on a step boundary.
+   
+   And it runs on brightness rather than opacity, so the surges can go above
+   1 -- opacity cannot, so with opacity there is no overshoot to be had. */
+/* The bulb keeps its own blur through all of this. `filter` is one property,
+   so a keyframe that sets brightness on it drops whatever else was there --
+   which left the bulb a hard-edged ellipse for the whole 2.6s. */
+.room.is-flickering .lamp-bulb { animation: lamp-gutter-bulb 2.6s linear both; }
 .room.is-flickering .lamp-cone,
 .room.is-flickering .lamp-halo,
 .room.is-flickering .desk-pool-lamp,
-.room.is-flickering .floor-light-lamp,
-.room.is-flickering .wall-wash {
-  animation: lamp-stutter 2.2s steps(1, end);
+.room.is-flickering .floor-light-lamp {
+  animation: lamp-gutter 2.6s linear both;
 }
-@keyframes lamp-stutter {
-  0%, 8%, 15%, 27%, 44%, 61%, 80%, 100% { opacity: 1; }
-  5%, 12%, 22%, 38%, 55%, 74%           { opacity: .12; }
+/* The shade is lit BY the bulb, so its own glow follows -- but it stays
+   solidly there the whole time. */
+.room.is-flickering .lamp-shade { animation: lamp-shade-gutter 2.6s linear both; }
+/* The wall carries both lights, so it only loses the lamp's share of it. */
+.room.is-flickering .wall-wash { animation: lamp-wash-gutter 2.6s linear both; }
+
+/* Dips redden as they fall: a filament running cold is a redder filament,
+   and the saturation lift is what sells that in one channel. */
+@keyframes lamp-gutter {
+  0%   { filter: brightness(1)    saturate(1);    }
+  5%   { filter: brightness(.34)  saturate(1.5);  }
+  8%   { filter: brightness(1.06) saturate(1);    }
+  12%  { filter: brightness(.4)   saturate(1.45); }
+  15%  { filter: brightness(.95)  saturate(1);    }
+  19%  { filter: brightness(.28)  saturate(1.6);  }
+  23%  { filter: brightness(1.22) saturate(.94);  }
+  29%  { filter: brightness(.46)  saturate(1.4);  }
+  34%  { filter: brightness(1)    saturate(1);    }
+  42%  { filter: brightness(.36)  saturate(1.5);  }
+  47%  { filter: brightness(1.14) saturate(.97);  }
+  56%  { filter: brightness(.62)  saturate(1.25); }
+  63%  { filter: brightness(1.05) saturate(1);    }
+  72%  { filter: brightness(.78)  saturate(1.12); }
+  80%  { filter: brightness(1.03) saturate(1);    }
+  88%  { filter: brightness(.9)   saturate(1.05); }
+  100% { filter: brightness(1)    saturate(1);    }
+}
+@keyframes lamp-gutter-bulb {
+  0%   { filter: blur(2px) brightness(1)    saturate(1);    }
+  5%   { filter: blur(3px) brightness(.3)   saturate(1.5);  }
+  8%   { filter: blur(2px) brightness(1.1)  saturate(1);    }
+  12%  { filter: blur(3px) brightness(.36)  saturate(1.45); }
+  15%  { filter: blur(2px) brightness(.95)  saturate(1);    }
+  19%  { filter: blur(4px) brightness(.24)  saturate(1.6);  }
+  23%  { filter: blur(1px) brightness(1.3)  saturate(.94);  }
+  29%  { filter: blur(3px) brightness(.42)  saturate(1.4);  }
+  34%  { filter: blur(2px) brightness(1)    saturate(1);    }
+  42%  { filter: blur(3px) brightness(.32)  saturate(1.5);  }
+  47%  { filter: blur(1px) brightness(1.2)  saturate(.97);  }
+  56%  { filter: blur(2px) brightness(.6)   saturate(1.25); }
+  63%  { filter: blur(2px) brightness(1.06) saturate(1);    }
+  72%  { filter: blur(2px) brightness(.76)  saturate(1.12); }
+  80%  { filter: blur(2px) brightness(1.03) saturate(1);    }
+  88%  { filter: blur(2px) brightness(.9)   saturate(1.05); }
+  100% { filter: blur(2px) brightness(1)    saturate(1);    }
+}
+@keyframes lamp-shade-gutter {
+  0%   { filter: brightness(1);    }
+  5%   { filter: brightness(.66);  }
+  8%   { filter: brightness(1.03); }
+  12%  { filter: brightness(.7);   }
+  15%  { filter: brightness(.98);  }
+  19%  { filter: brightness(.62);  }
+  23%  { filter: brightness(1.1);  }
+  29%  { filter: brightness(.73);  }
+  34%  { filter: brightness(1);    }
+  42%  { filter: brightness(.68);  }
+  47%  { filter: brightness(1.07); }
+  56%  { filter: brightness(.81);  }
+  63%  { filter: brightness(1.02); }
+  72%  { filter: brightness(.89);  }
+  100% { filter: brightness(1);    }
+}
+@keyframes lamp-wash-gutter {
+  0%   { filter: brightness(1);    }
+  5%   { filter: brightness(.72);  }
+  8%   { filter: brightness(1.02); }
+  12%  { filter: brightness(.75);  }
+  15%  { filter: brightness(.98);  }
+  19%  { filter: brightness(.68);  }
+  23%  { filter: brightness(1.08); }
+  29%  { filter: brightness(.78);  }
+  34%  { filter: brightness(1);    }
+  42%  { filter: brightness(.73);  }
+  47%  { filter: brightness(1.05); }
+  56%  { filter: brightness(.85);  }
+  63%  { filter: brightness(1.01); }
+  72%  { filter: brightness(.92);  }
+  100% { filter: brightness(1);    }
 }
 
 /* Storm -- the window goes colder and streaked, and the whole room cools a
@@ -1668,6 +1804,51 @@ html, body {
 }
 .mid-banner-blurb { font-size: 12.5px; font-weight: 600; color: var(--ink-dim); }
 
+/* ── The confirm modal ─────────────────────────────────────────────────
+   Sits inside the app overlay, so it lands on the monitor's screen with
+   everything else rather than over the whole browser window -- which is
+   exactly what window.confirm() got wrong. */
+
+.modal-veil {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(8, 6, 4, .74);
+  backdrop-filter: blur(3px);
+  z-index: 90;
+  animation: modal-veil-in .16s ease-out;
+}
+@keyframes modal-veil-in { from { opacity: 0; } }
+
+.modal {
+  width: min(400px, 100%);
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 22px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, .6);
+  animation: modal-in .18s cubic-bezier(.2, .9, .3, 1);
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+}
+.modal-title { margin: 0; text-align: center; font-size: 22px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+.modal-actions .btn { flex: 1; }
+
+/* The destructive choice, and the one that is not the default -- focus
+   starts on Stay. */
+.btn-danger {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 42%, transparent);
+  background: color-mix(in srgb, var(--red) 9%, transparent);
+}
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+  border-color: color-mix(in srgb, var(--red) 62%, transparent);
+}
+
 /* ── Toast ─────────────────────────────────────────────────────────── */
 
 .toast {
@@ -1675,7 +1856,9 @@ html, body {
   background: var(--panel); border: 1px solid var(--line); color: var(--ink);
   padding: 11px 17px; border-radius: 11px; font-size: 14px; font-weight: 600;
   opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
-  max-width: 460px; text-align: center; z-index: 85;
+  /* Above the modal veil: a toast is usually about the thing the modal was
+     asking about, so it has to stay readable over it. */
+  max-width: 460px; text-align: center; z-index: 95;
 }
 .toast[data-show] { opacity: 1; transform: translate(-50%, 0); }
 
@@ -2309,16 +2492,26 @@ html, body {
    perspective, so the box sits in the same space as everything else. */
 .fuse-stage { z-index: 6; }
 
-/* On the back wall (z = -2200), centred under the shelf. The shelf is
-   `right: 7%` of a 3600-wide wall and 620 wide, which puts its centre at
-   x = +1238 in the wall's own centred coordinates; the numbers below are
-   read off that rather than eyeballed, so the two stay lined up. */
+/* On the right-hand wall, at the wall's own angle -- the same rotateY(-90deg)
+   .wall-right carries, so it is genuinely mounted on that plane rather than
+   floating in front of it at a different one.
+   
+   Its width is measured along z, which the camera sees at a grazing angle:
+   over this stretch of wall roughly 1px of depth is a quarter of a screen
+   pixel. A box the true size of a consumer unit would come out about 60px
+   wide on screen, which is not a thing you can find and hit in ten seconds
+   in the dark -- so it is drawn oversized, 560 deep, and lands at about
+   115x190 on screen. Everything on this wall has to pay that tax.
+   
+   `left/top: 50%` is the stage centre; translateX puts it on the wall plane;
+   translateZ picks where along the wall it hangs. */
 .fusebox {
   position: absolute; left: 50%; top: 50%;
-  --depth: 74px;
-  width: 176px; height: 236px;
+  --depth: 60px;
+  width: 520px; height: 300px;
   transform: translate(-50%, -50%)
-             translateX(1238px) translateY(-120px) translateZ(-2200px);
+             translateX(1250px) translateY(40px) translateZ(-1650px)
+             rotateY(-90deg);
   transform-style: preserve-3d;
   pointer-events: none;      /* scenery, until it trips */
 }
@@ -2369,18 +2562,23 @@ html, body {
 
 /* The printed strip you get on every one of these. */
 .fuse-label {
-  position: absolute; left: 14%; right: 14%; top: 10%; height: 12%;
+  position: absolute; left: 22%; right: 22%; top: 11%; height: 13%;
   border-radius: 2px;
   background: repeating-linear-gradient(90deg,
     rgba(255, 240, 220, .16) 0 4px, transparent 4px 10px);
   opacity: .5;
 }
 .fuse-leds {
-  position: absolute; left: 0; right: 0; top: 32%;
-  display: flex; justify-content: center; gap: 22%;
+  position: absolute; left: 0; right: 0; top: 34%;
+  display: flex; justify-content: center; gap: 14%;
 }
+/* Wider than they are tall, because they are not going to be looked at
+   square-on. The wall crushes horizontal distance by roughly 3.2x from this
+   camera, so a round LED drawn round comes out as a thin vertical slit --
+   and in a blacked-out room that slit is the only thing telling you where
+   to click. 70x22 projects to a circle. */
 .fuse-led {
-  width: 22px; height: 22px; border-radius: 50%;
+  width: 70px; height: 22px; border-radius: 50%;
   background: #1b1a18;
   border: 1px solid rgba(0, 0, 0, .6);
   box-shadow: inset 0 2px 2px rgba(255, 255, 255, .12);
@@ -2393,12 +2591,15 @@ html, body {
 /* Both lights swap when it trips, and the red one pulses -- in a completely
    dark room it is the only thing telling you where to click. */
 .fusebox.is-tripped .fuse-led-green {
-  background: #1e2a1e;
-  box-shadow: inset 0 2px 2px rgba(255, 255, 255, .06);
+  /* Nearly black, not dark green: with the power off it is an unlit lens,
+     and the brief was that the red light is the only thing you can see. */
+  background: #141614;
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, .04);
 }
 .fusebox.is-tripped .fuse-led-red {
-  background: #e8402f;
-  box-shadow: 0 0 26px rgba(232, 64, 47, .95), 0 0 70px rgba(232, 64, 47, .5),
+  background: #ff4a33;
+  box-shadow: 0 0 34px rgba(232, 64, 47, .95), 0 0 110px rgba(232, 64, 47, .6),
+              0 0 200px rgba(232, 64, 47, .3),
               inset 0 2px 2px rgba(255, 255, 255, .35);
   animation: fuse-alarm .9s ease-in-out infinite;
 }
@@ -2408,8 +2609,8 @@ html, body {
 }
 
 .fuse-switch {
-  position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%);
-  width: 46%; height: 30%;
+  position: absolute; left: 50%; bottom: 11%; transform: translateX(-50%);
+  width: 30%; height: 32%;
   appearance: none; padding: 0; margin: 0;
   border-radius: 4px;
   border: 1px solid rgba(0, 0, 0, .55);
@@ -2424,6 +2625,35 @@ html, body {
 }
 /* Thrown down, which is what a tripped breaker looks like. */
 .fusebox.is-tripped .fuse-lever { top: 52%; }
+
+/* Narrow frames: back onto the back wall, under the shelf.
+   
+   How much of the right wall you can see is set by where the corner lands,
+   and the corner is a fixed point in the room -- so as the frame narrows it
+   walks toward the right-hand edge and the wall becomes a sliver. Below
+   about 1700 there is 60px of it or less, which is not somewhere a box you
+   have to find and hit in ten seconds can go. The room keeps its corner
+   either way; only the box moves.
+   
+   x = 1057 is the middle of what is left of the back wall: the monitor's
+   right edge falls at x = 865 on this plane at every size (it is pinned to
+   fixed geometry), and the corner is at x = 1250.
+   
+   The unit's proportions have to be restated because the two placements are
+   different shapes: 520x300 crushed by the grazing angle on the side wall,
+   176x236 seen square-on here. */
+@media (max-width: 1699px) {
+  .fusebox {
+    --depth: 74px;
+    width: 176px; height: 236px;
+    transform: translate(-50%, -50%)
+               translateX(1057px) translateY(-120px) translateZ(-2200px);
+  }
+  .fuse-label { left: 14%; right: 14%; top: 10%; height: 12%; }
+  .fuse-leds { top: 32%; gap: 22%; }
+  .fuse-led { width: 22px; }        /* seen square-on here, so actually round */
+  .fuse-switch { bottom: 12%; width: 46%; height: 30%; }
+}
 /* The whole box is the target, so finding it in the dark is about the light
    rather than about hitting the small switch. */
 .fusebox.is-tripped { pointer-events: auto; cursor: pointer; }

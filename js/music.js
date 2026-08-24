@@ -3,26 +3,60 @@
 //
 // It is not a loop that plays back. There is a scheduler ticking on a timer,
 // and a THEME describing what to build: a tempo, a scale, a chord
-// progression, and which layers are switched on. Changing the theme changes
-// what gets scheduled from the next bar, so the music follows the game
-// rather than being cut and restarted at every transition.
+// progression, and a set of layers. Changing the theme changes what gets
+// scheduled from the next bar, so the music follows the game rather than
+// being cut and restarted at every transition.
 //
-// Why generative rather than a written loop: the track has to sit under
-// someone concentrating on a word for five minutes at a stretch. A short
-// loop announces itself the third time round. A progression walking through
-// its chords with a little controlled randomness in the arp stops being
-// something you notice and turns into room tone -- which is the whole point.
+// ── What changed, and why ────────────────────────────────────────────────
 //
-// Scheduling uses the standard lookahead pattern (Chris Wilson, "A Tale of
-// Two Clocks"): a setInterval wakes often and queues every note falling
-// inside a short window, at sample-accurate times, on the audio clock. Note
-// timing never touches setTimeout, so a busy main thread -- a board full of
-// tiles flipping -- cannot make the music stutter.
+// The first version of this had four layers -- a pad, a root-note bass, a
+// wandering arp and a soft thump -- and every one of them went through the
+// same oscillator-into-a-lowpass voice. A theme could differ from another
+// theme in tempo, in scale, and in how loud each layer was, and in nothing
+// else. Which meant that at some level every theme WAS the same theme. You
+// do not tell two pieces of music apart by their filter cutoff. You tell
+// them apart by what they play.
+//
+// So the engine now has the three things that were missing:
+//
+//   1. Written parts. `bass` and `lead` are step patterns of scale degrees,
+//      not "a root note every N steps". A theme can have a riff, and a riff
+//      is the thing you actually remember afterwards.
+//   2. A drum machine. Kick, snare, rim, closed and open hats and a clap,
+//      each on its own pattern, instead of one thump that fired whenever
+//      the step number divided by four.
+//   3. Voices worth writing for: saw and square through a resonant filter
+//      that sweeps across each note, detuned stacks, sub-oscillators, bells.
+//
+// Plus swing, which on its own is most of the difference between the Solo
+// bed and the Co-op one.
+//
+// ── Patterns ─────────────────────────────────────────────────────────────
+//
+// Drums are strings, one character per 16th note: `x` a hit, `X` an accent,
+// `.` a rest. Length is a multiple of 16, so a two-bar pattern is 32
+// characters and still reads as two bars on one line.
+//
+// Bass and lead are arrays, one entry per 16th:
+//   a number -- play this scale degree, relative to the bar's chord root
+//   _        -- rest
+//   H        -- hold the note before it
+// A note lasts for however many H follow it, so a riff's rhythm lives in the
+// same array as its pitches instead of in a parallel duration field.
+//
+// ── Scheduling ───────────────────────────────────────────────────────────
+//
+// Standard lookahead (Chris Wilson, "A Tale of Two Clocks"): a setInterval
+// wakes often and queues every note falling inside a short window, at
+// sample-accurate times, on the audio clock. Note timing never touches
+// setTimeout, so a busy main thread -- a board full of tiles flipping --
+// cannot make the music stutter.
 
 import { audioContext, buses } from './audio.js';
 
 const LOOKAHEAD_MS = 25;    // how often the scheduler wakes
 const HORIZON_S = 0.14;     // how far ahead it queues
+const STEPS_PER_BAR = 16;
 
 // ── Notes ────────────────────────────────────────────────────────────────
 // Semitones from A4 = 440. Everything below is written in scale degrees, so
@@ -36,6 +70,9 @@ const SCALES = {
   major:   [0, 2, 4, 5, 7, 9, 11],
   minor:   [0, 2, 3, 5, 7, 8, 10],
   dorian:  [0, 2, 3, 5, 7, 9, 10],
+  // Minor with a flattened second. Every line in it leans on that semitone
+  // and wants to fall, which is why it is the sound of being chased.
+  phryg:   [0, 1, 3, 5, 7, 8, 10],
   // Deliberately unsettled -- no perfect fifth to land on.
   whole:   [0, 2, 4, 6, 8, 10],
   // Flat fifth as well as a flat second: the one mode with no stable note
@@ -50,182 +87,360 @@ function degree(scale, n) {
   return scale[((n % len) + len) % len] + 12 * oct;
 }
 
+// Shorthand, so a written pattern reads as a rhythm rather than as
+// punctuation. `_` is a rest and `H` holds the note before it.
+const _ = null;
+const H = 'hold';
+
 // ── Themes ───────────────────────────────────────────────────────────────
 // `chords` are root degrees; each bar takes the next one. Layer gains are
 // absolute and small: the music bus already carries the player's volume, and
 // this bed has to stay under a chime without being ducked.
 const THEMES = {
-  // Menus. Slow, open, almost still.
+  // ── Menus ──────────────────────────────────────────────────────────────
+
+  // The first thing anyone hears. Slow and open, but it has a tune now:
+  // four notes with long tails, once every two bars. A title screen that is
+  // only texture gives you nothing to remember the game by.
   title: {
     bpm: 66, root: -21, scale: 'penta', chords: [0, 3, 4, 2],
-    pad: { gain: 0.045, cutoff: 1100 },
-    bass: { gain: 0.05, every: 8 },
-    arp: { gain: 0.035, every: 4, span: 5, jitter: 0.4, cutoff: 2200 },
-    perc: null,
+    pad: { gain: 0.045, cutoff: 1100, wave: 'triangle' },
+    bass: { gain: 0.05, wave: 'sine', cutoff: 300, octave: -1, legato: 1.8,
+      pattern: [0, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] },
+    lead: { gain: 0.034, wave: 'sine', bell: true, cutoff: 3400, octave: 1,
+      pattern: [4, H, H, H, _, _, 2, H, H, _, _, _, 0, H, H, H,
+                _, _, _, _, 7, H, H, H, _, _, 4, H, H, _, _, _] },
+    arp: { gain: 0.024, every: 4, span: 5, jitter: 0.4, cutoff: 2200 },
+    drums: null,
   },
-  // Waiting for people. The same room, with a pulse to say time is passing.
+
+  // Waiting for people. The title's key, given a pulse and a walking bass:
+  // the room is filling up and something is about to start.
   lobby: {
-    bpm: 78, root: -21, scale: 'penta', chords: [0, 4, 3, 4],
-    pad: { gain: 0.04, cutoff: 1200 },
-    bass: { gain: 0.055, every: 4 },
-    arp: { gain: 0.035, every: 2, span: 6, jitter: 0.3, cutoff: 2600 },
-    perc: { gain: 0.018, hat: 4, kick: 8 },
+    bpm: 82, root: -21, scale: 'penta', chords: [0, 4, 3, 4],
+    pad: { gain: 0.038, cutoff: 1250, wave: 'triangle' },
+    bass: { gain: 0.056, wave: 'sine', cutoff: 340, octave: -1,
+      pattern: [0, _, _, _, 4, _, _, _, 2, _, _, _, 4, _, 5, _] },
+    lead: { gain: 0.03, wave: 'triangle', cutoff: 2600, octave: 1,
+      pattern: [_, _, 0, _, 2, _, _, 4, H, _, _, 2, _, _, _, _,
+                _, _, 4, _, 5, _, _, 7, H, H, _, _, 4, _, 2, _] },
+    drums: { gain: 0.02, kick: 'x.......x.......', hat: '..x...x...x...x.',
+             rim: '....x.......x...' },
   },
-  // Under live play. The one that has to disappear: no arp at all, because
-  // a moving line is exactly what pulls attention off a word.
+
+  // ── Under live play ────────────────────────────────────────────────────
+
+  // Solo. The one theme whose whole job is to disappear: no lead, no arp,
+  // nothing that moves. A line over the top is exactly what pulls attention
+  // off a word, and in Solo there is nothing else to pull it back.
+  //
+  // Deliberately left alone in the rewrite. It is not a weak theme, it is a
+  // bed, and those are different jobs.
   live: {
     bpm: 84, root: -21, scale: 'penta', chords: [0, 2, 3, 4],
-    pad: { gain: 0.05, cutoff: 900 },
-    bass: { gain: 0.05, every: 8 },
-    arp: null,
-    perc: { gain: 0.012, hat: 8, kick: 16 },
+    pad: { gain: 0.05, cutoff: 900, wave: 'triangle' },
+    bass: { gain: 0.05, wave: 'sine', cutoff: 420, octave: -1, legato: 1.4,
+      pattern: [0, _, _, _, _, _, _, _, 0, _, _, _, _, _, _, _] },
+    lead: null,
+    drums: { gain: 0.012, kick: 'x...............', hat: '........x.......' },
   },
-  // PvP. Someone else is racing you through the same word right now, and the
-  // bed should not let you forget it: faster, minor, and a bass on every
-  // other step that behaves like a pulse rather than a note. Still no arp --
-  // whatever the mood, a moving line over the top pulls your eye off the
-  // board, and that is true in a duel as much as anywhere. The adrenaline
-  // comes from tempo and insistence, not from melody.
+
+  // PvP. Someone else is racing you through the same word right now.
+  //
+  // This is the one that had to change most. The old version was the Solo
+  // bed at 108bpm in a minor key, and "the same thing, faster and sadder" is
+  // not adrenaline. This is built the way a fast track is actually built:
+  // four-on-the-floor under a rolling 16th bass, accented snare on 2 and 4,
+  // an open hat pulling into each bar line, and a two-bar saw hook over the
+  // top with the filter sweeping shut through every note.
+  //
+  // The hook is 32 steps against a four-bar chord cycle, so it comes round
+  // twice per cycle over different harmony each time -- often enough to be a
+  // hook, never twice identically.
   live_pvp: {
-    bpm: 108, root: -21, scale: 'minor', chords: [0, 0, 5, 4],
-    pad: { gain: 0.042, cutoff: 850 },
-    bass: { gain: 0.072, every: 2 },
-    arp: null,
-    perc: { gain: 0.024, hat: 2, kick: 8 },
+    bpm: 146, root: -21, scale: 'minor', chords: [0, 0, 5, 6],
+    pad: { gain: 0.026, cutoff: 640, wave: 'sawtooth', detune: 9 },
+    bass: { gain: 0.07, wave: 'sawtooth', cutoff: 300, q: 4, sweep: 3, octave: -1,
+      pattern: [0, _, 0, 0, _, 0, _, 0, 0, _, 0, _, 0, 0, _, 7] },
+    lead: { gain: 0.032, wave: 'sawtooth', cutoff: 2100, q: 7, sweep: 4, spread: 11, octave: 1,
+      pattern: [7, H, _, 4, _, 7, _, 9, 11, H, H, _, 9, _, 7, _,
+                4, H, _, 7, _, 4, _, 2, 0, H, H, _, 2, 4, _, _] },
+    drums: { gain: 0.028, kick: 'x...x...x...x...', snare: '....X.......X...',
+             hat: '..x...x...x...x.', open: '..............x.' },
   },
+
   // Co-op. Nobody is racing anybody -- you are all looking at one board --
-  // so this stays calm, but it should not just be Solo's bed again. Dorian
-  // gives it a colour of its own, and a bell every half bar is the one arp
-  // slow enough not to distract: it reads as space rather than movement.
+  // so it stays calm. What makes it not-Solo is the swing: the off-16ths
+  // land a fifth of a step late, which is the single change that turns a
+  // straight bed into something with a shoulder roll in it. Dorian on top of
+  // that, a dub bass with a long tail, a rimshot where a snare would be, and
+  // a bell line sparse enough to read as space rather than movement.
   live_coop: {
-    bpm: 74, root: -21, scale: 'dorian', chords: [0, 3, 5, 2],
-    pad: { gain: 0.055, cutoff: 1150 },
-    bass: { gain: 0.05, every: 8 },
-    arp: { gain: 0.03, every: 8, span: 5, jitter: 0.45, cutoff: 2400, bell: true },
-    perc: { gain: 0.011, hat: 8, kick: 16 },
+    bpm: 76, root: -21, scale: 'dorian', chords: [0, 3, 5, 4], swing: 0.22,
+    pad: { gain: 0.05, cutoff: 1050, wave: 'triangle', detune: 6 },
+    bass: { gain: 0.058, wave: 'sine', cutoff: 250, octave: -1, legato: 1.6,
+      pattern: [0, _, _, _, _, _, 4, _, _, _, 0, _, _, 7, _, _] },
+    lead: { gain: 0.026, wave: 'sine', bell: true, cutoff: 3000, octave: 1,
+      pattern: [_, _, 4, _, _, 2, _, _, 0, H, _, _, _, _, _, _,
+                _, _, 7, _, _, 4, _, _, 2, H, H, _, _, _, _, _] },
+    drums: { gain: 0.013, kick: 'x.......x.......', rim: '....x.......x...',
+             hat: '..x...x...x...x.' },
   },
-  // ⚡ Blitz. Faster, minor, and the hats close up -- the clock is the point.
+
+  // ── Round modifiers ────────────────────────────────────────────────────
+
+  // Blitz. The clock is the point, so everything here is a subdivision of
+  // it: a square lead running straight 8ths with no rests in it at all, hats
+  // on every sixteenth, and a bass that never lets a bar breathe. Square
+  // rather than saw, so it does not just sound like PvP in a hurry.
   blitz: {
     bpm: 138, root: -21, scale: 'minor', chords: [0, 5, 3, 4],
-    pad: { gain: 0.032, cutoff: 800 },
-    bass: { gain: 0.07, every: 2 },
-    arp: { gain: 0.042, every: 1, span: 7, jitter: 0.1, cutoff: 3200 },
-    perc: { gain: 0.03, hat: 2, kick: 4 },
+    pad: { gain: 0.026, cutoff: 780, wave: 'sawtooth' },
+    bass: { gain: 0.066, wave: 'square', cutoff: 340, q: 3, sweep: 2.5, octave: -1,
+      pattern: [0, _, 0, _, 0, _, 0, _, 0, _, 0, _, 0, _, 0, _] },
+    lead: { gain: 0.03, wave: 'square', cutoff: 2800, q: 4, sweep: 2, octave: 1,
+      pattern: [0, _, 2, _, 4, _, 2, _, 5, _, 4, _, 2, _, 0, _,
+                7, _, 5, _, 4, _, 5, _, 4, _, 2, _, 0, _, 2, _] },
+    drums: { gain: 0.028, kick: 'x...x...x...x...', snare: '....X.......X...',
+             hat: 'x.x.x.x.x.x.x.x.', open: '..............x.' },
   },
-  // 💰 Double Points. Warm and major, with a bell arp over the top.
+
+  // Double Points. Warm and major, with a bell hook that keeps climbing --
+  // it should sound like good news arriving.
   double_points: {
-    bpm: 92, root: -21, scale: 'major', chords: [0, 3, 5, 4],
-    pad: { gain: 0.055, cutoff: 1600 },
-    bass: { gain: 0.055, every: 4 },
-    arp: { gain: 0.05, every: 2, span: 8, jitter: 0.25, cutoff: 4200, bell: true },
-    perc: { gain: 0.016, hat: 4, kick: 8 },
+    bpm: 96, root: -21, scale: 'major', chords: [0, 3, 5, 4],
+    pad: { gain: 0.052, cutoff: 1700, wave: 'triangle' },
+    bass: { gain: 0.055, wave: 'sine', cutoff: 380, octave: -1,
+      pattern: [0, _, _, _, _, _, 4, _, 2, _, _, _, _, _, 4, _] },
+    lead: { gain: 0.042, wave: 'sine', bell: true, cutoff: 4200, octave: 1,
+      pattern: [4, _, 6, _, 7, H, _, _, 6, _, 4, _, 2, H, _, _,
+                7, _, 6, _, 4, H, _, _, 2, _, 4, _, 6, H, H, _] },
+    drums: { gain: 0.016, kick: 'x.......x...x...', hat: '..x...x...x...x.',
+             rim: '....x.......x...' },
   },
-  // 🙈 Blackout. Everything shuts down to a low murmur -- the legend has
-  // gone dark and so has the music.
+
+  // Blackout. The legend has gone dark and so has the music: no top end at
+  // all, a sub you feel more than hear, and one slow pulse. The only theme
+  // with nothing on the beat except that pulse.
   blackout: {
     bpm: 68, root: -24, scale: 'minor', chords: [0, 1, 0, 4],
-    pad: { gain: 0.06, cutoff: 380 },
-    bass: { gain: 0.06, every: 8 },
-    arp: null,
-    perc: null,
+    pad: { gain: 0.06, cutoff: 340, wave: 'triangle', detune: 12 },
+    bass: { gain: 0.062, wave: 'sine', cutoff: 160, octave: -1, legato: 2,
+      pattern: [0, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] },
+    lead: null,
+    drums: { gain: 0.02, kick: 'x.......x.......' },
   },
-  // 🎰 Jackpot. The only theme allowed to be loud.
+
+  // Jackpot. The one theme allowed to be loud, and the only one that gets a
+  // clap. Bouncing bass, bell hook, hats wide open: a machine paying out.
   jackpot: {
-    bpm: 116, root: -21, scale: 'major', chords: [0, 4, 5, 4],
-    pad: { gain: 0.05, cutoff: 2600 },
-    bass: { gain: 0.07, every: 2 },
-    arp: { gain: 0.06, every: 1, span: 9, jitter: 0.15, cutoff: 5200, bell: true },
-    perc: { gain: 0.032, hat: 2, kick: 4 },
+    bpm: 118, root: -21, scale: 'major', chords: [0, 4, 5, 4],
+    pad: { gain: 0.044, cutoff: 2600, wave: 'sawtooth', detune: 7 },
+    bass: { gain: 0.07, wave: 'square', cutoff: 420, q: 3, sweep: 2.5, octave: -1,
+      pattern: [0, _, _, 0, _, 4, _, _, 0, _, _, 0, _, 7, _, 4] },
+    lead: { gain: 0.05, wave: 'sine', bell: true, cutoff: 5000, octave: 1,
+      pattern: [7, _, 9, _, 11, _, 9, _, 7, H, _, 4, _, 7, _, _,
+                11, _, 9, _, 7, _, 9, _, 11, H, H, _, _, 9, 7, _] },
+    drums: { gain: 0.03, kick: 'x...x...x...x...', clap: '....x.......x...',
+             hat: 'x.x.x.x.x.x.x.x.', open: '......x.......x.' },
   },
-  // 🔀 Letter Swap. Whole-tone: nothing resolves, which is the joke.
-  letter_swap: {
-    bpm: 88, root: -22, scale: 'whole', chords: [0, 2, 4, 1],
-    pad: { gain: 0.05, cutoff: 1300, detune: 14 },
-    bass: { gain: 0.05, every: 4 },
-    arp: { gain: 0.04, every: 2, span: 6, jitter: 0.5, cutoff: 2800 },
-    perc: { gain: 0.014, hat: 4, kick: 8 },
-  },
-  // ⛈ The storm. Player-sided -- only the person whose window it is raining
-  // on hears it -- and the one theme that is allowed to be unpleasant.
+
+  // Letter Swap. Whole-tone: six equal steps, no leading note, nothing that
+  // resolves. The lead climbs a ladder with no top and no bottom and slides
+  // into every note of it -- your letters just moved and so did the tune.
   //
-  // It used to be slow and moody, which is what weather sounds like from
-  // indoors when you are not worried about it. A storm that is about to take
-  // your lights out is not that. Locrian has no stable fifth to sit on, the
-  // arp jitters more than any other theme's, and the bass moves on every
-  // other step, so nothing here settles.
+  // It is a detuned saw with a wide spread rather than a polite triangle,
+  // and it has a clap and a moving bass under it, because this had to be
+  // audibly further from the Co-op bed than it was: Co-op is the theme a
+  // letter swap most often lands on top of, and two things you hear one
+  // after the other are the two that must not be confusable. Measured on
+  // the music bus the pair used to sit almost on top of each other.
+  letter_swap: {
+    bpm: 92, root: -22, scale: 'whole', chords: [0, 2, 4, 1],
+    pad: { gain: 0.044, cutoff: 1500, wave: 'sawtooth', detune: 20 },
+    bass: { gain: 0.058, wave: 'square', cutoff: 320, q: 3, sweep: 2.5, octave: -1,
+      pattern: [0, _, 0, _, 3, _, 0, _, 0, _, 5, _, 3, _, 0, _] },
+    lead: { gain: 0.036, wave: 'sawtooth', cutoff: 3000, q: 5, sweep: 3,
+      spread: 22, octave: 1, glide: 0.06,
+      pattern: [0, _, 1, _, 2, _, 3, _, 4, _, 5, _, 6, _, 7, _,
+                6, _, 5, _, 4, _, 3, _, 2, _, 1, _, 0, _, -1, _] },
+    drums: { gain: 0.022, kick: 'x...x...x...x...', clap: '....x.......x...',
+             hat: 'x.x.x.x.x.x.x.x.' },
+  },
+
+  // ── The room ───────────────────────────────────────────────────────────
+
+  // The storm. Player-sided -- only the person whose window it is raining on
+  // hears it -- and the one theme allowed to be unpleasant. Locrian has no
+  // stable fifth to sit on, the bass moves on every other step, and the lead
+  // is a figure that keeps trying to land and cannot.
   storm: {
     bpm: 128, root: -24, scale: 'locrian', chords: [0, 1, 4, 6, 0, 3],
-    pad: { gain: 0.05, cutoff: 620, detune: 22 },
-    bass: { gain: 0.075, every: 2 },
-    arp: { gain: 0.042, every: 1, span: 9, jitter: 0.85, cutoff: 2600 },
-    perc: { gain: 0.026, hat: 2, kick: 8 },
+    pad: { gain: 0.05, cutoff: 600, wave: 'sawtooth', detune: 24 },
+    bass: { gain: 0.072, wave: 'sawtooth', cutoff: 260, q: 5, sweep: 3, octave: -1,
+      pattern: [0, _, 0, _, 1, _, 0, _, 0, _, 4, _, 0, 0, _, 1] },
+    lead: { gain: 0.03, wave: 'sawtooth', cutoff: 1700, q: 8, sweep: 3.5, spread: 18, octave: 1,
+      pattern: [4, _, 3, _, 4, _, 6, H, _, 4, _, 3, _, 1, _, _,
+                6, _, 4, _, 3, _, 1, H, _, 0, _, 1, _, 3, 4, _] },
+    arp: { gain: 0.028, every: 2, span: 9, jitter: 0.85, cutoff: 2600 },
+    drums: { gain: 0.026, kick: 'x...x..xx...x...', snare: '....X.......X...',
+             hat: '..x...x...x...x.' },
   },
+
   // The lights are out and something is in the room with you. Almost
   // nothing: a low drone and a heartbeat, which is what your ears do with
-  // silence when you are already braced for a fright.
+  // silence when you are already braced for a fright. Two kicks close
+  // together and then a long gap -- a heartbeat, not a pulse.
   outage: {
     bpm: 54, root: -27, scale: 'locrian', chords: [0, 0, 1, 0],
-    pad: { gain: 0.07, cutoff: 210, detune: 30 },
-    bass: { gain: 0.05, every: 8 },
-    arp: null,
-    // Nothing but the low hit: a heartbeat, on every half bar.
-    perc: { gain: 0.03, hat: null, kick: 8 },
+    pad: { gain: 0.07, cutoff: 200, wave: 'triangle', detune: 32 },
+    bass: { gain: 0.05, wave: 'sine', cutoff: 140, octave: -1, legato: 2,
+      pattern: [0, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] },
+    lead: null,
+    drums: { gain: 0.03, kick: 'x..x............' },
   },
-  // You won. Major, unhurried, and the only theme that gets a bell arp on
-  // top of a full pad -- it should sound like the thing you were playing for.
-  victory: {
-    bpm: 96, root: -21, scale: 'major', chords: [0, 4, 5, 3],
-    pad: { gain: 0.06, cutoff: 2600 },
-    bass: { gain: 0.06, every: 4 },
-    arp: { gain: 0.055, every: 2, span: 9, jitter: 0.2, cutoff: 4600, bell: true },
-    perc: { gain: 0.02, hat: 4, kick: 8 },
-  },
-  // You did not. Minor and slow, but deliberately not miserable -- there is
-  // another match in a minute, and a dirge would make losing one round of a
-  // word game feel like more than it is.
-  defeat: {
-    bpm: 70, root: -24, scale: 'minor', chords: [0, 5, 3, 4],
-    pad: { gain: 0.055, cutoff: 900 },
-    bass: { gain: 0.05, every: 8 },
-    arp: { gain: 0.03, every: 4, span: 5, jitter: 0.3, cutoff: 1700 },
-    perc: null,
-  },
-  // The word is up. Held, resolved, and out of the way of the reveal cue.
-  reveal: {
-    bpm: 60, root: -21, scale: 'major', chords: [0, 4],
-    pad: { gain: 0.05, cutoff: 1500 },
-    bass: { gain: 0.045, every: 8 },
-    arp: null,
-    perc: null,
-  },
-  // The dead-time games. Brighter and busier than the menus it sits between
-  // -- the arcade is the one place in this app you are supposed to be going
-  // fast, and a bed that stays as still as the title screen's undercuts
-  // that. Same key as everything else, so leaving it is not a lurch.
-  arcade: {
-    bpm: 104, root: -21, scale: 'penta', chords: [0, 4, 2, 5],
-    pad: { gain: 0.038, cutoff: 1700 },
-    bass: { gain: 0.06, every: 2 },
-    arp: { gain: 0.045, every: 2, span: 8, jitter: 0.35, cutoff: 3800 },
-    perc: { gain: 0.022, hat: 2, kick: 8 },
-  },
+
   // Someone else's music, through a wall. A room event rather than anything
   // the game did -- and the reason the engine has an override layer at all.
   // Four-on-the-floor with the top end taken off: what you actually hear
-  // through plasterboard is the kick and the bass, and nothing else.
+  // through plasterboard is the kick and the bass and nothing else, so there
+  // are no hats here at all. Those are the first thing a wall eats.
   neighbour: {
-    bpm: 124, root: -24, scale: 'minor', chords: [0, 0, 5, 3],
-    pad: { gain: 0.045, cutoff: 190 },
-    bass: { gain: 0.075, every: 2 },
-    arp: null,
-    perc: { gain: 0.028, hat: 4, kick: 4 },
+    bpm: 126, root: -24, scale: 'minor', chords: [0, 0, 5, 3],
+    pad: { gain: 0.045, cutoff: 190, wave: 'sawtooth' },
+    bass: { gain: 0.075, wave: 'square', cutoff: 200, octave: -1,
+      pattern: [0, _, _, 0, _, _, 0, _, 0, _, _, 0, _, 7, _, _] },
+    lead: { gain: 0.014, wave: 'sawtooth', cutoff: 320, octave: 0,
+      pattern: [0, _, _, _, 4, _, _, _, 3, _, _, _, 0, _, _, _] },
+    drums: { gain: 0.028, kick: 'x...x...x...x...' },
   },
+
+  // ── Outcomes ───────────────────────────────────────────────────────────
+
+  // The word is up. Held, resolved, and out of the way of the reveal cue --
+  // this plays for a few seconds and hands back, so it is a chord and a
+  // breath rather than a piece of music.
+  reveal: {
+    bpm: 60, root: -21, scale: 'major', chords: [0, 4],
+    pad: { gain: 0.05, cutoff: 1500, wave: 'triangle' },
+    bass: { gain: 0.045, wave: 'sine', cutoff: 300, octave: -1, legato: 2,
+      pattern: [0, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] },
+    lead: null,
+    drums: null,
+  },
+
+  // Between rounds. Mid-tempo and a little funky -- you are reading a table,
+  // not playing, so this is one of the few places a tune can have your
+  // attention without costing you anything.
   standings: {
-    bpm: 86, root: -21, scale: 'penta', chords: [0, 4, 2, 3],
-    pad: { gain: 0.042, cutoff: 1500 },
-    bass: { gain: 0.05, every: 4 },
-    arp: { gain: 0.04, every: 2, span: 7, jitter: 0.3, cutoff: 3200 },
-    perc: { gain: 0.02, hat: 4, kick: 8 },
+    bpm: 90, root: -21, scale: 'penta', chords: [0, 4, 2, 3],
+    pad: { gain: 0.04, cutoff: 1500, wave: 'triangle' },
+    bass: { gain: 0.058, wave: 'sine', cutoff: 360, octave: -1,
+      pattern: [0, _, _, 0, _, _, 4, _, _, 0, _, _, 5, _, 4, _] },
+    lead: { gain: 0.036, wave: 'triangle', cutoff: 3000, octave: 1,
+      pattern: [_, _, 4, _, 5, H, _, 4, _, 2, _, _, 0, H, _, _,
+                _, _, 7, _, 5, H, _, 4, _, 5, _, _, 4, H, 2, _] },
+    drums: { gain: 0.02, kick: 'x.....x.x.......', snare: '....x.......x...',
+             hat: '..x...x...x...x.' },
+  },
+
+  // You won. Major, unhurried, and the only theme with a fanfare in it: a
+  // rising figure that lands on the octave and stays there. It should sound
+  // like the thing you were playing for.
+  victory: {
+    bpm: 100, root: -21, scale: 'major', chords: [0, 4, 5, 3],
+    pad: { gain: 0.058, cutoff: 2600, wave: 'triangle' },
+    bass: { gain: 0.062, wave: 'sine', cutoff: 400, octave: -1,
+      pattern: [0, _, _, _, 4, _, _, _, 2, _, _, _, 4, _, 5, _] },
+    lead: { gain: 0.05, wave: 'sine', bell: true, cutoff: 4600, octave: 1,
+      pattern: [0, _, 2, _, 4, _, 5, _, 7, H, H, _, 4, _, 7, _,
+                9, _, 7, _, 5, _, 4, _, 7, H, H, H, H, _, _, _] },
+    drums: { gain: 0.022, kick: 'x...x...x...x...', clap: '....x.......x...',
+             hat: '..x...x...x...x.', open: '..............x.' },
+  },
+
+  // You did not. Minor and slow, but deliberately not miserable -- there is
+  // another match in a minute, and a dirge would make losing one round of a
+  // word game feel like more than it is. The line falls, then turns back up
+  // at the end of every phrase.
+  defeat: {
+    bpm: 74, root: -24, scale: 'minor', chords: [0, 5, 3, 4],
+    pad: { gain: 0.055, cutoff: 900, wave: 'triangle' },
+    bass: { gain: 0.05, wave: 'sine', cutoff: 280, octave: -1, legato: 1.6,
+      pattern: [0, _, _, _, _, _, _, _, 4, _, _, _, _, _, _, _] },
+    lead: { gain: 0.03, wave: 'triangle', cutoff: 1900, octave: 1,
+      pattern: [7, H, _, 5, _, 4, H, _, 2, H, H, _, _, _, _, _,
+                4, H, _, 2, _, 0, H, _, 2, H, H, H, _, _, _, _] },
+    drums: { gain: 0.012, rim: '........x.......' },
+  },
+
+  // ── The arcade ─────────────────────────────────────────────────────────
+  //
+  // Four themes, not one. The picker keeps its own, and then each game gets
+  // the music its particular kind of pressure deserves. A minigame played
+  // for a personal best is the one place in this app where the music is
+  // allowed to be the loudest thing happening.
+
+  // Choosing a game. Bright and busy and going somewhere -- but nothing has
+  // started yet, so no snare.
+  arcade: {
+    bpm: 108, root: -21, scale: 'penta', chords: [0, 4, 2, 5],
+    pad: { gain: 0.034, cutoff: 1700, wave: 'triangle' },
+    bass: { gain: 0.06, wave: 'square', cutoff: 380, q: 3, sweep: 2, octave: -1,
+      pattern: [0, _, 0, _, _, 4, _, _, 0, _, 0, _, _, 5, _, _] },
+    lead: { gain: 0.036, wave: 'triangle', cutoff: 3400, octave: 1,
+      pattern: [0, _, 2, _, 4, _, _, 2, _, 4, _, 5, 4, _, 2, _,
+                7, _, 5, _, 4, _, _, 5, _, 4, _, 2, 0, _, _, _] },
+    drums: { gain: 0.02, kick: 'x.......x...x...', hat: '..x...x...x...x.',
+             rim: '....x.......x...' },
+  },
+
+  // Word Hunt: sixty seconds staring at a rack of letters. Rummaging music
+  // -- a bouncy, wide-interval bell figure that keeps turning things over
+  // and putting them back. Major pentatonic, so it is still friendly at
+  // minute four of a session.
+  arcade_hunt: {
+    bpm: 114, root: -21, scale: 'penta', chords: [0, 2, 4, 2],
+    pad: { gain: 0.03, cutoff: 1900, wave: 'triangle' },
+    bass: { gain: 0.062, wave: 'sine', cutoff: 400, octave: -1,
+      pattern: [0, _, _, 0, _, 4, _, _, 0, _, _, 2, _, 5, _, _] },
+    lead: { gain: 0.042, wave: 'sine', bell: true, cutoff: 4000, octave: 1,
+      pattern: [0, _, 4, _, 2, _, 7, _, 5, _, 2, _, 4, _, _, _,
+                7, _, 4, _, 9, _, 5, _, 7, _, 4, _, 2, _, 0, _] },
+    drums: { gain: 0.024, kick: 'x...x.....x.x...', snare: '....x.......x...',
+             hat: '..x...x...x...x.', open: '..............x.' },
+  },
+
+  // Chain: every word has to start where the last one ended. So does the
+  // music -- the second bar of the hook begins on the note the first bar
+  // finished on, over a bass that never stops moving forward. Dorian,
+  // because it is the mode that sounds like it is on its way somewhere.
+  arcade_chain: {
+    bpm: 124, root: -21, scale: 'dorian', chords: [0, 3, 5, 3],
+    pad: { gain: 0.03, cutoff: 1200, wave: 'sawtooth', detune: 6 },
+    bass: { gain: 0.068, wave: 'sawtooth', cutoff: 320, q: 4, sweep: 2.5, octave: -1,
+      pattern: [0, _, 0, 3, _, 0, _, 5, 0, _, 0, 3, _, 7, _, 5] },
+    lead: { gain: 0.036, wave: 'square', cutoff: 2600, q: 3, sweep: 2, octave: 1,
+      pattern: [0, _, 2, _, 3, _, 5, H, _, _, 3, _, 2, _, 0, _,
+                0, _, -2, _, 0, _, 2, H, _, _, 3, _, 5, _, 7, _] },
+    drums: { gain: 0.026, kick: 'x...x...x...x...', snare: '....x.......x.x.',
+             hat: 'x.x.x.x.x.x.x.x.' },
+  },
+
+  // Moth Swat: reflexes, three lives, and a moth that will not hold still.
+  // The fastest thing in the app. Phrygian for that flat second, a lead in
+  // stabs rather than lines, and a snare that keeps arriving a sixteenth
+  // early so you never quite settle into the bar.
+  arcade_swat: {
+    bpm: 152, root: -21, scale: 'phryg', chords: [0, 0, 1, 0],
+    pad: { gain: 0.024, cutoff: 700, wave: 'sawtooth', detune: 11 },
+    bass: { gain: 0.072, wave: 'sawtooth', cutoff: 280, q: 5, sweep: 3, octave: -1,
+      pattern: [0, 0, _, 0, _, 0, 1, _, 0, 0, _, 0, _, 1, _, 0] },
+    lead: { gain: 0.03, wave: 'square', cutoff: 2400, q: 6, sweep: 3, spread: 9, octave: 1,
+      pattern: [0, _, _, 1, _, _, 0, _, _, 4, _, 3, _, _, 1, _,
+                _, 0, _, _, 1, _, 3, _, 4, _, _, 3, _, 1, 0, _] },
+    drums: { gain: 0.03, kick: 'x...x...x...x...', snare: '....X.....X.X...',
+             hat: 'x.x.x.x.x.x.x.x.', open: '..........x.....' },
   },
 };
 
@@ -247,11 +462,10 @@ let pending = null;     // theme queued for the next bar boundary
 let base = 'live';
 let override = null;
 const wanted = () => override ?? base;
-let step = 0;           // 16th notes since the engine started
+let step = 0;           // 16th notes since the theme started
 let nextStepTime = 0;
 let noiseBuf = null;
 
-const STEPS_PER_BAR = 16;
 const stepDuration = () => 60 / theme.bpm / 4;
 
 function noiseSource() {
@@ -265,49 +479,168 @@ function noiseSource() {
   return src;
 }
 
-/** One voice: oscillator -> lowpass -> envelope -> engine out. */
-function voice({ freq, at, dur, type = 'sine', gain, cutoff = 2000, attack = 0.02, detune = 0 }) {
-  const osc = ctx.createOscillator();
+/**
+ * One voice: an oscillator (or a detuned pair) -> resonant lowpass ->
+ * envelope.
+ *
+ * `sweep` is most of why the saw themes have any life in them: the filter
+ * opens at cutoff * sweep and closes to cutoff over the front of the note.
+ * A static filter on a sawtooth is a buzz; a moving one is a synth.
+ */
+function voice({
+  freq, at, dur, type = 'sine', gain, cutoff = 2000, q = 0.5,
+  attack = 0.02, detune = 0, spread = 0, sweep = 1, sub = 0, glide = 0,
+}) {
   const lp = ctx.createBiquadFilter();
   const env = ctx.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, at);
-  if (detune) osc.detune.setValueAtTime(detune, at);
+
   lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(cutoff, at);
-  lp.Q.setValueAtTime(0.5, at);
+  lp.Q.setValueAtTime(q, at);
+  if (sweep > 1) {
+    lp.frequency.setValueAtTime(Math.min(18000, cutoff * sweep), at);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(60, cutoff), at + Math.min(dur * 0.8, 0.28));
+  } else {
+    lp.frequency.setValueAtTime(cutoff, at);
+  }
+
   env.gain.setValueAtTime(0.0001, at);
   env.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), at + attack);
   env.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-  osc.connect(lp).connect(env).connect(out);
-  osc.start(at);
-  osc.stop(at + dur + 0.05);
+  lp.connect(env).connect(out);
+
+  // `spread` is in cents, one oscillator either side of the note. Two
+  // slightly detuned saws is the cheapest way to make a lead sound like more
+  // than a pocket calculator.
+  const offsets = spread ? [-spread, spread] : [0];
+  for (const off of offsets) {
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    if (glide) {
+      osc.frequency.setValueAtTime(freq * 0.94, at);
+      osc.frequency.exponentialRampToValueAtTime(freq, at + glide);
+    } else {
+      osc.frequency.setValueAtTime(freq, at);
+    }
+    osc.detune.setValueAtTime(detune + off, at);
+    osc.connect(lp);
+    osc.start(at);
+    osc.stop(at + dur + 0.05);
+  }
+  if (sub > 0) {
+    const s = ctx.createOscillator();
+    const sg = ctx.createGain();
+    s.type = 'sine';
+    s.frequency.setValueAtTime(freq / 2, at);
+    sg.gain.setValueAtTime(0.0001, at);
+    sg.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain * sub), at + attack);
+    sg.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    s.connect(sg).connect(out);
+    s.start(at);
+    s.stop(at + dur + 0.05);
+  }
 }
 
-function percHit({ at, kick }) {
+/** A bell: the note, its octave, and a slightly-out third partial on top. */
+function bell({ freq, at, dur, gain, cutoff }) {
+  voice({ freq, at, dur, type: 'sine', gain, cutoff, attack: 0.006 });
+  voice({ freq: freq * 2, at, dur: dur * 0.55, type: 'sine', gain: gain * 0.28, cutoff });
+  voice({ freq: freq * 3.01, at, dur: dur * 0.3, type: 'sine', gain: gain * 0.1, cutoff });
+}
+
+// ── Drums ────────────────────────────────────────────────────────────────
+// Small, dry and mixed low. This is a bed under a word game, not a kit in a
+// room -- but it is a kit, which the single soft thump it replaced was not.
+
+function noiseHit({ at, gain, dur, filterType, freq, q = 1 }) {
   const src = noiseSource();
-  const filt = ctx.createBiquadFilter();
+  const f = ctx.createBiquadFilter();
   const env = ctx.createGain();
-  const g = theme.perc.gain;
-  if (kick) {
-    // Not a drum kit -- a soft thump, the sort of low knock a room makes.
-    filt.type = 'lowpass';
-    filt.frequency.setValueAtTime(140, at);
-    env.gain.setValueAtTime(g * 2.6, at);
-    env.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
-    src.connect(filt).connect(env).connect(out);
-    src.start(at); src.stop(at + 0.2);
-    voice({ freq: 68, at, dur: 0.17, type: 'sine', gain: g * 2.2, cutoff: 200, attack: 0.004 });
-  } else {
-    // Brushed, not a hi-hat: bandpassed and very short.
-    filt.type = 'bandpass';
-    filt.frequency.setValueAtTime(6200, at);
-    filt.Q.setValueAtTime(0.8, at);
-    env.gain.setValueAtTime(g, at);
-    env.gain.exponentialRampToValueAtTime(0.0001, at + 0.035);
-    src.connect(filt).connect(env).connect(out);
-    src.start(at); src.stop(at + 0.05);
+  f.type = filterType;
+  f.frequency.setValueAtTime(freq, at);
+  f.Q.setValueAtTime(q, at);
+  env.gain.setValueAtTime(gain, at);
+  env.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  src.connect(f).connect(env).connect(out);
+  src.start(at);
+  src.stop(at + dur + 0.02);
+}
+
+function kick(at, g) {
+  // The pitch drop is what makes a sine a kick rather than a boop.
+  const osc = ctx.createOscillator();
+  const env = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, at);
+  osc.frequency.exponentialRampToValueAtTime(42, at + 0.09);
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.exponentialRampToValueAtTime(g * 2.4, at + 0.004);
+  env.gain.exponentialRampToValueAtTime(0.0001, at + 0.2);
+  osc.connect(env).connect(out);
+  osc.start(at);
+  osc.stop(at + 0.25);
+  noiseHit({ at, gain: g * 0.5, dur: 0.014, filterType: 'lowpass', freq: 2400 });
+}
+
+function snare(at, g) {
+  // Two tuned tones for the shell, noise for the wires under it.
+  voice({ freq: 186, at, dur: 0.1, type: 'triangle', gain: g * 0.9, cutoff: 1400, attack: 0.001 });
+  voice({ freq: 331, at, dur: 0.08, type: 'triangle', gain: g * 0.5, cutoff: 1800, attack: 0.001 });
+  noiseHit({ at, gain: g * 1.5, dur: 0.12, filterType: 'bandpass', freq: 1900, q: 0.7 });
+}
+
+function rim(at, g) {
+  voice({ freq: 420, at, dur: 0.035, type: 'triangle', gain: g * 1.1, cutoff: 3600, attack: 0.001 });
+  noiseHit({ at, gain: g * 0.7, dur: 0.03, filterType: 'bandpass', freq: 2600, q: 2 });
+}
+
+function clap(at, g) {
+  // Three fast bursts and a tail: one burst is a slap, three is a room.
+  for (const [d, m] of [[0, 0.7], [0.011, 0.9], [0.023, 1]]) {
+    noiseHit({ at: at + d, gain: g * 1.3 * m, dur: 0.02, filterType: 'bandpass', freq: 1500, q: 0.9 });
   }
+  noiseHit({ at: at + 0.03, gain: g * 0.8, dur: 0.12, filterType: 'bandpass', freq: 1300, q: 0.6 });
+}
+
+const hat = (at, g) => noiseHit({ at, gain: g, dur: 0.028, filterType: 'highpass', freq: 7200 });
+const openHat = (at, g) => noiseHit({ at, gain: g * 0.85, dur: 0.18, filterType: 'highpass', freq: 6400 });
+
+const DRUM_VOICES = { kick, snare, rim, clap, hat, open: openHat };
+
+// ── Patterns ─────────────────────────────────────────────────────────────
+
+/** How long a note at `i` lasts, in steps: itself plus every hold after it. */
+function heldSteps(pattern, i) {
+  let n = 1;
+  while (n < pattern.length && pattern[(i + n) % pattern.length] === H) n++;
+  return n;
+}
+
+/** Play one step of a written part (`bass` or `lead`). */
+function playPattern(layer, { at, n, scale, chordRoot, stepSec }) {
+  const pat = layer.pattern;
+  const i = n % pat.length;
+  const d = pat[i];
+  if (d === null || d === undefined || d === H) return;
+
+  const semis = theme.root + 12 * (layer.octave ?? 0) + degree(scale, chordRoot + d);
+  const dur = heldSteps(pat, i) * stepSec * (layer.legato ?? 0.92);
+
+  if (layer.bell) {
+    bell({ freq: hz(semis), at, dur: Math.max(dur, 0.5), gain: layer.gain, cutoff: layer.cutoff });
+    return;
+  }
+  voice({
+    freq: hz(semis), at, dur,
+    type: layer.wave ?? 'triangle',
+    gain: layer.gain,
+    cutoff: layer.cutoff ?? 2000,
+    q: layer.q ?? 0.5,
+    sweep: layer.sweep ?? 1,
+    spread: layer.spread ?? 0,
+    sub: layer.sub ?? 0,
+    glide: layer.glide ?? 0,
+    attack: layer.attack ?? 0.012,
+  });
 }
 
 /** Everything that happens on one 16th note. */
@@ -316,7 +649,8 @@ function scheduleStep(n, at) {
   const bar = Math.floor(n / STEPS_PER_BAR);
   const inBar = n % STEPS_PER_BAR;
   const chordRoot = theme.chords[bar % theme.chords.length];
-  const barSeconds = stepDuration() * STEPS_PER_BAR;
+  const stepSec = stepDuration();
+  const barSeconds = stepSec * STEPS_PER_BAR;
 
   // Pad: one sustained chord per bar, three voices a third apart.
   if (theme.pad && inBar === 0) {
@@ -324,44 +658,41 @@ function scheduleStep(n, at) {
       const semis = theme.root + degree(scale, chordRoot + offset);
       voice({
         freq: hz(semis), at, dur: barSeconds * 1.05,
-        type: 'triangle', gain: theme.pad.gain, cutoff: theme.pad.cutoff,
+        type: theme.pad.wave ?? 'triangle',
+        gain: theme.pad.gain, cutoff: theme.pad.cutoff,
         attack: barSeconds * 0.3,
         detune: theme.pad.detune ? (offset - 2) * theme.pad.detune : 0,
       });
     }
   }
 
-  // Bass: the chord root, an octave and a half down.
-  if (theme.bass && inBar % theme.bass.every === 0) {
-    const semis = theme.root - 12 + degree(scale, chordRoot);
-    voice({
-      freq: hz(semis), at, dur: stepDuration() * theme.bass.every * 0.9,
-      type: 'sine', gain: theme.bass.gain, cutoff: 420, attack: 0.02,
-    });
-  }
+  if (theme.bass) playPattern(theme.bass, { at, n, scale, chordRoot, stepSec });
+  if (theme.lead) playPattern(theme.lead, { at, n, scale, chordRoot, stepSec });
 
-  // Arp: walks the chord, with `jitter` of the notes nudged off the pattern
-  // so a long round never settles into something you can hum along to.
+  // Arp: walks the chord with `jitter` of its notes nudged off the pattern,
+  // so a long round never settles into something you can hum along to. Kept
+  // for the two themes that want movement without a tune -- the title
+  // screen's shimmer and the storm's chaos.
   if (theme.arp && inBar % theme.arp.every === 0) {
     const idx = Math.floor(n / theme.arp.every);
     let d = chordRoot + (idx % theme.arp.span);
     if (Math.random() < theme.arp.jitter) d += [2, 4, -2, 7][Math.floor(Math.random() * 4)];
     const semis = theme.root + 12 + degree(scale, d);
     const g = theme.arp.gain * (0.65 + Math.random() * 0.35);
-    if (theme.arp.bell) {
-      voice({ freq: hz(semis), at, dur: 0.7, type: 'sine', gain: g, cutoff: theme.arp.cutoff, attack: 0.008 });
-      voice({ freq: hz(semis + 12), at, dur: 0.4, type: 'sine', gain: g * 0.3, cutoff: theme.arp.cutoff });
-    } else {
-      voice({ freq: hz(semis), at, dur: 0.45, type: 'triangle', gain: g, cutoff: theme.arp.cutoff, attack: 0.01 });
-    }
+    voice({ freq: hz(semis), at, dur: 0.45, type: 'triangle', gain: g, cutoff: theme.arp.cutoff, attack: 0.01 });
   }
 
-  if (theme.perc) {
-    // Kick wins where they coincide. `hat: null` means a theme wants the
-    // low hit and nothing else -- saying so beats encoding it as a
-    // divisibility that happens to make the hat never fire.
-    if (inBar % theme.perc.kick === 0) percHit({ at, kick: true });
-    else if (theme.perc.hat && inBar % theme.perc.hat === 0) percHit({ at, kick: false });
+  // Drums. Each part carries its own pattern, so they can disagree with each
+  // other -- which is the only way a pattern ends up with any groove in it.
+  if (theme.drums) {
+    const g = theme.drums.gain;
+    for (const part of Object.keys(DRUM_VOICES)) {
+      const pat = theme.drums[part];
+      if (!pat) continue;
+      const c = pat[n % pat.length];
+      if (c === 'x') DRUM_VOICES[part](at, g);
+      else if (c === 'X') DRUM_VOICES[part](at, g * 1.45);
+    }
   }
 }
 
@@ -382,7 +713,11 @@ function tick() {
         out.gain.linearRampToValueAtTime(1, now + 0.5);
       }
     }
-    scheduleStep(step, nextStepTime);
+    // Swing pushes the off-16ths late. It shifts when a note SOUNDS, not the
+    // grid it was scheduled on, so the bar still ends where it should and a
+    // theme change still lands on the downbeat.
+    const swing = theme.swing && step % 2 ? theme.swing * stepDuration() : 0;
+    scheduleStep(step, nextStepTime + swing);
     nextStepTime += stepDuration();
     step += 1;
   }

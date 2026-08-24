@@ -30,6 +30,66 @@ export function showScreen(id) {
   $(`#${id}`)?.setAttribute('data-active', '');
 }
 
+/**
+ * The app's own confirm(). Resolves true if they went through with it.
+ *
+ * window.confirm() blocks the whole page on a dialog drawn by the browser:
+ * it cannot be styled, it sits outside the monitor the game is pretending to
+ * be, and on mobile it hangs off the URL bar. It also freezes the music
+ * scheduler's main thread while it is up. This is the same question, asked
+ * inside the room.
+ *
+ * Focus starts on the cancel button, Escape cancels, and Tab cycles between
+ * the two buttons rather than wandering off into the board behind -- which
+ * is what makes it a modal rather than a panel that happens to be on top.
+ */
+export function confirmDialog({ title, body, confirm = 'Confirm', cancel = 'Cancel' } = {}) {
+  const veil = $('#confirm-veil');
+  const yes = $('#confirm-yes');
+  const no = $('#confirm-no');
+  $('#confirm-title').textContent = title;
+  $('#confirm-body').textContent = body;
+  yes.textContent = confirm;
+  no.textContent = cancel;
+
+  const returnFocus = document.activeElement;
+  veil.hidden = false;
+  no.focus();
+
+  return new Promise((resolve) => {
+    const done = (answer) => {
+      veil.hidden = true;
+      yes.removeEventListener('click', onYes);
+      no.removeEventListener('click', onNo);
+      veil.removeEventListener('mousedown', onVeil);
+      document.removeEventListener('keydown', onKey, true);
+      // Put focus back where it was, unless that button has since gone.
+      if (returnFocus?.isConnected) returnFocus.focus();
+      resolve(answer);
+    };
+    const onYes = () => done(true);
+    const onNo = () => done(false);
+    // Clicking the backdrop is a cancel; clicking inside the card is not.
+    const onVeil = (e) => { if (e.target === veil) done(false); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); return; }
+      if (e.key === 'Tab') {
+        // Two focusable things, so the trap is just "the other one".
+        e.preventDefault();
+        (document.activeElement === yes ? no : yes).focus();
+        return;
+      }
+      // Everything else is swallowed: the board below listens on document for
+      // letter keys, and typing into a dialog must not also type a guess.
+      if (e.key !== 'Enter' && e.key !== ' ') e.stopPropagation();
+    };
+    yes.addEventListener('click', onYes);
+    no.addEventListener('click', onNo);
+    veil.addEventListener('mousedown', onVeil);
+    document.addEventListener('keydown', onKey, true);
+  });
+}
+
 let toastTimer = null;
 export function toast(message, ms = 2600) {
   const el = $('#toast');

@@ -242,13 +242,16 @@ function phone(done) {
 
 /* ── Ambient: no target to click, just the room doing something ────────── */
 
-/** The desk lamp stutters and the warm half of the room drops out with it. */
+/** The desk lamp gutters: it dips and surges and settles, and the warm half
+    of the room's light follows it down and back. 2.6s rather than 2.2 -- the
+    tail of it is the part that reads as a bulb calming down rather than as
+    an effect being switched off. */
 function lampFlicker(done) {
   const room = $('#room-scene');
   if (!room) return done();
   sfx.lampBuzz();
   room.classList.add('is-flickering');
-  const t = setTimeout(() => { room.classList.remove('is-flickering'); done(); }, 2200);
+  const t = setTimeout(() => { room.classList.remove('is-flickering'); done(); }, 2600);
   return () => { clearTimeout(t); room.classList.remove('is-flickering'); };
 }
 

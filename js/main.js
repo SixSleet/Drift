@@ -6,7 +6,7 @@ import { DEFAULT_ROUNDS, DEFAULT_WORD_LENGTH, WORD_LENGTH_CHOICES } from './conf
 import { sfx } from './sfx.js';
 import {
   $, showScreen, toast, buildKeypad, setCodeDisplay, flashKey, setMuteButton,
-  chipGroup, showError, CODE_ALPHABET, buildSettings,
+  chipGroup, showError, CODE_ALPHABET, buildSettings, confirmDialog,
 } from './ui.js';
 import { volume } from './audio.js';
 import { GAMES, startArcade, stopArcade, bestScore } from './arcade.js';
@@ -139,11 +139,26 @@ async function leave(btn) {
   backToMenu();
 }
 
-$('#btn-leave-lobby')?.addEventListener('click', (e) => leave(e.currentTarget));
-$('#btn-leave-game')?.addEventListener('click', (e) => {
-  // Mid-match, so make them mean it.
-  if (!window.confirm('Leave this game? You will not be able to rejoin it.')) return;
-  leave(e.currentTarget);
+// Both ask, because both are one click from throwing away something you
+// cannot get back into -- but they are different sizes of mistake, so they
+// are different questions.
+$('#btn-leave-lobby')?.addEventListener('click', async (e) => {
+  const ok = await confirmDialog({
+    title: 'Leave this room?',
+    body: game.isHost && game.players.length > 1
+      ? 'Someone else will take over as host.'
+      : "You can rejoin with the room's code.",
+    confirm: 'Leave', cancel: 'Stay',
+  });
+  if (ok) leave(e.currentTarget);
+});
+$('#btn-leave-game')?.addEventListener('click', async (e) => {
+  const ok = await confirmDialog({
+    title: 'Leave this game?',
+    body: "You won't be able to rejoin it, and your score stays on the board.",
+    confirm: 'Leave', cancel: 'Keep playing',
+  });
+  if (ok) leave(e.currentTarget);
 });
 
 const renameRow = $('#rename-row');
@@ -266,6 +281,14 @@ let cameFrom = 'screen-title';
   }
 })();
 
+// Which arcade theme currently holds the override, so it can be handed back
+// by name. music.release() with no name releases whoever holds it, and the
+// storm can be the holder -- releasing it from here would silence a storm
+// that is still raining on someone's window.
+let arcadeHeld = null;
+function holdArcade(name) { arcadeHeld = name; music.override(name); }
+function releaseArcade() { if (arcadeHeld) { music.release(arcadeHeld); arcadeHeld = null; } }
+
 function paintArcadeBests() {
   for (const [id] of Object.entries(GAMES)) {
     const chip = $(`#arcade-picker .chip[data-arcade="${id}"] .arcade-chip-best`);
@@ -285,17 +308,29 @@ function showPicker() {
   paintArcadeBests();
 }
 
+// Each game gets its own theme. They are three different kinds of pressure
+// -- sixty seconds rummaging through a rack, a chain you must not break, and
+// a moth you have three lives to hit -- and one shared bed made them feel
+// like one game with three skins. `arcade_<id>` by convention, falling back
+// to the picker's bed if a game is ever added without one.
+const arcadeTheme = (id) => (music.knows(`arcade_${id}`) ? `arcade_${id}` : 'arcade');
+
 async function play(id) {
   $('#arcade-picker').hidden = true;
   $('#arcade-stage').hidden = false;
   $('#arcade-time').hidden = false;
   $('#arcade-score').parentElement.hidden = false;
+  // Still an override, and still released by the same paths -- the arcade
+  // owns the music from the moment you open it until you leave, and which
+  // theme is playing inside that is its own business.
+  holdArcade(arcadeTheme(id));
   await startArcade(id, () => {
     // When a run ends, drop back to the picker so the score sits next to
-    // the option to go again.
+    // the option to go again -- and back to the picker's own theme with it.
     $('#arcade-picker').hidden = false;
     $('#arcade-stage').hidden = true;
     $('#arcade-time').hidden = true;
+    holdArcade('arcade');
     paintArcadeBests();
   });
 }
@@ -315,14 +350,14 @@ function openArcade(from) {
   // The arcade gets its own bed. It sits between two menus and is the one
   // place here you are meant to be going fast; the title theme undercuts
   // that. Same key, so coming back out is not a lurch.
-  music.override('arcade');
+  holdArcade('arcade');
 }
 
 $('#btn-arcade-title')?.addEventListener('click', () => openArcade('screen-title'));
 $('#btn-arcade-lobby')?.addEventListener('click', () => openArcade('screen-lobby'));
 $('#btn-arcade-back')?.addEventListener('click', () => {
   stopArcade();
-  music.release('arcade');
+  releaseArcade();
   showScreen(cameFrom);
 });
 
@@ -333,10 +368,11 @@ $('#btn-arcade-back')?.addEventListener('click', () => {
 new MutationObserver(() => {
   if ($('#screen-arcade[data-active]')) return;
   stopArcade();
-  // A round starting is also the arcade's music ending. Releasing an
-  // override that is not held is a no-op, so this is safe on every screen
-  // change, not just the ones that came from the arcade.
-  music.release('arcade');
+  // A round starting is also the arcade's music ending. Released by the name
+  // it was taken under, because by now that could be any of the four arcade
+  // themes -- and because an unnamed release would hand back whatever holds
+  // the override, which during a live round can be the storm.
+  releaseArcade();
 }).observe($('#app'), { attributes: true, attributeFilter: ['data-active'], subtree: true });
 
 $('#btn-again').addEventListener('click', () => { location.href = location.pathname; });

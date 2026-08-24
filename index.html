@@ -247,6 +247,25 @@
       <button class="btn btn-ghost" id="btn-mute-all" type="button" aria-pressed="false">Mute everything</button>
     </div>
 
+    <!-- The one modal in the app. window.confirm() is a browser chrome
+         dialog: it looks nothing like the room, it cannot be styled, and on
+         mobile it appears attached to the URL bar rather than to anything
+         you were doing. This is the same question asked inside the game.
+
+         Rendered once at overlay level and reused, because there is only
+         ever one question in flight. -->
+    <div class="modal-veil" id="confirm-veil" hidden>
+      <div class="modal" id="confirm-modal" role="alertdialog" aria-modal="true"
+           aria-labelledby="confirm-title" aria-describedby="confirm-body">
+        <h2 class="heading modal-title" id="confirm-title">Leave this game?</h2>
+        <p class="note" id="confirm-body">You won't be able to rejoin it.</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="confirm-no" type="button">Stay</button>
+          <button class="btn btn-danger" id="confirm-yes" type="button">Leave</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Arcade ────────────────────────────────────────────────
          Something to do in the dead time -- waiting in a lobby, or on the
          title screen before you commit to a match. Nothing here touches

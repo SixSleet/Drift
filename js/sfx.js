@@ -590,12 +590,31 @@ export const sfx = {
     tone({ freq: 150, to: 28, dur: 0.9, type: 'sine', gain: 0.22, cutoff: 300, attack: 0.002 });
   },
 
-  /** The desk lamp stuttering -- a dry electrical tick. */
+  /**
+   * The desk lamp guttering. One tick per dip, on the same beats the
+   * animation dips -- 130, 312, 494, 754, 1092, 1456, 1872 and 2288ms into
+   * `lamp-gutter` -- and getting quieter the way the dips get shallower.
+   *
+   * The rhythm is the whole point. It used to be four evenly spaced ticks
+   * regardless of what the picture was doing, so the sound and the light
+   * disagreed, and a sound that does not line up with a picture is the
+   * clearest signal there is that something has gone wrong with the machine
+   * rather than with the lamp.
+   */
   lampBuzz() {
-    for (let i = 0; i < 4; i++) {
-      blip({ freq: 60 + Math.random() * 40, dur: 0.03, type: 'square', gain: 0.06, delay: i * 0.09 });
+    // [when, how hard] -- shallower every time, like the dips.
+    const beats = [
+      [0.130, 1], [0.312, 0.94], [0.494, 1], [0.754, 0.82],
+      [1.092, 0.9], [1.456, 0.6], [1.872, 0.42], [2.288, 0.26],
+    ];
+    for (const [at, force] of beats) {
+      blip({ freq: 58 + Math.random() * 46, dur: 0.028, type: 'square', gain: 0.062 * force, delay: at });
+      // The contact arcing back, a hair later than the tick.
+      blip({ freq: 1900 + Math.random() * 700, dur: 0.02, type: 'square', gain: 0.012 * force, delay: at + 0.012 });
     }
-    blip({ freq: 120, dur: 0.5, type: 'sawtooth', gain: 0.02, delay: 0.36 });
+    // Mains hum underneath the whole thing, loudest while it is worst.
+    blip({ freq: 100, dur: 1.5, type: 'sawtooth', gain: 0.016, delay: 0.1 });
+    blip({ freq: 50, dur: 2.3, type: 'sawtooth', gain: 0.012, delay: 0.1 });
   },
 
   /**

@@ -140,11 +140,15 @@ no effect on any match — beyond a personal best kept in your own browser.
 
 Everything you hear is generated as you play — there are no audio files.
 
-**Each mode has its own soundtrack**: Solo is quiet and unhurried, PvP is
-faster and more insistent because somebody is racing you, and Co-op has its
-own calm one. On top of that the music changes with what is happening — the
-blitz clock, a blackout, a jackpot, the storm, the neighbour's stereo, and
-winning or losing.
+**Each mode has its own soundtrack.** Solo is a quiet bed with nothing moving
+over it, on purpose — anything with a tune in it pulls your eye off the word.
+PvP is fast and driving, because somebody is racing you. Co-op is the calm one
+and swings, which is what stops it being Solo in a different key.
+
+**And each minigame has its own**, as does everything that happens to you: the
+blitz clock, a blackout, a jackpot, a letter swap, the storm, the power going
+out, the neighbour's stereo, the standings between rounds, and winning or
+losing. Twenty-one pieces of music in all, none of them the same as another.
 
 Music and effects have **separate volume sliders**, under the ⚙ in the HUD or
 "Sound settings" on the title screen, and both are remembered.
