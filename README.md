@@ -86,17 +86,44 @@ starts with that letter, the constraint quietly drops for that round.
 About three rounds in five roll one, announced full-screen for the whole
 5-second countdown so nobody misses it.
 
+Three of them move a number. The other four **change the rules of the round**
+— what the board tells you, whether you can believe it, and what you are
+allowed to type.
+
 | Event | Odds | What it does |
 | --- | --- | --- |
 | 💰 Double Points | 12% | The round pays double |
 | ⚡ Blitz | 12% | The clock is cut to 90 seconds |
 | 🙈 Blackout | 10% | The legend stops greying out letters you have ruled out |
-| ⏳ Marathon | 7% | The clock is extended to 8 minutes |
-| 🎁 Bonus Guess | 7% | Two extra guesses, no strings attached |
-| 🔥 **Triple Points** | 5% | The round pays TRIPLE |
-| 🎰 **Jackpot** | 4% | An extra guess **and** double points |
-| 💎 **Mega Jackpot** | 3% | Two extra guesses **and** triple points |
+| 🎭 **Deceit** | 8% | One tile in every row of feedback is **lying to you** |
+| 🔢 **Cipher** | 7% | No colours at all — you are told only *how many* hits and presents |
+| 🔒 **Lockdown** | 6% | Every guess must reuse every letter you have confirmed |
+| 🎯 **Head Start** | 5% | One letter is handed to you, in the right place, before you begin |
 | *(none)* | 40% | An ordinary round |
+
+### The four that change the rules
+
+**🎭 Deceit.** Exactly one tile in each row is wrong — a green that is really
+a black, a black that is really a yellow. You are never told which. It never
+lies about a row that solved the word, and it can never invent a solve that
+did not happen, so a lie can cost you a guess but never a round you actually
+won. Everything the server scores is the truth; the lie is only ever on your
+screen.
+
+**🔢 Cipher.** The tiles keep your letters and lose their colours entirely.
+Instead each row gets two numbers: how many letters are in the right place,
+and how many are in the word but somewhere else. Which ones is up to you.
+This is Mastermind grafted onto a word game, and it is the hardest thing in
+the set.
+
+**🔒 Lockdown.** Once the board has confirmed a letter, you are stuck with
+it: greens stay where you found them, and every yellow has to appear
+somewhere in every later guess. Illegal guesses are refused before they are
+spent, so the modifier costs you options rather than attempts.
+
+**🎯 Head Start.** One position of the word, free, before your first guess.
+The friendliest thing that can happen to you, and the only one that hands
+out information rather than taking it away.
 
 ## Mid-round modifiers
 

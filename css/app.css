@@ -1479,6 +1479,13 @@ html, body {
 .pill-phase { color: var(--accent); border-color: rgba(226, 162, 89, .38); }
 .pill-phase[data-tone="warn"] { color: var(--gold); border-color: rgba(223, 174, 82, .45); }
 .pill-chain { color: var(--gold); border-color: rgba(223, 174, 82, .45); text-transform: lowercase; }
+/* head_start's free letter -- sage, so it reads as something given to you
+   rather than as another constraint like the chain letter beside it. */
+.pill-hint {
+  color: var(--sage);
+  border-color: color-mix(in srgb, var(--sage) 48%, transparent);
+  background: color-mix(in srgb, var(--sage) 10%, transparent);
+}
 .pill-timer { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .pill-timer.is-low {
   color: var(--red); border-color: rgba(204, 111, 86, .5);
@@ -1701,6 +1708,30 @@ html, body {
 .tile[data-tier="hit"]     { background: var(--sage); border-color: var(--sage); color: #121c0b; }
 .tile[data-tier="present"] { background: var(--gold); border-color: var(--gold); color: #241a05; }
 .tile[data-tier="miss"]    { background: var(--bg-2); border-color: var(--line); color: var(--ink-faint); }
+
+/* ── Cipher ────────────────────────────────────────────────────────────
+   The round where feedback stops being positional. A played tile keeps its
+   letter and gets no colour at all; the two numbers hanging off the end of
+   the row are the entire feedback channel. Deliberately inert-looking --
+   the point is that the board tells you nothing you have not deduced. */
+.tile.is-cipher {
+  background: #2b241d;
+  border-color: #4a3f34;
+  color: var(--ink-dim);
+}
+.tile-row.is-cipher-row { position: relative; }
+.cipher-tally {
+  position: absolute; left: 100%; top: 50%;
+  transform: translateY(-50%);
+  margin-left: 12px;
+  display: flex; align-items: baseline; gap: 4px;
+  font-family: var(--mono); font-size: 15px; font-weight: 800;
+  line-height: 1; white-space: nowrap;
+  pointer-events: none;
+}
+.cipher-hit     { color: var(--sage); }
+.cipher-present { color: var(--gold); }
+.cipher-sep     { color: var(--ink-faint); font-style: normal; font-weight: 600; }
 
 @keyframes tile-pop {
   0%   { transform: scale(1.4); }

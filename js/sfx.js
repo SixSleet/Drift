@@ -221,36 +221,62 @@ export const sfx = {
       }
       PENTA.forEach((f, i) => chime({ freq: f, dur: 0.5, gain: 0.12, delay: 0.4 + i * 0.065 }));
       chime({ freq: PENTA[7] * 2, dur: 1.4, gain: 0.1, delay: 0.95 });
-    } else if (kind === 'triple_points') {
-      // double_points' fanfare, but a third voice stacked on top of every
-      // chime -- three notes ringing at once is what actually says "triple"
-      // rather than just "louder double".
-      [659.25, 880, 1046.50, 1318.51].forEach((f, i) => {
-        chime({ freq: f, dur: 0.45, gain: 0.1, delay: i * 0.07 });
-        chime({ freq: f * 1.5, dur: 0.4, gain: 0.06, delay: i * 0.07 + 0.02 });
+    } else if (kind === 'deceit') {
+      // A phrase that starts sweet and goes wrong: a clean chime, then the
+      // same note again a semitone flat under it. Two pitches that close
+      // together beat against each other, which is the sound of something
+      // being not-quite-right -- exactly what this round is.
+      chime({ freq: 659.25, dur: 0.5, gain: 0.1 });
+      tone({ freq: 659.25 * 0.943, dur: 0.9, type: 'sine', gain: 0.075,
+             cutoff: 1600, attack: 0.06, delay: 0.16 });
+      tone({ freq: 440 * 0.943, to: 380, dur: 1.1, type: 'triangle', gain: 0.06,
+             cutoff: 1200, attack: 0.1, delay: 0.3 });
+    } else if (kind === 'cipher') {
+      // Colour draining out: four descending taps with the top end filtered
+      // further off each one, ending somewhere flat and toneless.
+      [880, 740, 622, 523.25].forEach((f, i) => {
+        tone({ freq: f, dur: 0.22, type: 'triangle', gain: 0.085,
+               cutoff: 2600 - i * 550, delay: i * 0.13 });
       });
-    } else if (kind === 'marathon') {
-      // A slow, spacious two-note swell -- the opposite gesture of blitz's
-      // clipped triangle stabs, because this modifier is giving time back.
-      tone({ freq: 392, to: 587.33, dur: 1.1, type: 'sine', gain: 0.09, cutoff: 1800, attack: 0.2 });
-      tone({ freq: 587.33, to: 880, dur: 1.4, type: 'sine', gain: 0.07, cutoff: 1800, attack: 0.3, delay: 0.35 });
-    } else if (kind === 'bonus_guess') {
-      // Two friendly rising chimes -- a small gift arriving, not a fanfare.
-      chime({ freq: 783.99, dur: 0.4, gain: 0.1 });
-      chime({ freq: 1046.50, dur: 0.5, gain: 0.11, delay: 0.14 });
-    } else if (kind === 'mega_jackpot') {
-      // The jackpot fanfare, doubled in length and a fifth higher at the
-      // peak, plus a low sub hit under the first reel spin -- the biggest
-      // thing that can happen at round start gets the biggest cue.
-      tone({ freq: 90, dur: 0.5, type: 'sine', gain: 0.14, cutoff: 300, attack: 0.003 });
-      for (let i = 0; i < 14; i++) {
-        tone({ freq: PENTA[i % PENTA.length], dur: 0.055, type: 'triangle',
-               gain: 0.065, delay: i * 0.032, cutoff: 2800 });
+      tone({ freq: 262, dur: 0.7, type: 'sine', gain: 0.05, cutoff: 500, attack: 0.08, delay: 0.5 });
+    } else if (kind === 'lockdown') {
+      // A bolt going across: a hard mechanical clunk, then a lower one
+      // settling into place behind it.
+      const c = ensure();
+      if (c) {
+        const t0 = c.currentTime;
+        for (const [at, freq] of [[0, 2000], [0.14, 1500]]) {
+          const src = noise(c);
+          const bp = c.createBiquadFilter();
+          const env = c.createGain();
+          bp.type = 'bandpass';
+          bp.frequency.setValueAtTime(freq, t0 + at);
+          bp.Q.setValueAtTime(1.5, t0 + at);
+          env.gain.setValueAtTime(0.15, t0 + at);
+          env.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.08);
+          src.connect(bp).connect(env).connect(buses.sfx);
+          src.start(t0 + at); src.stop(t0 + at + 0.1);
+        }
       }
-      PENTA.forEach((f, i) => chime({ freq: f, dur: 0.55, gain: 0.13, delay: 0.5 + i * 0.06 }));
-      chime({ freq: PENTA[7] * 2, dur: 1.8, gain: 0.12, delay: 1.15 });
-      chime({ freq: PENTA[7] * 3, dur: 1.4, gain: 0.07, delay: 1.3 });
+      tone({ freq: 150, to: 70, dur: 0.5, type: 'square', gain: 0.09, cutoff: 400, attack: 0.004, delay: 0.14 });
+    } else if (kind === 'head_start') {
+      // A gift: one clean rising figure, over almost immediately. Small on
+      // purpose -- this is the friendliest thing in the set and does not
+      // need a fanfare to land.
+      [659.25, 880, 1174.66].forEach((f, i) =>
+        chime({ freq: f, dur: 0.5, gain: 0.1, delay: i * 0.09 }));
     }
+  },
+
+  /**
+   * One row landing in a CIPHER round. The usual per-tile reveal chimes are
+   * suppressed there -- they play left to right with a different pitch per
+   * tier, so they would announce the exact positions the modifier exists to
+   * withhold. This replaces the lot with a single flat, position-free tick.
+   */
+  cipherRow() {
+    tone({ freq: 523.25, dur: 0.14, type: 'triangle', gain: 0.075, cutoff: 1900, attack: 0.006 });
+    tone({ freq: 349.23, dur: 0.22, type: 'sine', gain: 0.05, cutoff: 1100, attack: 0.01, delay: 0.06 });
   },
 
   /** A guess that landed zero hits -- a dud, "not even one." */

@@ -160,11 +160,21 @@ create table public.wf_rounds (
   pool_used          int  not null default 0,                  -- coop only
   event              text not null default 'none'
                        check (event in ('none', 'double_points', 'blitz', 'blackout', 'jackpot',
-                                        'extra_guess', 'sudden_death', 'shuffle', 'bullseye', -- retired
+                                        -- The four that change the RULES rather than the dials.
+                                        'deceit', 'cipher', 'lockdown', 'head_start',
+                                        -- Retired, kept legal so already-minted rows stay valid:
+                                        -- the first four never shipped, the last four were
+                                        -- clock/budget/multiplier re-skins and were replaced.
+                                        'extra_guess', 'sudden_death', 'shuffle', 'bullseye',
                                         'triple_points', 'marathon', 'bonus_guess', 'mega_jackpot')),
-                                        -- 'extra_guess'..'bullseye' are retired (in original roll
-                                        -- order), kept legal so an old row stays valid
   time_limit_ms      int  not null default 300000 check (time_limit_ms > 0), -- blitz shortens this
+  -- head_start only: one position of the secret, handed out at mint time.
+  -- This is the ONLY thing that ever leaks a letter of an unsolved word, and
+  -- it leaks exactly one: the client reads these two columns off the round
+  -- row (wf_state returns the whole row) and shows "3rd letter is E".
+  -- NULL on every other round, which is what the client keys off.
+  hint_index         int  check (hint_index is null or hint_index between 0 and 6),
+  hint_letter        char(1),
   -- A *second*, global modifier that strikes partway through live play
   -- instead of being announced before the round. 'cat'/'phone' are retired
   -- here (room events are client-side and player-sided now), kept legal so
@@ -741,6 +751,8 @@ declare
   v_mid_roll double precision;
   v_mid_at_ms int;
   v_pool text[];
+  v_hint_index int := null;
+  v_hint_letter char(1) := null;
 begin
   if v_room.current_round >= 1 then
     select * into v_round from public.wf_rounds
@@ -798,20 +810,24 @@ begin
   v_time_limit_ms := 300000;
 
   -- Round-start modifier, announced full-screen before the round begins.
-  -- Nine possible outcomes, weighted so an ordinary round is still the
-  -- single most common thing that happens even though there are now more
-  -- ways for a round to be unusual than there used to be:
+  --
+  -- Only three of these move a number (blitz's clock, jackpot's budget,
+  -- double_points' multiplier). The other four change how the round is
+  -- actually PLAYED, and are handled entirely client-side (see EVENTS in
+  -- js/config.js -- each carries a `rule` that game.js reads):
   --
   --   40% none            -- an ordinary round
   --   12% double_points   -- pays double
   --   12% blitz           -- clock cut to 90s
   --   10% blackout        -- legend stops greying out known letters
-  --    7% marathon        -- clock extended to 8 minutes
-  --    7% bonus_guess     -- +2 guesses, no change to scoring
-  --    5% triple_points   -- pays triple
-  --    4% jackpot         -- +1 guess AND double points
-  --    3% mega_jackpot    -- +2 guesses AND triple points -- the rarest
-  --                          thing that can happen at round start
+  --    8% deceit          -- exactly one tile per row of feedback LIES
+  --    7% cipher          -- feedback loses its positions: counts only
+  --    6% lockdown        -- every guess must reuse every confirmed letter
+  --    5% head_start      -- one letter handed to you, in position
+  --
+  -- deceit/cipher are display-side only: the feedback stored in wf_guesses
+  -- is always the truth, so solving, settling and scoring are untouched by
+  -- them and a lie can never cost anyone a round they actually won.
   --
   -- One shared roll against cumulative thresholds (NOT one random() per
   -- WHEN -- that silently skews the odds, since each branch would draw its
@@ -822,25 +838,27 @@ begin
     when v_roll < 0.52 then 'double_points'
     when v_roll < 0.64 then 'blitz'
     when v_roll < 0.74 then 'blackout'
-    when v_roll < 0.81 then 'marathon'
-    when v_roll < 0.88 then 'bonus_guess'
-    when v_roll < 0.93 then 'triple_points'
-    when v_roll < 0.97 then 'jackpot'
-    else 'mega_jackpot'
+    when v_roll < 0.82 then 'deceit'
+    when v_roll < 0.89 then 'cipher'
+    when v_roll < 0.95 then 'lockdown'
+    else 'head_start'
   end;
 
   -- Guess-budget bumps are capped at 12, wf_rounds' own ceiling on
   -- max_guesses -- a length-7 Coop round already starts at 10, so an
-  -- uncapped +2 here would throw a constraint violation and fail the round
+  -- uncapped bump would throw a constraint violation and fail the round
   -- outright instead of just capping the bonus.
   if v_event = 'blitz' then
     v_time_limit_ms := 90000;
-  elsif v_event = 'marathon' then
-    v_time_limit_ms := 480000;
   elsif v_event = 'jackpot' then
     v_max_guesses := least(12, v_max_guesses + 1);
-  elsif v_event in ('bonus_guess', 'mega_jackpot') then
-    v_max_guesses := least(12, v_max_guesses + 2);
+  elsif v_event = 'head_start' then
+    -- Hand out exactly one position of the secret. Chosen here rather than
+    -- client-side for the obvious reason: the client has never seen the
+    -- word and must not, so the one letter it is allowed to know has to be
+    -- picked by the only code that can read wf_round_secrets.
+    v_hint_index := floor(random() * v_len)::int;
+    v_hint_letter := substr(v_secret, v_hint_index + 1, 1);
   end if;
 
   -- Mid-round modifier: a *second*, independent global roll that lands
@@ -871,13 +889,13 @@ begin
 
   insert into public.wf_rounds
     (room_id, round_no, word_length, max_guesses, chain_letter, chain_broken, starts_at,
-     event, time_limit_ms, mid_modifier, mid_modifier_at_ms)
+     event, time_limit_ms, mid_modifier, mid_modifier_at_ms, hint_index, hint_letter)
   values (
     p_room, v_no, v_len, v_max_guesses,
     case when v_chain_broken then null else v_chain_letter end,
     v_chain_broken,
     now() + interval '5 seconds',
-    v_event, v_time_limit_ms, v_mid_modifier, v_mid_at_ms
+    v_event, v_time_limit_ms, v_mid_modifier, v_mid_at_ms, v_hint_index, v_hint_letter
   )
   returning * into v_round;
 
@@ -994,11 +1012,15 @@ begin
 
   v_all_hit := array_fill('hit'::text, array[v_round.word_length]);
   v_time_up := now() >= v_round.starts_at + make_interval(secs => v_round.time_limit_ms / 1000.0);
-  -- triple_points/mega_jackpot pay 3x; double_points/jackpot (round-start or
-  -- fired mid-round) pay 2x; everything else is 1x. Never additive -- a
-  -- round that opens triple_points and also fires a mid-round double_points
-  -- still pays 3x, not 6x, the same "one shared multiplier" rule the
-  -- original double_points/jackpot pairing already used.
+  -- double_points/jackpot (round-start or fired mid-round) pay 2x,
+  -- everything else 1x. Never additive: a round that opens double_points
+  -- and also fires a mid-round double_points still pays 2x, not 4x.
+  --
+  -- triple_points/mega_jackpot are retired and can no longer be rolled, but
+  -- the 3x branch stays: a round minted while they were live must still
+  -- settle at the multiplier its event card promised the players.
+  -- deceit/cipher/lockdown/head_start deliberately have no branch here --
+  -- they change how the round is played, not what it pays.
   v_mult := case
     when v_round.event in ('triple_points', 'mega_jackpot') then 3
     when v_round.event in ('double_points', 'jackpot')

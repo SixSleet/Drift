@@ -17,6 +17,9 @@ import {
   renderRailLeft, renderRailRight, resetRails, setRoundRecap,
 } from './ui.js';
 import { startRoomEvents } from './room-events.js';
+import {
+  applyDeceit, cipherCounts, lockdownViolation, headStartLabel,
+} from './round-rules.js';
 
 const CONFETTI_COLORS = ['#dfae52', '#cc6f56', '#94b073', '#e2a259', '#cf8465'];
 
@@ -35,6 +38,10 @@ export class Game {
     this.won = false;              // set once the match ends; drives the final theme
     this.channel = null;
     this.ghost = null;               // pvp only: opponent's live aggregate
+    // The two client-side rule slots, kept separate so a mid-round blackout
+    // can't switch off a cipher/deceit/lockdown round (see #showMidModifier).
+    this.roundRule = null;           // from the round-start event
+    this.midRule = null;             // from the mid-round modifier
     this.local = this.#freshLocal();
     this.host = { advancing: false };
     this.settling = false;
@@ -209,14 +216,34 @@ export class Game {
     resetRails();
     loadDictionary(row.word_length);
 
-    // `rule` (blackout) actually changes how this round is played, not just
-    // how it looks -- read directly off EVENTS elsewhere in the render loop
-    // instead of re-deriving it from row.event each time.
+    // `rule` actually changes how this round is played, not just how it
+    // looks -- read directly off EVENTS elsewhere in the render loop instead
+    // of re-deriving it from row.event each time. blackout, deceit, cipher,
+    // lockdown and head_start all arrive this way.
     this.roundRule = EVENTS[row.event]?.rule ?? null;
-    $('#letter-legend').classList.toggle('is-blackout', this.roundRule === 'blackout');
+    // Whatever the previous round's mid-round modifier was, it does not
+    // carry over -- without this a blackout that fired last round would
+    // leave this round's legend dark forever.
+    this.midRule = null;
+    this.#paintLegendMode();
     paintLetterLegend(new Map());
+    this.#renderHint();
 
     this.#applyEvent(row.event);
+  }
+
+  /**
+   * HEAD START's free letter, as a HUD pill that stays up for the whole
+   * round -- it is a fact about the word, so unlike the mid-round banner it
+   * has no reason to time out. hint_index/hint_letter are NULL on every
+   * other round, which is what hides the pill again.
+   */
+  #renderHint() {
+    const el = $('#hud-hint');
+    if (!el) return;
+    const label = this.roundRule === 'head_start' ? headStartLabel(this.round) : null;
+    el.hidden = !label;
+    el.textContent = label ?? '';
   }
 
   /** A round's random event — announced once, at the moment it starts. */
@@ -328,10 +355,27 @@ export class Game {
     sfx.event(kind);
     this.#announceMidModifier(kind);
     music.set(this.musicTheme());
+    // Kept apart from roundRule rather than overwriting it. A cipher, deceit
+    // or lockdown round can also roll a mid-round blackout (wf_next_round
+    // only excludes the round's OWN event from that pool), and assigning
+    // over roundRule there would quietly switch the round-start modifier
+    // off: the board would start showing colours again halfway through a
+    // cipher round, which hands back exactly the information it exists to
+    // withhold. The two rules are independent, so they are stored that way.
     if (info.rule) {
-      this.roundRule = info.rule;
-      $('#letter-legend').classList.toggle('is-blackout', this.roundRule === 'blackout');
+      this.midRule = info.rule;
+      this.#paintLegendMode();
     }
+  }
+
+  /**
+   * The legend goes dark for blackout (from either roll) and for cipher,
+   * which has no honest per-letter colour to show in the first place.
+   */
+  #paintLegendMode() {
+    $('#letter-legend').classList.toggle('is-blackout',
+      this.roundRule === 'blackout' || this.roundRule === 'cipher'
+      || this.midRule === 'blackout');
   }
 
   /** Blitz / Double Points / Blackout / Jackpot, landing mid-round. */
@@ -416,6 +460,19 @@ export class Game {
       return;
     }
 
+    // LOCKDOWN: reject anything that throws away a letter the board has
+    // already confirmed. Checked here, before the guess is spent, so an
+    // illegal word costs nothing but the keystrokes -- it is a constraint on
+    // what you may play, not a trap that burns an attempt.
+    if (this.roundRule === 'lockdown') {
+      const why = lockdownViolation(word, this.#myGuesses());
+      if (why) {
+        this.#invalidShake();
+        toast(why);
+        return;
+      }
+    }
+
     const roundId = this.round.id;
     try {
       const row = await api.submitGuess(roundId, word);
@@ -423,11 +480,22 @@ export class Game {
       if (!this.guessesByRound.has(roundId)) this.guessesByRound.set(roundId, []);
       this.guessesByRound.get(roundId).push(row);
 
-      row.feedback.forEach((tier, i) => setTimeout(() => sfx.reveal(tier), i * 90));
+      // What you HEAR has to agree with what you see. Under deceit that
+      // means the lie, not the truth -- a tile showing miss while its chime
+      // says hit would give the whole modifier away in one row. Under cipher
+      // it means no per-tile chimes at all: they play in tile order with a
+      // different pitch per tier, so they would spell out the exact
+      // positions that cipher exists to withhold.
+      const heard = this.#displayFeedback(row);
+      if (this.roundRule === 'cipher') {
+        sfx.cipherRow();
+      } else {
+        heard.forEach((tier, i) => setTimeout(() => sfx.reveal(tier), i * 90));
+      }
       // "Not even one" -- a distinct sting after the whole row's flipped, on
       // top of the row's own is-whiff shake (see renderGrid).
-      if (row.feedback.every((f) => f !== 'hit')) {
-        setTimeout(() => sfx.whiff(), row.feedback.length * 90 + 80);
+      if (heard.every((f) => f !== 'hit')) {
+        setTimeout(() => sfx.whiff(), heard.length * 90 + 80);
       }
 
       if (this.mode === 'pvp') {
@@ -459,6 +527,45 @@ export class Game {
   // ── Completion / settlement ──────────────────────────────────────────
 
   #allHit(g) { return g.feedback.every((f) => f === 'hit'); }
+
+  /**
+   * The rows this player is playing against: the whole shared board in Coop,
+   * only your own in PvP and Solo. Raw, server-truth feedback -- this is
+   * what lockdown reads, and what #displayGuesses starts from.
+   */
+  #myGuesses() {
+    const gs = this.guessesByRound.get(this.round.id) ?? [];
+    return this.mode === 'coop' ? gs : gs.filter((g) => g.player_id === this.me?.id);
+  }
+
+  /**
+   * The board as it should be SHOWN, which under deceit is not the board as
+   * it is. Everything that decides anything -- solving, settling, scoring,
+   * lockdown's legality check -- keeps reading the raw rows instead.
+   */
+  #displayGuesses(guesses) {
+    if (this.roundRule !== 'deceit') return guesses;
+    const shown = applyDeceit(guesses, this.round.id);
+    // renderGrid remembers which rows it has already flipped by setting
+    // `_rendered` on the row object itself. These are fresh copies every
+    // frame, so that mark would be thrown away as fast as it was written and
+    // every row on the board would replay its flip animation each time a new
+    // guess arrived. Point the flag at the row the copy was made from.
+    shown.forEach((copy, i) => {
+      const original = guesses[i];
+      Object.defineProperty(copy, '_rendered', {
+        get: () => original._rendered,
+        set: (v) => { original._rendered = v; },
+        configurable: true,
+      });
+    });
+    return shown;
+  }
+
+  /** One row's feedback as shown, for keeping the sound in step with it. */
+  #displayFeedback(g) {
+    return this.#displayGuesses([g])[0].feedback;
+  }
 
   #roundSeemsFinished() {
     if (!this.round) return false;
@@ -784,20 +891,34 @@ export class Game {
     const playerColor = this.mode === 'coop'
       ? new Map(this.players.map((p) => [p.id, p.color])) : null;
 
+    // Rails count guesses, so they read the real rows.
     this.#renderRails(visible);
+
+    // The board reads the display copies, so a deceit round draws its lie
+    // instead of the truth. Everything else on this screen still works off
+    // `visible`, which is never corrupted.
+    const shown = this.#displayGuesses(visible);
 
     renderGrid({
       wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
-      guesses: visible, active: this.local.active,
+      guesses: shown, active: this.local.active,
       canType: phase === 'live', playerColor, meId: this.me?.id ?? null,
       shake: this.local.shake,
+      // Cipher hides where the hits are; the row is told only how many.
+      cipher: this.roundRule === 'cipher',
+      cipherCounts: this.roundRule === 'cipher'
+        ? shown.map((g) => cipherCounts(g.feedback)) : null,
     });
 
-    if (this.roundRule === 'blackout') {
+    // Cipher's legend would hand back exactly the per-letter knowledge the
+    // modifier is withholding, so it goes dark alongside blackout's -- from
+    // either roll (see #paintLegendMode).
+    if (this.roundRule === 'blackout' || this.roundRule === 'cipher'
+        || this.midRule === 'blackout') {
       paintLetterLegend(new Map());
     } else {
       const tiers = new Map();
-      for (const g of visible) {
+      for (const g of shown) {
         // g.word comes back lowercase from the server; the legend's letters
         // are uppercase, so this has to match case or nothing gets painted.
         g.word.toUpperCase().split('').forEach((ch, i) => {

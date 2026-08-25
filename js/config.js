@@ -54,13 +54,25 @@ export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
 // ── Round-start events ──────────────────────────────────────────────────
 // Picked server-side in wf_next_round (see the odds table right above the
 // roll itself, in that function) — this is display metadata only, any
-// *numeric* effect (blitz/marathon's clock, jackpot/bonus_guess/mega_jackpot's
-// guess budget) already happened by the time the client ever sees the round
-// row. `fx` names the per-event presentation treatment in game.js/app.css:
-// 'coins' rains money, 'siren' strobes the flash and shakes the screen,
-// 'eclipse' dims the letter legend's hint colours, and 'jackpot' stacks all
-// of it. `rule` ('blackout') is read directly by game.js to change how a
-// round is actually played, not just how it looks.
+// *numeric* effect (blitz's clock, jackpot's guess budget) already happened
+// by the time the client ever sees the round row. `fx` names the per-event
+// presentation treatment in game.js/app.css: 'coins' rains money, 'siren'
+// strobes the flash and shakes the screen, 'eclipse' dims the letter
+// legend's hint colours, and 'jackpot' stacks all of it.
+//
+// `rule` is the interesting one: it is read directly by game.js and changes
+// how the round is actually PLAYED. Four of the five rules below alter the
+// play loop itself rather than any number attached to it --
+//
+//   blackout   the legend stops tracking what you have ruled out
+//   deceit     one tile per row of feedback lies to you
+//   cipher     feedback loses its positions -- counts only, Mastermind-style
+//   lockdown   a guess is illegal unless it reuses every confirmed letter
+//   head_start one letter of the secret is given to you up front
+//
+// -- and all of them are client-side, exactly like blackout always was. The
+// feedback stored server-side is always the truth (see wf_score_guess), so
+// deceit and cipher can never change who solved a round or what it paid.
 export const EVENTS = Object.freeze({
   none: null,
   double_points: { label: 'Double Points', emoji: '💰', tint: '#dfae52', blurb: 'This round pays double.',                                       midBlurb: 'Points doubled, from here on.',      fx: 'coins' },
@@ -69,12 +81,13 @@ export const EVENTS = Object.freeze({
   jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#dfae52', blurb: 'Extra guess AND double points!',                                  midBlurb: 'Extra guess AND double points!',    fx: 'jackpot', rare: true },
   // Coop-only, and mid-round only -- it needs guesses on the board to swap.
   letter_swap:   { label: 'Letter Swap',   emoji: '🔀', tint: '#cf8465', blurb: 'Two guesses just got their tiles mixed up.',                      midBlurb: 'Two guesses just traded tiles.',    fx: 'siren' },
-  // Round-start only, added alongside the original four: no mid-round pool
-  // in wf_next_round ever rolls these, matching how jackpot already worked.
-  marathon:      { label: 'Marathon',      emoji: '⏳', tint: '#7f9bb5', blurb: 'The clock is extended to 8 minutes.',                              midBlurb: 'The clock just got a lot longer.',   fx: null },
-  bonus_guess:   { label: 'Bonus Guess',   emoji: '🎁', tint: '#94b073', blurb: 'Two extra guesses, no strings attached.',                          midBlurb: 'Two extra guesses just landed.',     fx: null },
-  triple_points: { label: 'Triple Points', emoji: '🔥', tint: '#f2b705', blurb: 'This round pays TRIPLE.',                                          midBlurb: 'Points just tripled, from here on.', fx: 'coins', rare: true },
-  mega_jackpot:  { label: 'MEGA JACKPOT',  emoji: '💎', tint: '#dfae52', blurb: 'Two extra guesses AND triple points!',                             midBlurb: 'Two extra guesses AND triple points!', fx: 'jackpot', rare: true },
+  // Round-start only: wf_next_round's mid-round pool never contains these,
+  // the same way it never contains jackpot. They rewrite the rules of the
+  // round, which is not something to spring on someone halfway through it.
+  deceit:        { label: 'Deceit',        emoji: '🎭', tint: '#a98cb8', blurb: 'One tile in every row of feedback is lying to you.',              midBlurb: 'The board started lying to you.',    fx: 'eclipse', rule: 'deceit', rare: true },
+  cipher:        { label: 'Cipher',        emoji: '🔢', tint: '#7f9bb5', blurb: 'No colours. You are told only how many hits and presents.',       midBlurb: 'The colours just went away.',        fx: 'eclipse', rule: 'cipher', rare: true },
+  lockdown:      { label: 'Lockdown',      emoji: '🔒', tint: '#c2705a', blurb: 'Every guess must reuse every letter you have confirmed.',         midBlurb: 'Confirmed letters are now locked in.', fx: 'siren', rule: 'lockdown' },
+  head_start:    { label: 'Head Start',    emoji: '🎯', tint: '#94b073', blurb: 'One letter is yours for free, in the right place.',               midBlurb: 'Have a letter, on the house.',       fx: 'coins', rule: 'head_start' },
 });
 
 // ── Mid-round modifiers ──────────────────────────────────────────────────

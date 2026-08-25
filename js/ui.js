@@ -300,10 +300,14 @@ function paintActiveRow(row, wordLength, active, shake) {
 export function renderGrid(opts) {
   const { wordLength, maxGuesses, guesses, active, canType, playerColor } = opts;
   const shake = !!opts.shake;
+  const cipher = !!opts.cipher;
+  const counts = opts.cipherCounts ?? null;
   const board = $('#board');
 
   // Structure only -- `active` and `shake` are deliberately absent.
-  const sig = JSON.stringify([wordLength, maxGuesses, canType, opts.meId ?? null,
+  // `cipher` IS in here: it changes what every revealed tile looks like, so
+  // a round that turns it on has to rebuild rather than repaint.
+  const sig = JSON.stringify([wordLength, maxGuesses, canType, opts.meId ?? null, cipher,
     guesses.map((g) => `${g.player_id}:${g.attempt_no}`)]);
   const activeIndex = guesses.length;
 
@@ -342,7 +346,11 @@ export function renderGrid(opts) {
         tile.className = 'tile';
         if (g) {
           tile.textContent = g.word[j]?.toUpperCase() ?? '';
-          tile.dataset.tier = g.feedback[j];
+          // Cipher withholds WHERE the hits are, so a played row keeps its
+          // letters and gets no tier at all -- the count badge below is the
+          // only feedback it gets.
+          if (cipher) tile.classList.add('is-cipher');
+          else tile.dataset.tier = g.feedback[j];
           // Only a guess appearing for the first time flips. A rebuild for
           // some later reason must not re-flip guesses already on the board.
           if (fresh) {
@@ -351,6 +359,22 @@ export function renderGrid(opts) {
           }
         }
         row.appendChild(tile);
+      }
+      // Cipher's whole feedback channel: two numbers hung off the end of the
+      // row, where the colours would otherwise have been.
+      if (cipher && g && counts?.[i]) {
+        // The row is a fixed-column grid, so the badge is taken out of flow
+        // and hung off the right-hand edge -- left in flow it would wrap to
+        // a line of its own and push the board apart.
+        row.classList.add('is-cipher-row');
+        const tally = document.createElement('span');
+        tally.className = 'cipher-tally';
+        tally.innerHTML =
+          `<b class="cipher-hit">${counts[i].hits}</b>` +
+          `<i class="cipher-sep">·</i>` +
+          `<b class="cipher-present">${counts[i].presents}</b>`;
+        tally.title = `${counts[i].hits} in the right place, ${counts[i].presents} in the word but misplaced`;
+        row.appendChild(tally);
       }
       board.appendChild(row);
     }
