@@ -16,6 +16,7 @@
 
 import { loadDictionary } from './words.js';
 import { sfx } from './sfx.js';
+import { t } from './i18n.js';
 
 const bestKey = (id) => `wf-best-${id}`;
 
@@ -138,7 +139,7 @@ async function wordHunt(root, api) {
     for (const w of [...found].sort()) {
       foundBox.appendChild(el('span', `found-word${w.length === 5 ? ' is-long' : ''}`, w.toUpperCase()));
     }
-    progress.textContent = `${found.size} of ${solutions.size} in these letters`;
+    progress.textContent = t('arcade.progress', { n: found.size, total: solutions.size });
   };
 
   const newRack = () => {
@@ -458,25 +459,28 @@ async function chain(root, api) {
 }
 
 export const GAMES = {
+  // Every word here is a translation key rather than a string: the picker
+  // is rebuilt on a language change, and a name baked in at module load
+  // would survive it.
   hunt: {
-    name: 'Word Hunt',
-    blurb: 'Six letters. Find every 4- and 5-letter word hiding in them.',
+    nameKey: 'arcade.wordHunt',
+    blurbKey: 'arcade.wordHunt.blurb',
     seconds: HUNT_SECONDS,
-    unit: 'points',
+    unitKey: 'arcade.unit.points',
     run: wordHunt,
   },
   chain: {
-    name: 'Chain',
-    blurb: "Each word starts with the last letter of the one before. The rule that catches people out mid-match.",
+    nameKey: 'arcade.chain',
+    blurbKey: 'arcade.chain.blurb',
     seconds: CHAIN_SECONDS,
-    unit: 'points',
+    unitKey: 'arcade.unit.points',
     run: chain,
   },
   swat: {
-    name: 'Moth Swat',
-    blurb: "They keep coming, and faster. Three get past you and it's over.",
+    nameKey: 'arcade.moth',
+    blurbKey: 'arcade.moth.blurb',
     seconds: SWAT_SECONDS,
-    unit: 'swatted',
+    unitKey: 'arcade.unit.swatted',
     run: mothSwat,
   },
 };
@@ -530,9 +534,9 @@ export async function startArcade(id, onFinish) {
   const titleEl = $a('#arcade-title');
   const resultEl = $a('#arcade-result');
 
-  if (titleEl) titleEl.textContent = game.name;
+  if (titleEl) titleEl.textContent = t(game.nameKey);
   if (resultEl) { resultEl.hidden = true; resultEl.textContent = ''; }
-  if (bestEl) bestEl.textContent = `Best ${bestScore(id)}`;
+  if (bestEl) bestEl.textContent = t('arcade.best', { n: bestScore(id) });
 
   const paintTime = () => {
     if (timeEl) timeEl.textContent = `0:${String(Math.max(0, Math.ceil(remaining))).padStart(2, '0')}`;
@@ -547,12 +551,12 @@ export async function startArcade(id, onFinish) {
     clock = null;
     if (stopCurrent) { stopCurrent(); stopCurrent = null; }
     const isBest = recordBest(id, score);
-    if (bestEl) bestEl.textContent = `Best ${bestScore(id)}`;
+    if (bestEl) bestEl.textContent = t('arcade.best', { n: bestScore(id) });
     if (resultEl) {
       resultEl.hidden = false;
       resultEl.textContent = isBest
-        ? `${score} ${game.unit} — a new best.`
-        : `${score} ${game.unit}. Best is ${bestScore(id)}.`;
+        ? t('arcade.newBest', { score, unit: t(game.unitKey) })
+        : t('arcade.result', { score, unit: t(game.unitKey), best: bestScore(id) });
       resultEl.classList.toggle('is-best', isBest);
     }
     stage.dataset.game = '';

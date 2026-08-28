@@ -61,6 +61,13 @@ who joins inherits it.
 Then pick the number of **rounds** — 4, 6, 8 or 12. Points build across all
 of them, and whoever has the most at the end wins.
 
+Pick the **language** too. It does two things at once, on purpose: it sets
+the language of the interface — yours alone, remembered in your browser, so
+two people at the same table can read the game in two different languages —
+and it sets the language of the *words* in any room you go on to create.
+Joining somebody else's room does not change your menus; you keep them and
+guess in whatever the room was made in.
+
 **Guess budgets** are word length + 2 in Solo and PvP, and word length + 3 in
 Co-op — no bigger a pool just because you invited more people.
 
@@ -97,7 +104,7 @@ ends, and what it is worth.
 | 🙈 Blackout | 7% | The legend stops greying out letters you have ruled out |
 | 🔢 **Cipher** | 6% | No colours at all — you are told only *how many* hits and presents |
 | 🔒 **Lockdown** | 6% | Every guess must reuse every letter you have confirmed |
-| 🩸 **Sudden Death** | 6% | A guess that scores **nothing at all** ends the round |
+| 🩸 **Sudden Death** | 6% | A guess that scores **nothing at all** puts you out for the round |
 | 🫥 **Fading Ink** | 6% | Colours drain off each row seconds after it lands |
 | 🚫 **Banned Letter** | 5% | One letter is outlawed for the whole round |
 | 🎰 **Jackpot** | 2% | An extra guess **and** double points |
@@ -118,12 +125,13 @@ somewhere in every later guess. Illegal guesses are refused before they are
 spent, so the modifier costs you options rather than attempts.
 
 **🩸 Sudden Death.** A guess that comes back completely empty — not one of
-its letters anywhere in the word — ends the round on the spot. Not "no
-greens", which happens on most openers; a total miss. It turns a probing
-guess from something that costs an attempt into something that can cost you
-everything, and it makes playing safe a real strategy for once. In Co-op the
-board is shared, so the risk is too: one player's total miss ends it for the
-team.
+its letters anywhere in the word — puts you out for the rest of the round.
+Not "no greens", which happens on most openers; a total miss. It turns a
+probing guess from something that costs an attempt into something that can
+cost you everything, and it makes playing safe a real strategy for once. In
+Co-op it eliminates only the player who threw it: the rest of the team keeps
+going on the shared board, and the round ends when the word is found, the
+clock runs out, or everybody is out.
 
 **🫥 Fading Ink.** Each row keeps its colours for about eight seconds and
 then loses them, letters left behind. The legend forgets along with the
@@ -243,6 +251,38 @@ happens to everyone else depends on when:
 - **In a duel**, the remaining player is taken to the final standings rather
   than left waiting for a rival who is not coming back.
 - **In Co-op**, the match carries on with whoever is left.
+
+## Languages
+
+Five, fully translated — interface and word pools both:
+
+| | Answers | Accepted guesses |
+|---|---:|---:|
+| 🇬🇧 English | 4,703 | 74,103 |
+| 🇮🇹 Italiano | 3,066 | 32,618 |
+| 🇩🇪 Deutsch | 3,802 | 26,485 |
+| 🇪🇸 Español | 4,818 | 72,485 |
+| 🇫🇷 Français | 3,416 | 55,811 |
+| | **19,805** | **261,502** |
+
+Two lists per language and per word length, and the difference matters:
+**answers** is the small, frequency-filtered pool a secret is drawn from, so
+you are never asked to guess a word you have not met; **accepted guesses** is
+everything the game will let you type, deliberately much larger, because
+being refused a word you know is the most annoying thing a word game can do
+to you. Only the accepted-guess lists ship to the browser — the answer pools
+live server-side in `wf_words` and are never deployed.
+
+Both are built by `tools/build-words.mjs` from Hunspell dictionaries and
+frequency lists (see the header of that file for the sources and the exact
+filtering). Rerunning it is deterministic: same dictionaries in, same lists
+out.
+
+**Accents are typed without them.** The board, the letter legend and the
+scoring all assume a 26-letter alphabet, so *café* is played as CAFE and
+*schön* as SCHON, in both lists alike — you never have to reach for a key
+your keyboard may not have. German ß is the one thing dropped rather than
+folded, since turning it into "ss" would change a word's length.
 
 ## Licence
 

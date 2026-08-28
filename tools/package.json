@@ -1,0 +1,20 @@
+{
+  "name": "wordforge-tools",
+  "version": "1.0.0",
+  "description": "Build-time only: generates data/<lang>/*.json and supabase/seed-words.sql. Not shipped to the browser.",
+  "license": "ISC",
+  "dependencies": {
+    "dictionary-de": "^3.0.0",
+    "dictionary-en": "^4.0.0",
+    "dictionary-es": "^4.0.0",
+    "dictionary-fr": "^3.0.0",
+    "dictionary-it": "^2.0.0",
+    "hunspell-reader": "^10.1.1",
+    "lodash": "^4.18.1",
+    "most-common-words-by-language": "^3.0.14"
+  },
+  "private": true,
+  "scripts": {
+    "build:words": "node build-words.mjs"
+  }
+}

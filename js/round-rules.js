@@ -12,6 +12,8 @@
 // is what should be SHOWN or what should be ALLOWED; the raw rows are what
 // solving, settling and scoring keep using.
 
+import { t, ordinal } from './i18n.js';
+
 /**
  * CIPHER: how many hits and presents a row scored, with no indication of
  * where any of them are. This is the whole modifier -- the tiles render
@@ -28,7 +30,6 @@ export function cipherCounts(feedback) {
   return { hits, presents };
 }
 
-const ORDINALS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th'];
 
 /**
  * Everything the board has confirmed so far: which positions are pinned to a
@@ -68,12 +69,12 @@ export function lockdownViolation(word, guesses) {
 
   for (const [i, letter] of greens) {
     if (w[i] !== letter) {
-      return `Lockdown: the ${ORDINALS[i] ?? `${i + 1}th`} letter has to be ${letter.toUpperCase()}.`;
+      return t('lockdown.position', { ord: ordinal(i), letter: letter.toUpperCase() });
     }
   }
   for (const letter of presents) {
     if (!w.includes(letter)) {
-      return `Lockdown: your guess has to use ${letter.toUpperCase()}.`;
+      return t('lockdown.letter', { letter: letter.toUpperCase() });
     }
   }
   return null;
@@ -93,7 +94,7 @@ export function bannedLetterViolation(word, round) {
   if (!banned) return null;
   const b = String(banned).toLowerCase();
   if (!(word || '').toLowerCase().includes(b)) return null;
-  return `${b.toUpperCase()} is banned this round.`;
+  return t('toast.banned', { letter: b.toUpperCase() });
 }
 
 /**

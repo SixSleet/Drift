@@ -1355,6 +1355,22 @@ html, body {
 }
 .chip:disabled { opacity: .35; cursor: not-allowed; }
 
+/* The language row. Five of them have to fit one line of the panel without
+   wrapping the way the mode chips do, so the flag carries the recognition
+   and the name is small enough to be a label rather than a button. */
+.lang-chips { gap: 6px; }
+.lang-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-width: 0; padding: 7px 10px; font-size: 12px;
+}
+.lang-flag { font-size: 15px; line-height: 1; }
+.lang-name { font-weight: 700; }
+@media (max-width: 620px) {
+  /* Tight enough that the names would wrap; the flags alone still read. */
+  .lang-name { display: none; }
+  .lang-chip { padding: 7px 9px; }
+}
+
 .mode-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
 .mode-chip {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;

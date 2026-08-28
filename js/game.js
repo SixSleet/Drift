@@ -9,6 +9,7 @@ import {
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
+import { t, ordinal, getLang, eventLabel, eventBlurb, eventMid, modeLabel } from './i18n.js';
 import { sfx } from './sfx.js';
 import { music } from './music.js';
 import {
@@ -72,7 +73,7 @@ export class Game {
   }
 
   async createRoom(mode, rounds = DEFAULT_ROUNDS, wordLength = DEFAULT_WORD_LENGTH) {
-    const res = await api.createRoom(mode, rounds, wordLength);
+    const res = await api.createRoom(mode, rounds, wordLength, getLang());
     await this.enterRoom(res.room_id);
     // Solo is a room of exactly one, forever — there is no one else to wait
     // for, so skip the lobby and go straight in.
@@ -146,7 +147,7 @@ export class Game {
     if (!this.room) return;
     $('#lobby-code').textContent = this.room.code;
     const modeInfo = MODES[this.room.mode];
-    $('#lobby-mode').textContent = modeInfo?.label ?? '';
+    $('#lobby-mode').textContent = this.room.mode ? modeLabel(this.room.mode) : '';
     $('#lobby-mode').style.color = modeInfo?.tint ?? '';
     renderPlayers(this.players, this.me?.id);
     const cap = modeInfo?.maxPlayers ?? 10;
@@ -158,11 +159,12 @@ export class Game {
     // Everyone in the room plays the host's word length, so everyone needs
     // to be told what it is -- a joiner had no way of knowing before.
     const wl = this.room.word_length
-      ? `${this.room.word_length}-letter words` : 'mixed 4- and 5-letter words';
-    const setup = `${this.room.total_rounds} rounds · ${wl}.`;
+      ? t('lobby.words.fixed', { n: this.room.word_length })
+      : t('lobby.words.mixed');
+    const setup = t('lobby.setup', { rounds: this.room.total_rounds, words: wl });
     $('#lobby-note').textContent = this.isHost
-      ? (enough ? setup : 'Waiting for one more player…')
-      : `${setup} Waiting for the host to start…`;
+      ? (enough ? setup : t('lobby.waitingOne'))
+      : `${setup} ${t('lobby.waitingHost')}`;
     if (this.me) {
       $('#hud-you').textContent = this.me.name;
       $('#hud-you').style.color = this.me.color;
@@ -208,16 +210,16 @@ export class Game {
     this.host.advancing = false;
     this.settling = false;
     showScreen('screen-game');
-    $('#hud-round').textContent = `Round ${row.round_no}/${this.room.total_rounds}`;
+    $('#hud-round').textContent = t('hud.round', { n: row.round_no, total: this.room.total_rounds });
     const chainEl = $('#hud-chain');
     if (row.chain_letter) {
       chainEl.hidden = false;
-      chainEl.textContent = `starts with "${row.chain_letter.toUpperCase()}"`;
+      chainEl.textContent = t('hud.startsWith', { letter: row.chain_letter.toUpperCase() });
     } else {
       chainEl.hidden = true;
     }
     resetRails();
-    loadDictionary(row.word_length);
+    loadDictionary(row.word_length, this.room.lang);
 
     // `rule` actually changes how this round is played, not just how it
     // looks -- read directly off EVENTS elsewhere in the render loop instead
@@ -248,13 +250,13 @@ export class Game {
     let label = null;
     let tone = null;
     if (this.roundRule === 'banned_letter' && this.round?.banned_letter) {
-      label = `🚫 no ${String(this.round.banned_letter).toUpperCase()}`;
+      label = t('pill.noLetter', { letter: String(this.round.banned_letter).toUpperCase() });
       tone = 'ban';
     } else if (this.roundRule === 'sudden_death') {
-      label = '🩸 sudden death';
+      label = t('pill.suddenDeath');
       tone = 'ban';
     } else if (this.roundRule === 'wager' && this.local.stake > 0) {
-      label = `🎲 staked ${this.local.stake}`;
+      label = t('pill.staked', { n: this.local.stake });
       tone = 'stake';
     }
     el.hidden = !label;
@@ -279,8 +281,8 @@ export class Game {
     const label = document.createElement('p');
     label.className = 'wager-label';
     label.textContent = banked > 0
-      ? `Stake up to ${banked} on solving this one`
-      : 'Nothing banked yet — nothing to stake';
+      ? t('wager.prompt', { n: banked })
+      : t('wager.nothing');
     box.appendChild(label);
 
     if (banked <= 0) return;
@@ -307,12 +309,12 @@ export class Game {
         b.classList.toggle('is-on', Number(b.textContent) === this.local.stake);
       });
       sfx.wagerPlaced();
-      toast(`Staked ${this.local.stake}.`);
+      toast(t('toast.staked', { n: this.local.stake }));
       this.#renderRoundRulePill();
     } catch (e) {
       // Too late, or the round moved on. Either way the stake did not land,
       // and saying so is better than leaving a chip looking selected.
-      toast(e.code === 'P0028' ? 'Too late to stake on this one.' : (e.message || 'Stake rejected.'));
+      toast(e.code === 'P0028' ? t('toast.tooLate') : (e.message || t('toast.stakeRejected')));
     }
   }
 
@@ -336,7 +338,7 @@ export class Game {
     el.hidden = false;
     el.classList.toggle('is-rare', !!info.rare);
     el.style.setProperty('--tint', info.tint);
-    el.textContent = `${info.emoji} ${info.label}`;
+    el.textContent = `${info.emoji} ${eventLabel(event)}`;
     // Re-trigger the CSS pop-in even if the previous round had the same event.
     el.style.animation = 'none';
     void el.offsetWidth;
@@ -363,8 +365,8 @@ export class Game {
     card.dataset.fx = info.fx ?? '';
     card.style.setProperty('--tint', info.tint);
     $('#event-card-emoji').textContent = info.emoji;
-    $('#event-card-label').textContent = info.label;
-    $('#event-card-blurb').textContent = info.blurb;
+    $('#event-card-label').textContent = eventLabel(event);
+    $('#event-card-blurb').textContent = eventBlurb(event);
     card.classList.remove('is-active');
     void card.offsetWidth;
     card.classList.add('is-active');
@@ -489,8 +491,8 @@ export class Game {
     if (!el) return;
     el.style.setProperty('--tint', info.tint || 'var(--accent)');
     el.innerHTML = `<span class="mid-banner-emoji">${info.emoji}</span>` +
-                   `<span class="mid-banner-label">${info.label}</span>` +
-                   `<span class="mid-banner-blurb">${info.midBlurb || info.blurb}</span>`;
+                   `<span class="mid-banner-label">${eventLabel(kind)}</span>` +
+                   `<span class="mid-banner-blurb">${eventMid(kind)}</span>`;
     el.hidden = false;
     el.classList.remove('is-live');
     void el.offsetWidth;             // restart the animation on a repeat
@@ -527,9 +529,9 @@ export class Game {
       this.#invalidShake();
       return;
     }
-    if (!(await isValidWord(word, this.round.word_length))) {
+    if (!(await isValidWord(word, this.round.word_length, this.room.lang))) {
       this.#invalidShake();
-      toast('Not a word I know.');
+      toast(t('toast.notAWord'));
       return;
     }
 
@@ -570,9 +572,7 @@ export class Game {
       if (this.roundRule === 'sudden_death' && isTotalMiss(row.feedback)) {
         this.local.diedAt = Date.now();
         setTimeout(() => sfx.suddenDeath(), row.feedback.length * 90 + 60);
-        toast(this.mode === 'coop'
-          ? "Nothing at all. You're out — the team plays on."
-          : "Nothing at all. You're out.");
+        toast(t(this.mode === 'coop' ? 'toast.outCoop' : 'toast.outSolo'));
       } else if (row.feedback.every((f) => f !== 'hit')) {
         // "Not even one" -- a distinct sting after the whole row's flipped,
         // on top of the row's own is-whiff shake (see renderGrid).
@@ -591,10 +591,10 @@ export class Game {
         this.channel?.poke();
       }
     } catch (e) {
-      if (e.code === 'P0019') toast('Already solved — nothing left to guess.');
-      else if (e.code === 'P0018') toast('No guesses left.');
-      else if (e.code === 'P0021') toast("Time's up for this round.");
-      else toast(e.message || 'Guess rejected.');
+      if (e.code === 'P0019') toast(t('toast.alreadySolved'));
+      else if (e.code === 'P0018') toast(t('toast.noGuesses'));
+      else if (e.code === 'P0021') toast(t('toast.timeUp'));
+      else toast(e.message || t('toast.rejected'));
       this.#invalidShake();
     }
   }
@@ -828,20 +828,22 @@ export class Game {
     this.refreshState().then(() => {
       const rows = this.#standings();
       if (this.mode === 'coop') {
-        $('#board-title').textContent = 'Final standings';
+        $('#board-title').textContent = t('board.finalStandings');
         const solvedRounds = new Set(
           this.results.filter((r) => r.solved).map((r) => r.round_id)).size;
-        $('#board-note').textContent = `Team solved ${solvedRounds}/${this.room.total_rounds} rounds.`;
+        $('#board-note').textContent =
+          t('board.teamSolved', { n: solvedRounds, total: this.room.total_rounds });
       } else if (this.mode === 'solo') {
-        $('#board-title').textContent = 'Run complete';
+        $('#board-title').textContent = t('board.runComplete');
         const solvedRounds = new Set(
           this.results.filter((r) => r.solved).map((r) => r.round_id)).size;
         $('#board-note').textContent = rows.length
-          ? `${rows[0].total} points — solved ${solvedRounds}/${this.room.total_rounds} rounds.`
+          ? t('board.soloSummary',
+              { points: rows[0].total, n: solvedRounds, total: this.room.total_rounds })
           : '';
       } else {
-        $('#board-title').textContent = 'Final standings';
-        $('#board-note').textContent = rows.length ? `${rows[0].name} wins the duel.` : '';
+        $('#board-title').textContent = t('board.finalStandings');
+        $('#board-note').textContent = rows.length ? t('board.duelWinner', { name: rows[0].name }) : '';
       }
       $('#btn-again').hidden = false;
       setRoundRecap('');
@@ -950,9 +952,9 @@ export class Game {
 
     if (phase === 'countdown') {
       const secs = Math.ceil(-(serverNow() - Date.parse(this.round.starts_at)) / 1000);
-      setStatusLine(`<div class="big">${secs > 0 ? secs : 'GO'}</div>`);
+      setStatusLine(`<div class="big">${secs > 0 ? secs : t('countdown.go')}</div>`);
       const countEl = $('#event-card-count');
-      if (countEl) countEl.textContent = secs > 0 ? `Starts in ${secs}…` : 'GO!';
+      if (countEl) countEl.textContent = secs > 0 ? t('countdown.startsIn', { n: secs }) : t('countdown.go');
       renderGrid({
         wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
         guesses: [], active: '', canType: false,
@@ -1020,10 +1022,10 @@ export class Game {
 
     if (phase === 'live') {
       setStatusLine(this.mode === 'pvp' && this.ghost
-        ? `<div class="small">Opponent: ${this.ghost.attempts}/${this.round.max_guesses} guesses</div>`
+        ? `<div class="small">${t('status.opponent', { used: this.ghost.attempts, max: this.round.max_guesses })}</div>`
         : '');
     } else if (phase === 'settling') {
-      setStatusLine('<div class="small">Settling…</div>');
+      setStatusLine(`<div class="small">${t('status.settling')}</div>`);
     } else if (phase === 'reveal') {
       const word = `<div class="reveal-word">${(this.round.revealed_secret ?? '').toUpperCase()}</div>`;
       let sub = '';
@@ -1031,21 +1033,21 @@ export class Game {
         if (this.round.winner_player_id) {
           const iWon = this.round.winner_player_id === this.me?.id;
           const winner = this.players.find((p) => p.id === this.round.winner_player_id);
-          sub = `<div class="small">${iWon ? 'You got it first!' : `${winner?.name ?? 'Your rival'} got it first.`}</div>`;
+          sub = `<div class="small">${iWon ? t('status.gotItFirst') : t('status.rivalFirst', { name: winner?.name ?? t('rail.rival') })}</div>`;
         } else {
-          sub = '<div class="small">Nobody solved it in time.</div>';
+          sub = `<div class="small">${t('status.nobodySolved')}</div>`;
         }
       }
       setStatusLine(word + sub);
     } else if (phase === 'board' || phase === 'next') {
       const last = this.round.round_no >= this.room.total_rounds;
       $('#board-title').textContent = last
-        ? `After the last round` : `After round ${this.round.round_no}`;
+        ? t('board.afterLast') : t('board.afterRound', { n: this.round.round_no });
       // There is no next round after the last one. Promising one and then
       // cutting to the final standings reads as the game losing its place.
       $('#board-note').textContent = last
-        ? 'Working out the final standings…'
-        : (this.isHost ? 'Next round starting…' : 'Waiting for the host…');
+        ? t('board.final')
+        : t(this.isHost ? 'board.next' : 'board.waitingHost');
       $('#btn-again').hidden = true;
       setRoundRecap(this.#roundRecap());
       renderBoard(this.#standings());
@@ -1069,9 +1071,9 @@ export class Game {
       guessesUsed: visible.length,
       maxGuesses: this.round.max_guesses,
       eventEmoji: info?.emoji ?? null,
-      eventLabel: info?.label ?? null,
+      eventLabel: info ? eventLabel(this.round.event) : null,
       midEmoji: mid?.emoji ?? null,
-      midLabel: mid?.label ?? null,
+      midLabel: mid ? eventLabel(this.round.mid_modifier) : null,
     });
 
     const byId = new Map(this.leaderboard.map((r) => [r.player_id, r.total]));
@@ -1110,20 +1112,20 @@ export class Game {
     }
 
     if (phase === 'countdown' || phase === 'live') {
-      setPhase(phase === 'countdown' ? 'Get ready' : 'Live', null);
+      setPhase(t(phase === 'countdown' ? 'phase.countdown' : 'phase.live'), null);
       showScreen('screen-game');
       if (phase === 'live') sfx.go();
     } else if (phase === 'settling') {
-      setPhase('Settling', 'warn');
+      setPhase(t('phase.settling'), 'warn');
     } else if (phase === 'reveal') {
-      setPhase('Reveal', null);
+      setPhase(t('phase.reveal'), null);
       const mine = (this.guessesByRound.get(this.round.id) ?? [])
         .filter((g) => this.mode === 'coop' || g.player_id === this.me?.id);
       if (mine.some((g) => this.#allHit(g))) sfx.solved();
       else sfx.lost();
     } else if (phase === 'board' || phase === 'next') {
-      setPhase('Standings', null);
-      $('#board-title').textContent = `After round ${this.round?.round_no ?? ''}`;
+      setPhase(t('phase.board'), null);
+      $('#board-title').textContent = t('board.afterRound', { n: this.round?.round_no ?? '' });
       $('#btn-again').hidden = true;
       setRoundRecap(this.#roundRecap());
       renderBoard(this.#standings());

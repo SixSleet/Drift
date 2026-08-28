@@ -44,10 +44,10 @@
     <section class="screen" id="screen-title" data-active>
       <div class="stack">
         <h1 class="wordmark">Word<span>forge</span></h1>
-        <p class="tagline">Same idea as that word game you know. More letters, more modes, more pressure.</p>
+        <p class="tagline" data-i18n="app.tagline">Same idea as that word game you know. More letters, more modes, more pressure.</p>
 
         <div class="panel">
-          <p class="label">Mode</p>
+          <p class="label" data-i18n="label.mode">Mode</p>
           <div class="mode-picker" id="mode-chips" role="group" aria-label="Game mode">
     <button class="chip mode-chip is-on" data-mode="solo" style="--tint:#e2a259">
       <span class="mode-name">Solo</span>
@@ -63,11 +63,11 @@
     </button>
           </div>
 
-          <p class="label">Word length</p>
+          <p class="label" data-i18n="label.wordLength">Word length</p>
           <div class="chips" id="length-chips" role="group" aria-label="Word length"></div>
           <p class="hint hint-inline" id="length-hint"></p>
 
-          <p class="label">Rounds</p>
+          <p class="label" data-i18n="label.rounds">Rounds</p>
           <div class="chips" id="rounds-chips" role="group" aria-label="Number of rounds">
     <button class="chip" data-rounds="4">4</button>
     <button class="chip is-on" data-rounds="6">6</button>
@@ -75,25 +75,36 @@
     <button class="chip" data-rounds="12">12</button>
           </div>
 
-          <button class="btn btn-primary btn-lg" id="btn-create">Play solo</button>
+          <p class="label" data-i18n="label.language">Language</p>
+          <!-- Two things at once, and deliberately so: it sets the language
+               of this interface (yours alone, remembered in this browser)
+               AND the language of the words in any room you go on to
+               create. Someone who picks Italian wants to play in Italian,
+               not to read Italian menus while guessing English words.
+               Joining a room does not change it: you keep your menus, and
+               guess in whatever the room was created in. -->
+          <div class="chips lang-chips" id="lang-chips" role="group" data-i18n-aria="label.language" aria-label="Language"></div>
+          <p class="hint hint-inline" data-i18n="lang.note">Accented letters are typed without their accents.</p>
+
+          <button class="btn btn-primary btn-lg" id="btn-create" data-i18n="btn.playSolo">Play solo</button>
           <!-- Side by side: three full-width buttons pushed the last one
                below the fold on a 1440 screen, and a button you cannot see
                is the problem this was meant to fix. -->
           <div class="btn-row">
-            <button class="btn btn-ghost btn-lg" id="btn-join">Join with a code</button>
+            <button class="btn btn-ghost btn-lg" id="btn-join" data-i18n="btn.join">Join with a code</button>
             <button class="btn btn-arcade btn-lg" id="btn-arcade-title" type="button">
-              <span class="btn-arcade-name">Minigames</span>
-              <span class="btn-arcade-sub">Word Hunt · Chain · Moth Swat</span>
+              <span class="btn-arcade-name" data-i18n="btn.minigames">Minigames</span>
+              <span class="btn-arcade-sub" data-i18n="btn.minigames.sub">Word Hunt · Chain · Moth Swat</span>
             </button>
           </div>
           <div class="btn-row">
-            <button class="btn btn-quiet" id="btn-settings-title" type="button" aria-expanded="false" aria-controls="settings-panel">Sound settings</button>
-            <button class="btn btn-quiet" id="btn-jukebox" type="button" aria-expanded="false" aria-controls="jukebox-panel">Soundtrack</button>
+            <button class="btn btn-quiet" id="btn-settings-title" type="button" aria-expanded="false" aria-controls="settings-panel" data-i18n="btn.soundSettings">Sound settings</button>
+            <button class="btn btn-quiet" id="btn-jukebox" type="button" aria-expanded="false" aria-controls="jukebox-panel" data-i18n="btn.soundtrack">Soundtrack</button>
           </div>
         </div>
 
         <details class="how">
-          <summary>How it works</summary>
+          <summary data-i18n="how.summary">How it works</summary>
           <ol>
     <li>Pick the word length before you create the room — 4, 5, 6, 7, or Mixed (4 or 5, re-rolled every round). It's fixed for the whole match, and anyone who joins inherits it.</li>
     <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
@@ -114,31 +125,31 @@
     <!-- ── Code entry ────────────────────────────────────────── -->
     <section class="screen" id="screen-code">
       <div class="stack">
-        <h2 class="heading">Room code</h2>
+        <h2 class="heading" data-i18n="code.title">Room code</h2>
         <div class="code-display" id="code-display" aria-live="polite"></div>
         <div class="keypad" id="keypad"></div>
         <div class="row">
-          <button class="btn btn-ghost" id="btn-code-back">Back</button>
-          <button class="btn btn-ghost" id="btn-code-del">Delete</button>
+          <button class="btn btn-ghost" id="btn-code-back" data-i18n="btn.back">Back</button>
+          <button class="btn btn-ghost" id="btn-code-del" data-i18n="btn.delete">Delete</button>
         </div>
         <p class="note" id="code-note"></p>
-        <p class="hint">You can type the code on your keyboard too.</p>
+        <p class="hint" data-i18n="code.hint">You can type the code on your keyboard too.</p>
       </div>
     </section>
 
     <!-- ── Lobby ─────────────────────────────────────────────── -->
     <section class="screen" id="screen-lobby">
       <div class="stack">
-        <p class="label">Room code · <span id="lobby-mode"></span></p>
+        <p class="label"><span data-i18n="label.roomCode">Room code</span> · <span id="lobby-mode"></span></p>
         <div class="code-big" id="lobby-code"></div>
-        <button class="btn btn-ghost" id="btn-copy">Copy invite link</button>
+        <button class="btn btn-ghost" id="btn-copy" data-i18n="btn.copyInvite">Copy invite link</button>
 
         <div class="panel">
-          <p class="label">Players <span id="lobby-count" class="muted"></span><span id="lobby-count-max" class="muted"></span></p>
+          <p class="label"><span data-i18n="label.players">Players</span> <span id="lobby-count" class="muted"></span><span id="lobby-count-max" class="muted"></span></p>
           <ul class="players" id="lobby-players"></ul>
         </div>
 
-        <button class="btn btn-primary btn-lg" id="btn-start" hidden>Start game</button>
+        <button class="btn btn-primary btn-lg" id="btn-start" hidden data-i18n="btn.startGame">Start game</button>
         <p class="note" id="lobby-note"></p>
 
         <!-- Only ever shown on the lobby screen. A text input anywhere the
@@ -150,17 +161,18 @@
                before any of that happened. -->
           <input class="rename-input" id="rename-input" type="text" maxlength="24"
                  autocomplete="off" spellcheck="false" aria-label="Your name"
+                 data-i18n-aria="placeholder.yourName" data-i18n-placeholder="placeholder.yourName"
                  placeholder="Your name">
-          <button class="btn btn-primary" id="btn-rename-save" type="submit">Save</button>
-          <button class="btn btn-ghost" id="btn-rename-cancel" type="button">Cancel</button>
+          <button class="btn btn-primary" id="btn-rename-save" type="submit" data-i18n="btn.save">Save</button>
+          <button class="btn btn-ghost" id="btn-rename-cancel" type="button" data-i18n="btn.cancel">Cancel</button>
         </form>
         <button class="btn btn-arcade btn-lg" id="btn-arcade-lobby" type="button">
-          <span class="btn-arcade-name">Minigames</span>
-          <span class="btn-arcade-sub">Something to do while you wait</span>
+          <span class="btn-arcade-name" data-i18n="btn.minigames">Minigames</span>
+          <span class="btn-arcade-sub" data-i18n="lobby.minigamesSub">Something to do while you wait</span>
         </button>
         <div class="btn-row">
-          <button class="btn btn-ghost" id="btn-rename" type="button">Change your name</button>
-          <button class="btn btn-ghost btn-leave" id="btn-leave-lobby" type="button">Leave room</button>
+          <button class="btn btn-ghost" id="btn-rename" type="button" data-i18n="btn.rename">Change your name</button>
+          <button class="btn btn-ghost btn-leave" id="btn-leave-lobby" type="button" data-i18n="btn.leaveRoom">Leave room</button>
         </div>
       </div>
     </section>
@@ -173,7 +185,7 @@
       <header class="hud">
         <div class="hud-left">
           <span class="pill" id="hud-round">Round 1/6</span>
-          <span class="pill pill-phase" id="hud-phase">Get ready</span>
+          <span class="pill pill-phase" id="hud-phase" data-i18n="phase.countdown">Get ready</span>
           <span class="pill pill-chain" id="hud-chain" hidden></span>
           <!-- A standing rule for the round: a banned letter, sudden death,
                a stake placed. Stays up for the whole round, unlike the
@@ -216,13 +228,13 @@
     <!-- ── Between rounds / final ────────────────────────────── -->
     <section class="screen" id="screen-board">
       <div class="stack">
-        <h2 class="heading" id="board-title">Standings</h2>
+        <h2 class="heading" id="board-title" data-i18n="phase.board">Standings</h2>
         <!-- What just happened, in one line: the word and who got it. The
              standings used to be two names on an empty screen. -->
         <p class="round-recap" id="board-recap" hidden></p>
         <ol class="board" id="board-list"></ol>
         <p class="note" id="board-note"></p>
-        <button class="btn btn-primary btn-lg" id="btn-again" hidden>New room</button>
+        <button class="btn btn-primary btn-lg" id="btn-again" hidden data-i18n="btn.newRoom">New room</button>
       </div>
     </section>
 
@@ -233,25 +245,25 @@
          it. Rendered once, at overlay level, so it opens over any screen. -->
     <div class="settings-panel" id="settings-panel" hidden role="dialog" aria-modal="false" aria-label="Sound settings">
       <div class="settings-head">
-        <p class="label">Sound</p>
+        <p class="label" data-i18n="settings.title">Sound</p>
         <button class="btn-icon settings-close" id="btn-settings-close" type="button" aria-label="Close sound settings">✕</button>
       </div>
 
       <label class="slider-row" for="vol-music">
-        <span class="slider-name">Music</span>
+        <span class="slider-name" data-i18n="settings.music">Music</span>
         <input type="range" id="vol-music" min="0" max="100" step="1" aria-describedby="vol-music-val">
         <output class="slider-val" id="vol-music-val" for="vol-music"></output>
       </label>
-      <p class="hint hint-inline">The room's soundtrack. It changes with what's happening — blitz, blackout, jackpot, and the storm all sound different.</p>
+      <p class="hint hint-inline" data-i18n="settings.musicHint">The room's soundtrack. It changes with what's happening — blitz, blackout, jackpot, and the storm all sound different.</p>
 
       <label class="slider-row" for="vol-sfx">
-        <span class="slider-name">Effects</span>
+        <span class="slider-name" data-i18n="settings.effects">Effects</span>
         <input type="range" id="vol-sfx" min="0" max="100" step="1" aria-describedby="vol-sfx-val">
         <output class="slider-val" id="vol-sfx-val" for="vol-sfx"></output>
       </label>
-      <p class="hint hint-inline">Typing, tiles flipping, the timer, and everything the room does.</p>
+      <p class="hint hint-inline" data-i18n="settings.effectsHint">Typing, tiles flipping, the timer, and everything the room does.</p>
 
-      <button class="btn btn-ghost" id="btn-mute-all" type="button" aria-pressed="false">Mute everything</button>
+      <button class="btn btn-ghost" id="btn-mute-all" type="button" aria-pressed="false" data-i18n="settings.muteAll">Mute everything</button>
     </div>
 
     <!-- The jukebox. Every piece of music in the game, playable from the main
@@ -267,12 +279,12 @@
     <div class="modal-veil" id="jukebox-panel" hidden>
       <div class="jukebox-card" role="dialog" aria-modal="true" aria-label="Soundtrack">
         <div class="settings-head">
-          <p class="label">Soundtrack</p>
+          <p class="label" data-i18n="btn.soundtrack">Soundtrack</p>
           <button class="btn-icon settings-close" id="btn-jukebox-close" type="button"
                   aria-label="Close the soundtrack list">&#10005;</button>
         </div>
         <div class="jukebox-list" id="jukebox-list"></div>
-        <button class="btn btn-ghost" id="btn-jukebox-stop" type="button">Back to the menu music</button>
+        <button class="btn btn-ghost" id="btn-jukebox-stop" type="button" data-i18n="jukebox.back">Back to the menu music</button>
       </div>
     </div>
 

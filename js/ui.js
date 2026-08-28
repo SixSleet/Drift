@@ -2,6 +2,8 @@
 // requires a mouse. Guesses are physical-keyboard only, by design: there's
 // no on-screen keyboard to tap.
 
+import { t } from './i18n.js';
+
 export const $ = (sel) => document.querySelector(sel);
 export const $$ = (sel) => [...document.querySelectorAll(sel)];
 
@@ -451,15 +453,15 @@ export function renderRailLeft(opts) {
     const d = el('i', 'round-dot');
     if (i < opts.roundNo) d.classList.add('is-done');
     if (i === opts.roundNo) d.classList.add('is-now');
-    d.title = `Round ${i}`;
+    d.title = t('rail.round') + ` ${i}`;
     dots.appendChild(d);
   }
-  rounds.append(dots, el('p', 'rail-sub', `Round ${opts.roundNo} of ${opts.totalRounds}`));
+  rounds.append(dots, el('p', 'rail-sub', t('hud.round', { n: opts.roundNo, total: opts.totalRounds })));
   rail.appendChild(rounds);
 
   const left = Math.max(0, opts.maxGuesses - opts.guessesUsed);
   const guesses = el('div', 'rail-block');
-  guesses.append(el('p', 'rail-label', 'Guesses left'));
+  guesses.append(el('p', 'rail-label', t('rail.guessesLeft')));
   const big = el('div', 'rail-big', String(left));
   if (left <= 1) big.classList.add('is-low');
   guesses.append(big);
@@ -474,7 +476,7 @@ export function renderRailLeft(opts) {
 
   if (opts.eventLabel || opts.midLabel) {
     const mods = el('div', 'rail-block');
-    mods.append(el('p', 'rail-label', 'In play'));
+    mods.append(el('p', 'rail-label', t('rail.inPlay')));
     for (const [emoji, label, isMid] of [
       [opts.eventEmoji, opts.eventLabel, false],
       [opts.midEmoji, opts.midLabel, true],
@@ -508,7 +510,7 @@ export function renderRailRight(opts) {
 
   if (opts.mode === 'pvp') {
     const block = el('div', 'rail-block');
-    block.append(el('p', 'rail-label', 'Rival'));
+    block.append(el('p', 'rail-label', t('rail.rival')));
     const rival = opts.rows.find((r) => !r.isMe);
     block.append(el('div', 'rail-name', rival?.name ?? 'Waiting…'));
     // You never see a rival's letters -- only how much of their budget is
@@ -525,7 +527,7 @@ export function renderRailRight(opts) {
       bar.appendChild(dot);
     }
     block.appendChild(bar);
-    block.append(el('p', 'rail-sub', `${filled}/${opts.maxGuesses} guesses burned`));
+    block.append(el('p', 'rail-sub', t('rail.burned', { used: filled, max: opts.maxGuesses })));
     rail.appendChild(block);
     return;
   }
@@ -543,7 +545,7 @@ export function renderRailRight(opts) {
   // Co-op: everyone shares the board, so the useful readout is who has
   // spent what out of the shared pool.
   const block = el('div', 'rail-block');
-  block.append(el('p', 'rail-label', `Team · ${opts.rows.length}`));
+  block.append(el('p', 'rail-label', `${t('rail.team')} · ${opts.rows.length}`));
   const list = el('ul', 'team-list');
   for (const r of opts.rows) {
     const li = el('li', 'team-row');

@@ -88,8 +88,13 @@ async function rpc(fn, args) {
 }
 
 export const api = {
-  createRoom: (mode, rounds, wordLength = null) =>
-    rpc('wf_create_room', { p_mode: mode, p_total_rounds: rounds, p_word_length: wordLength }),
+  // `lang` is the WORD language for the room, not the caller's interface
+  // language -- they happen to be the same at creation time, but a joiner
+  // inherits the room's and keeps their own menus.
+  createRoom: (mode, rounds, wordLength = null, lang = 'en') =>
+    rpc('wf_create_room', {
+      p_mode: mode, p_total_rounds: rounds, p_word_length: wordLength, p_lang: lang,
+    }),
   joinRoom: (code) => rpc('wf_join_room', { p_code: code }),
   state: (roomId) => rpc('wf_state', { p_room: roomId }),
   heartbeat: (roomId) => rpc('wf_heartbeat', { p_room: roomId }),

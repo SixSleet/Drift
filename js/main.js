@@ -11,6 +11,9 @@ import {
 import { volume } from './audio.js';
 import { GAMES, startArcade, stopArcade, bestScore } from './arcade.js';
 import { music, tracks } from './music.js';
+import {
+  LANGUAGES, getLang, setLang, t, applyTranslations, modeLabel, modeBlurb,
+} from './i18n.js';
 
 const game = new Game();
 // Exposed so the browser test harness can inspect the live simulation.
@@ -22,20 +25,38 @@ let codeBuffer = '';
 
 function fail(err) {
   const msg = String(err?.message ?? err);
-  if (/no such room/i.test(msg)) { showScreen('screen-code'); $('#code-note').textContent = 'No room with that code.'; codeBuffer = ''; setCodeDisplay(''); return; }
-  if (/already started/i.test(msg)) { showScreen('screen-code'); $('#code-note').textContent = 'That game has already started.'; codeBuffer = ''; setCodeDisplay(''); return; }
-  if (/room is full/i.test(msg)) { showScreen('screen-code'); $('#code-note').textContent = 'That room is full.'; codeBuffer = ''; setCodeDisplay(''); return; }
-  showError('Something went wrong', msg);
+  const onCode = (key) => {
+    showScreen('screen-code');
+    $('#code-note').textContent = t(key);
+    codeBuffer = '';
+    setCodeDisplay('');
+  };
+  if (/no such room/i.test(msg)) { onCode('code.noRoom'); return; }
+  if (/already started/i.test(msg)) { onCode('code.started'); return; }
+  if (/room is full/i.test(msg)) { onCode('code.full'); return; }
+  showError(t('error.title'), msg);
 }
 
 // ── Title ──────────────────────────────────────────────────────────────
 
 function setCreateLabel(mode) {
-  $('#btn-create').textContent = mode === 'solo' ? 'Play solo' : 'Create a room';
+  $('#btn-create').textContent = t(mode === 'solo' ? 'btn.playSolo' : 'btn.createRoomShort');
 }
 setCreateLabel(chosenMode);
 
 chipGroup($('#mode-chips'), (v) => { chosenMode = v; setCreateLabel(v); }, 'mode');
+
+// The three mode chips are written out in index.html so the title screen has
+// something to show before any script runs; their text is replaced here, and
+// again whenever the language changes.
+function paintModeChips() {
+  for (const b of $('#mode-chips').children) {
+    const m = b.dataset.mode;
+    b.querySelector('.mode-name').textContent = modeLabel(m);
+    b.querySelector('.mode-blurb').textContent = modeBlurb(m);
+  }
+  setCreateLabel(chosenMode);
+}
 chipGroup($('#rounds-chips'), (v) => { chosenRounds = Number(v); }, 'rounds');
 
 // Word length is fixed for the whole match and has to be settled before the
@@ -44,23 +65,36 @@ chipGroup($('#rounds-chips'), (v) => { chosenRounds = Number(v); }, 'rounds');
 (function buildWordLengthChips() {
   const box = $('#length-chips');
   if (!box) return;
+  const key = (v) => (v === null ? 'mixed' : String(v));
   for (const c of WORD_LENGTH_CHOICES) {
     const b = document.createElement('button');
     b.className = 'chip';
     b.type = 'button';
-    b.dataset.length = c.value === null ? 'mixed' : String(c.value);
-    b.title = c.hint;
-    b.textContent = c.label;
+    b.dataset.length = key(c.value);
+    // The numbers are the same in every language; only Mixed and the hints
+    // need translating, so only those go through the table.
+    b.textContent = c.value === null ? t('length.mixed') : c.label;
+    if (c.value === null) b.dataset.i18n = 'length.mixed';
+    b.dataset.i18nTitle = `length.${key(c.value)}.hint`;
+    b.title = t(b.dataset.i18nTitle);
     if (c.value === DEFAULT_WORD_LENGTH) b.classList.add('is-on');
     box.appendChild(b);
   }
   const hint = $('#length-hint');
-  const describe = (v) => WORD_LENGTH_CHOICES.find((c) => c.value === v)?.hint ?? '';
-  if (hint) hint.textContent = describe(DEFAULT_WORD_LENGTH);
+  const describe = (v) => t(`length.${key(v)}.hint`);
+  const paintHint = () => { if (hint) hint.textContent = describe(chosenWordLength); };
+  paintHint();
   chipGroup(box, (v) => {
     chosenWordLength = v === 'mixed' ? null : Number(v);
-    if (hint) hint.textContent = describe(chosenWordLength);
+    paintHint();
   }, 'length');
+  // Chip titles and the hint under them are derived, so they have to be
+  // repainted when the language changes -- applyTranslations only knows
+  // about static data-i18n text.
+  window.addEventListener('wf-lang', () => {
+    for (const b of box.children) b.title = t(b.dataset.i18nTitle);
+    paintHint();
+  });
 })();
 
 $('#btn-create').addEventListener('click', async (e) => {
@@ -80,7 +114,7 @@ $('#btn-join').addEventListener('click', () => {
 // ── Code entry: tap the pad or type on a real keyboard — both call this ──
 
 async function submitCode() {
-  $('#code-note').textContent = 'Joining…';
+  $('#code-note').textContent = t('code.joining');
   try { await game.joinRoom(codeBuffer); }
   catch (err) { fail(err); }
 }
@@ -144,19 +178,18 @@ async function leave(btn) {
 // are different questions.
 $('#btn-leave-lobby')?.addEventListener('click', async (e) => {
   const ok = await confirmDialog({
-    title: 'Leave this room?',
+    title: t('leave.roomTitle'),
     body: game.isHost && game.players.length > 1
-      ? 'Someone else will take over as host.'
-      : "You can rejoin with the room's code.",
-    confirm: 'Leave', cancel: 'Stay',
+      ? t('leave.roomHost') : t('leave.roomBody'),
+    confirm: t('btn.leave'), cancel: t('btn.stay'),
   });
   if (ok) leave(e.currentTarget);
 });
 $('#btn-leave-game')?.addEventListener('click', async (e) => {
   const ok = await confirmDialog({
-    title: 'Leave this game?',
-    body: "You won't be able to rejoin it, and your score stays on the board.",
-    confirm: 'Leave', cancel: 'Keep playing',
+    title: t('leave.title'),
+    body: t('leave.body'),
+    confirm: t('btn.leave'), cancel: t('btn.keepPlaying'),
   });
   if (ok) leave(e.currentTarget);
 });
@@ -186,11 +219,11 @@ renameRow?.addEventListener('submit', async (e) => {
     const got = await game.rename(wanted);
     // The server strips what it will not render, so tell them if what they
     // get back is not what they typed.
-    if (got !== wanted.trim()) toast(`Saved as "${got}".`);
+    if (got !== wanted.trim()) toast(t('toast.savedAs', { name: got }));
     showRename(false);
   } catch (err) {
     const msg = String(err.message || err);
-    toast(/empty/i.test(msg) ? 'That name has nothing in it.' : msg);
+    toast(/empty/i.test(msg) ? t('toast.emptyName') : msg);
   } finally {
     save.disabled = false;
   }
@@ -205,7 +238,7 @@ renameRow?.addEventListener('keydown', (e) => {
 $('#btn-copy').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(location.href);
-    toast('Invite link copied.');
+    toast(t('toast.linkCopied'));
   } catch {
     toast(location.href, 6000);
   }
@@ -271,20 +304,20 @@ const juke = {
 };
 
 if (juke.panel) {
-  for (const t of tracks()) {
+  for (const track of tracks()) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'jukebox-track';
-    b.dataset.track = t.id;
+    b.dataset.track = track.id;
     b.innerHTML = '<span></span><span class="jukebox-bpm"></span>';
-    b.firstChild.textContent = t.name;
-    b.lastChild.textContent = `${t.bpm}`;
+    b.firstChild.textContent = track.name;
+    b.lastChild.textContent = `${track.bpm}`;
     b.addEventListener('click', () => {
       // Starting audio needs a gesture, and this is one -- so a player who
       // has not clicked anything else yet still gets sound out of it.
       if (!music.running) music.start(game.musicTheme());
-      juke.held = t.id;
-      music.cue(t.id);
+      juke.held = track.id;
+      music.cue(track.id);
       paintJukebox();
     });
     juke.list.appendChild(b);
@@ -355,11 +388,13 @@ let cameFrom = 'screen-title';
     b.type = 'button';
     b.dataset.arcade = id;
     b.innerHTML = `<span class="mode-name"></span><span class="mode-blurb"></span><span class="arcade-chip-best"></span>`;
-    b.querySelector('.mode-name').textContent = g.name;
-    b.querySelector('.mode-blurb').textContent = g.blurb;
+    b.querySelector('.mode-name').dataset.i18n = g.nameKey;
+    b.querySelector('.mode-blurb').dataset.i18n = g.blurbKey;
     b.addEventListener('click', () => play(id));
     box.appendChild(b);
   }
+  applyTranslations(box);
+  window.addEventListener('wf-lang', () => applyTranslations(box));
 })();
 
 // Which arcade theme currently holds the override, so it can be handed back
@@ -375,7 +410,9 @@ function paintArcadeBests() {
     const chip = $(`#arcade-picker .chip[data-arcade="${id}"] .arcade-chip-best`);
     if (!chip) continue;
     const best = bestScore(id);
-    chip.textContent = best ? `Best ${best} ${GAMES[id].unit}` : 'Not played yet';
+    chip.textContent = best
+      ? t('arcade.bestUnit', { n: best, unit: t(GAMES[id].unitKey) })
+      : t('arcade.notPlayed');
   }
 }
 
@@ -465,6 +502,49 @@ new MutationObserver(() => {
 
 $('#btn-again').addEventListener('click', () => { location.href = location.pathname; });
 $('#btn-error-back').addEventListener('click', () => { location.href = location.pathname; });
+
+// ── Language ───────────────────────────────────────────────────────────
+//
+// One row of flags on the title screen. Picking one rewrites every string
+// carrying a data-i18n attribute, then fires `wf-lang` so the parts of the
+// UI built in JavaScript (mode chips, length hints, the arcade picker) can
+// repaint themselves too.
+//
+// It is only offered on the title screen, and only matters there: the word
+// language is fixed onto a room when the room is created (see
+// game.createRoom), so changing it mid-match would swap your menus without
+// swapping the words -- confusing, and not what anyone means by it.
+
+(function buildLanguageChips() {
+  const box = $('#lang-chips');
+  if (!box) return;
+  for (const l of LANGUAGES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip lang-chip';
+    b.dataset.lang = l.code;
+    b.innerHTML = '<span class="lang-flag"></span><span class="lang-name"></span>';
+    b.firstChild.textContent = l.flag;
+    b.lastChild.textContent = l.label;
+    b.classList.toggle('is-on', l.code === getLang());
+    b.addEventListener('click', () => {
+      setLang(l.code);
+      for (const other of box.children) other.classList.toggle('is-on', other === b);
+      sfx.type();
+    });
+    box.appendChild(b);
+  }
+})();
+
+// Static text first, then everything derived from it. Both again on a change.
+function paintLanguage() {
+  applyTranslations();
+  paintModeChips();
+  paintArcadeBests();
+}
+document.documentElement.lang = getLang();
+paintLanguage();
+window.addEventListener('wf-lang', paintLanguage);
 
 // ── Go ─────────────────────────────────────────────────────────────────
 
