@@ -236,7 +236,9 @@ async function main() {
     const { words: dict, rootsOnly, truncated } = await readDictionary(lang.dict);
     process.stdout.write(`${dict.size} forms (${rootsOnly} roots${truncated ? ', affix pass truncated' : ''}); `);
 
-    const freq = readFrequency(lang.freq);
+    // English never consults the frequency list (see below), so it does not
+    // pay for reading one either.
+    const freq = lang.code === 'en' ? [] : readFrequency(lang.freq);
 
     // An answer has to be common (in the frequency list), real (in the
     // dictionary) and printable in a family setting.

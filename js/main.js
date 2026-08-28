@@ -422,7 +422,7 @@ function showPicker() {
   $('#arcade-stage').hidden = true;
   $('#arcade-time').hidden = true;
   $('#arcade-score').parentElement.hidden = true;
-  $('#arcade-title').textContent = 'Warm up';
+  $('#arcade-title').textContent = t('arcade.warmUp');
   paintArcadeBests();
 }
 
@@ -460,7 +460,7 @@ function openArcade(from) {
     // In a lobby the one thing you must not miss is people arriving, so the
     // count comes with you.
     note.hidden = from !== 'screen-lobby';
-    if (from === 'screen-lobby') note.textContent = 'Still in the lobby — the game starts without warning when the host is ready.';
+    if (from === 'screen-lobby') note.textContent = t('arcade.lobbyNote');
   }
   $('#arcade-result').hidden = true;
   showScreen('screen-arcade');

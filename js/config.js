@@ -7,25 +7,13 @@
 export const SUPABASE_URL = 'https://ycltdyjtjdrgoyrevepf.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_9XEu26xpqmLoP3t41iFZ1w_9lxZu9Vr';
 
+// What a mode IS, not what it is called: names and blurbs live in i18n.js
+// under mode.<id> / mode.<id>.blurb, because they change with the language
+// and none of this does.
 export const MODES = Object.freeze({
-  solo: {
-    label: 'Solo',
-    blurb: 'Just you and the clock. Same rules, no rival — chase your own best score.',
-    tint: '#e2a259',
-    maxPlayers: 1,
-  },
-  pvp: {
-    label: 'PvP Duel',
-    blurb: 'Same word, same start. Fewer guesses wins — you only see your own board.',
-    tint: '#cf8465',
-    maxPlayers: 2,
-  },
-  coop: {
-    label: 'Co-op',
-    blurb: 'One shared board, one shared guess pool. Everyone sees every guess.',
-    tint: '#94b073',
-    maxPlayers: 10,
-  },
+  solo: { tint: '#e2a259', maxPlayers: 1 },
+  pvp:  { tint: '#cf8465', maxPlayers: 2 },
+  coop: { tint: '#94b073', maxPlayers: 10 },
 });
 
 // ── Round shape ──────────────────────────────────────────────────────────
@@ -37,12 +25,14 @@ export const WORD_LENGTHS = [4, 5, 6, 7];
 // Offered on the title screen, before a lobby is created. Mixed stays 4-5:
 // it's the default match, and 6-7 change the feel enough to be a deliberate
 // choice rather than something a default should spring on you.
+// `label` is the digit on the chip, the same in every language; Mixed and
+// all five hints come from i18n.js (length.<key> / length.<key>.hint).
 export const WORD_LENGTH_CHOICES = Object.freeze([
-  { value: null, label: 'Mixed', hint: '4 or 5, re-rolled every round' },
-  { value: 4,    label: '4',     hint: 'Short and sharp' },
-  { value: 5,    label: '5',     hint: 'The classic' },
-  { value: 6,    label: '6',     hint: 'Getting roomy' },
-  { value: 7,    label: '7',     hint: 'Properly hard' },
+  { value: null, label: 'Mixed' },
+  { value: 4,    label: '4' },
+  { value: 5,    label: '5' },
+  { value: 6,    label: '6' },
+  { value: 7,    label: '7' },
 ]);
 export const DEFAULT_WORD_LENGTH = null;
 export const ROUND_LEAD_MS = 5000;  // matches wf_next_round's starts_at offset —
@@ -77,23 +67,27 @@ export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
 // have to be server-side as well, because they decide when a round ends and
 // what it pays -- see wf_check_settle and wf_place_wager. What is here for
 // those two is the presentation and the input rules only.
+// Emoji, tint, fx and rule -- everything about an event that is not words.
+// Its name, its card text and its mid-round line are keyed by the same
+// event name in i18n.js (event.<name>.label / .blurb / .mid), because those
+// change with the reader's language and none of this does.
 export const EVENTS = Object.freeze({
   none: null,
-  double_points: { label: 'Double Points', emoji: '💰', tint: '#dfae52', blurb: 'This round pays double.',                                       midBlurb: 'Points doubled, from here on.',      fx: 'coins' },
-  blitz:         { label: 'Blitz',         emoji: '⚡', tint: '#d98b5c', blurb: 'Only 90 seconds on the clock.',                                   midBlurb: 'The clock just got cut in half.',    fx: 'siren' },
-  blackout:      { label: 'Blackout',      emoji: '🙈', tint: '#9c8f7a', blurb: 'The legend stops showing you which letters you know.',            midBlurb: 'The legend just went dark.',        fx: 'eclipse', rule: 'blackout' },
-  jackpot:       { label: 'JACKPOT',       emoji: '🎰', tint: '#dfae52', blurb: 'Extra guess AND double points!',                                  midBlurb: 'Extra guess AND double points!',    fx: 'jackpot', rare: true },
+  double_points: { emoji: '💰', tint: '#dfae52', fx: 'coins' },
+  blitz:         { emoji: '⚡', tint: '#d98b5c', fx: 'siren' },
+  blackout:      { emoji: '🙈', tint: '#9c8f7a', fx: 'eclipse', rule: 'blackout' },
+  jackpot:       { emoji: '🎰', tint: '#dfae52', fx: 'jackpot', rare: true },
   // Coop-only, and mid-round only -- it needs guesses on the board to swap.
-  letter_swap:   { label: 'Letter Swap',   emoji: '🔀', tint: '#cf8465', blurb: 'Two guesses just got their tiles mixed up.',                      midBlurb: 'Two guesses just traded tiles.',    fx: 'siren' },
+  letter_swap:   { emoji: '🔀', tint: '#cf8465', fx: 'siren' },
   // Round-start only: wf_next_round's mid-round pool never contains these,
   // the same way it never contains jackpot. They rewrite the rules of the
   // round, which is not something to spring on someone halfway through it.
-  cipher:        { label: 'Cipher',        emoji: '🔢', tint: '#7f9bb5', blurb: 'No colours. You are told only how many hits and presents.',       midBlurb: 'The colours just went away.',        fx: 'eclipse', rule: 'cipher', rare: true },
-  lockdown:      { label: 'Lockdown',      emoji: '🔒', tint: '#c2705a', blurb: 'Every guess must reuse every letter you have confirmed.',         midBlurb: 'Confirmed letters are now locked in.', fx: 'siren', rule: 'lockdown' },
-  sudden_death:  { label: 'Sudden Death',  emoji: '🩸', tint: '#cc5544', blurb: 'A guess that scores nothing at all ends the round.',              midBlurb: 'One bad guess ends it now.',         fx: 'siren', rule: 'sudden_death', rare: true },
-  fading_ink:    { label: 'Fading Ink',    emoji: '🫥', tint: '#8fa9a0', blurb: 'Colours fade off each row a few seconds after it lands.',         midBlurb: 'The ink started fading.',            fx: 'eclipse', rule: 'fading_ink' },
-  banned_letter: { label: 'Banned Letter', emoji: '🚫', tint: '#c2705a', blurb: 'One letter is outlawed. It is not in the answer.',                midBlurb: 'A letter just got outlawed.',        fx: 'siren', rule: 'banned_letter' },
-  wager:         { label: 'Wager',         emoji: '🎲', tint: '#dfae52', blurb: 'Stake your points on solving this one.',                          midBlurb: 'Stakes are on the table.',           fx: 'coins', rule: 'wager', rare: true },
+  cipher:        { emoji: '🔢', tint: '#7f9bb5', fx: 'eclipse', rule: 'cipher', rare: true },
+  lockdown:      { emoji: '🔒', tint: '#c2705a', fx: 'siren', rule: 'lockdown' },
+  sudden_death:  { emoji: '🩸', tint: '#cc5544', fx: 'siren', rule: 'sudden_death', rare: true },
+  fading_ink:    { emoji: '🫥', tint: '#8fa9a0', fx: 'eclipse', rule: 'fading_ink' },
+  banned_letter: { emoji: '🚫', tint: '#c2705a', fx: 'siren', rule: 'banned_letter' },
+  wager:         { emoji: '🎲', tint: '#dfae52', fx: 'coins', rule: 'wager', rare: true },
 });
 
 // How long a row keeps its colours under FADING INK before they drain away.

@@ -2,7 +2,7 @@
 // requires a mouse. Guesses are physical-keyboard only, by design: there's
 // no on-screen keyboard to tap.
 
-import { t } from './i18n.js';
+import { t, getLang } from './i18n.js';
 
 export const $ = (sel) => document.querySelector(sel);
 export const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -185,7 +185,7 @@ export function renderPlayers(players, meId) {
     if (p.is_host) {
       const tag = document.createElement('span');
       tag.className = 'tag';
-      tag.textContent = 'HOST';
+      tag.textContent = t('player.host');
       li.appendChild(tag);
     }
     ul.appendChild(li);
@@ -440,14 +440,18 @@ const _railSig = { left: null, right: null };
 export function renderRailLeft(opts) {
   const rail = $('#rail-left');
   if (!rail) return;
-  const sig = JSON.stringify(opts);
+  // The language is part of the signature because half of what these
+  // render is words: memoising on the data alone means a language change
+  // cannot repaint them, and the rail keeps the previous language until
+  // something else happens to move a number.
+  const sig = JSON.stringify([getLang(), opts]);
   if (sig === _railSig.left) return;
   _railSig.left = sig;
 
   rail.innerHTML = '';
 
   const rounds = el('div', 'rail-block');
-  rounds.append(el('p', 'rail-label', 'Match'));
+  rounds.append(el('p', 'rail-label', t('rail.match')));
   const dots = el('div', 'round-dots');
   for (let i = 1; i <= opts.totalRounds; i++) {
     const d = el('i', 'round-dot');
@@ -502,7 +506,7 @@ export function renderRailLeft(opts) {
 export function renderRailRight(opts) {
   const rail = $('#rail-right');
   if (!rail) return;
-  const sig = JSON.stringify(opts);
+  const sig = JSON.stringify([getLang(), opts]);
   if (sig === _railSig.right) return;
   _railSig.right = sig;
 
@@ -512,7 +516,7 @@ export function renderRailRight(opts) {
     const block = el('div', 'rail-block');
     block.append(el('p', 'rail-label', t('rail.rival')));
     const rival = opts.rows.find((r) => !r.isMe);
-    block.append(el('div', 'rail-name', rival?.name ?? 'Waiting…'));
+    block.append(el('div', 'rail-name', rival?.name ?? t('rail.waiting')));
     // You never see a rival's letters -- only how much of their budget is
     // gone. The dots are that, and nothing more.
     const bar = el('div', 'ghost-bar');
@@ -534,10 +538,10 @@ export function renderRailRight(opts) {
 
   if (opts.mode === 'solo') {
     const block = el('div', 'rail-block');
-    block.append(el('p', 'rail-label', 'Score'));
+    block.append(el('p', 'rail-label', t('rail.score')));
     const me = opts.rows.find((r) => r.isMe);
     block.append(el('div', 'rail-big', String(me?.total ?? 0)));
-    block.append(el('p', 'rail-sub', 'points this match'));
+    block.append(el('p', 'rail-sub', t('rail.pointsThisMatch')));
     rail.appendChild(block);
     return;
   }
@@ -552,12 +556,12 @@ export function renderRailRight(opts) {
     if (r.isMe) li.classList.add('is-me');
     const dot = el('i', 'team-dot');
     dot.style.background = r.color;
-    li.append(dot, el('span', 'team-name', r.name + (r.isMe ? ' (you)' : '')));
+    li.append(dot, el('span', 'team-name', r.name + (r.isMe ? ` ${t('player.you')}` : '')));
     li.append(el('span', 'team-count', String(r.guesses)));
     list.appendChild(li);
   }
   block.appendChild(list);
-  block.append(el('p', 'rail-sub', 'guesses played this round'));
+  block.append(el('p', 'rail-sub', t('rail.playedThisRound')));
   rail.appendChild(block);
 }
 
