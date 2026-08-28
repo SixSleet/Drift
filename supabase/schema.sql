@@ -965,6 +965,19 @@ begin
     raise exception 'wordforge: guess must be a % letter word', v_round.word_length using errcode = 'P0017';
   end if;
 
+  -- SUDDEN DEATH eliminates the player who threw the empty guess, and only
+  -- them. In Coop that means the board and the shared pool carry on without
+  -- you: your teammates are not out because you were careless. Enforced here
+  -- as well as in the client so an eliminated player cannot keep playing by
+  -- reloading the page.
+  if v_round.event = 'sudden_death' and exists (
+       select 1 from public.wf_guesses g
+        where g.round_id = p_round and g.player_id = v_player.id
+          and not ('hit' = any(g.feedback))
+          and not ('present' = any(g.feedback))) then
+    raise exception 'wordforge: you are out for this round' using errcode = 'P0030';
+  end if;
+
   v_all_hit := array_fill('hit'::text, array[v_round.word_length]);
 
   if v_mode = 'coop' then
@@ -1047,8 +1060,8 @@ begin
   -- triple_points/mega_jackpot are retired and can no longer be rolled, but
   -- the 3x branch stays: a round minted while they were live must still
   -- settle at the multiplier its event card promised the players.
-  -- deceit/cipher/lockdown/head_start deliberately have no branch here --
-  -- they change how the round is played, not what it pays.
+  -- cipher/lockdown/sudden_death/fading_ink/banned_letter deliberately have
+  -- no branch here -- they change how the round is played, not what it pays.
   v_mult := case
     when v_round.event in ('triple_points', 'mega_jackpot') then 3
     when v_round.event in ('double_points', 'jackpot')
@@ -1068,13 +1081,22 @@ begin
     v_done := v_time_up
               or v_round.pool_used >= v_round.max_guesses
               or exists (select 1 from public.wf_guesses where round_id = p_round and feedback = v_all_hit)
-              -- One player's total miss ends it for the whole team: the
-              -- board and the guess pool are shared, so the risk is too.
-              or (v_sudden and exists (
-                    select 1 from public.wf_guesses g
-                     where g.round_id = p_round
-                       and not ('hit' = any(g.feedback))
-                       and not ('present' = any(g.feedback))));
+              -- Sudden death takes out the player who threw the empty guess,
+              -- not the team. The round only ends this way once there is
+              -- nobody left who can still play -- so a careless teammate
+              -- costs the pool a guess and costs themselves the round, and
+              -- everyone else carries on.
+              or (v_sudden
+                  and exists (select 1 from public.wf_players p
+                               where p.room_id = v_round.room_id and p.left_at is null)
+                  and not exists (
+                    select 1 from public.wf_players p
+                     where p.room_id = v_round.room_id and p.left_at is null
+                       and not exists (
+                         select 1 from public.wf_guesses g
+                          where g.round_id = p_round and g.player_id = p.id
+                            and not ('hit' = any(g.feedback))
+                            and not ('present' = any(g.feedback)))));
   else
     -- PvP and Solo: the round ends the instant anyone solves it (first to
     -- the word wins the round), once everyone still playing has run out of

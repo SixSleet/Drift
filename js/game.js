@@ -570,7 +570,9 @@ export class Game {
       if (this.roundRule === 'sudden_death' && isTotalMiss(row.feedback)) {
         this.local.diedAt = Date.now();
         setTimeout(() => sfx.suddenDeath(), row.feedback.length * 90 + 60);
-        toast(this.mode === 'coop' ? 'Nothing at all. The round is over.' : "Nothing at all. You're out.");
+        toast(this.mode === 'coop'
+          ? "Nothing at all. You're out — the team plays on."
+          : "Nothing at all. You're out.");
       } else if (row.feedback.every((f) => f !== 'hit')) {
         // "Not even one" -- a distinct sting after the whole row's flipped,
         // on top of the row's own is-whiff shake (see renderGrid).
@@ -618,12 +620,17 @@ export class Game {
   }
 
   /**
-   * SUDDEN DEATH: are we (or, in Coop, the team) already out? Read off the
-   * board rather than off local state so it survives a refresh -- the rows
-   * are the record, `local.diedAt` only exists to time the sting.
+   * SUDDEN DEATH: am *I* out? Always my own rows, even in Coop, where the
+   * board is shared but the elimination is not -- a teammate's empty guess
+   * takes them out and leaves the rest of the team playing.
+   *
+   * Read off the board rather than off local state so it survives a refresh:
+   * the rows are the record, `local.diedAt` only exists to time the sting.
    */
   #isDead() {
-    return this.roundRule === 'sudden_death' && suddenDeathOver(this.#myGuesses());
+    if (this.roundRule !== 'sudden_death') return false;
+    const gs = this.guessesByRound.get(this.round.id) ?? [];
+    return suddenDeathOver(gs.filter((g) => g.player_id === this.me?.id));
   }
 
   #roundSeemsFinished() {
@@ -632,12 +639,14 @@ export class Game {
     if (serverNow() - Date.parse(this.round.starts_at) >= timeLimitMs) return true; // round's own clock (blitz shortens it)
 
     const gs = this.guessesByRound.get(this.round.id) ?? [];
-    // Sudden death ends it for whoever threw the total miss -- for the whole
-    // team in Coop, where the board and the guess pool are shared.
+    // Sudden death takes out only the player who threw the total miss. In
+    // Coop that means the round ends this way only once nobody is left who
+    // can still play -- one careless teammate does not end it for everyone.
     const dead = this.roundRule === 'sudden_death';
     if (this.mode === 'coop') {
-      return gs.length >= this.round.max_guesses || gs.some((g) => this.#allHit(g))
-             || (dead && suddenDeathOver(gs));
+      const allOut = dead && this.players.length > 0 && this.players.every((p) =>
+        suddenDeathOver(gs.filter((g) => g.player_id === p.id)));
+      return gs.length >= this.round.max_guesses || gs.some((g) => this.#allHit(g)) || allOut;
     }
     const mine = gs.filter((g) => g.player_id === this.me?.id);
     const myDone = mine.length >= this.round.max_guesses || mine.some((g) => this.#allHit(g))
