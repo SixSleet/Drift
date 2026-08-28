@@ -1355,6 +1355,10 @@ html, body {
 }
 .chip:disabled { opacity: .35; cursor: not-allowed; }
 
+/* The room's language, tucked at the end of the rail's "Match" label. Small
+   and quiet -- it is a standing fact about the room, not an alert. */
+.rail-lang { float: right; font-size: 12px; opacity: .85; cursor: default; }
+
 /* The language row. Five of them have to fit one line of the panel without
    wrapping the way the mode chips do, so the flag carries the recognition
    and the name is small enough to be a label rather than a button. */

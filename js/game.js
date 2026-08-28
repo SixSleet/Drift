@@ -9,7 +9,9 @@ import {
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
-import { t, ordinal, getLang, eventLabel, eventBlurb, eventMid, modeLabel } from './i18n.js';
+import {
+  t, ordinal, getLang, eventLabel, eventBlurb, eventMid, modeLabel, languageOf,
+} from './i18n.js';
 import { sfx } from './sfx.js';
 import { music } from './music.js';
 import {
@@ -156,12 +158,17 @@ export class Game {
     const enough = this.mode === 'solo' || this.players.length >= 2;
     btn.hidden = !this.isHost;
     btn.disabled = !enough;
-    // Everyone in the room plays the host's word length, so everyone needs
-    // to be told what it is -- a joiner had no way of knowing before.
+    // Everyone in the room plays the host's word length AND the host's
+    // language, so everyone needs to be told both -- a joiner had no way of
+    // knowing either. The language especially: your menus are in yours, so
+    // nothing else on this screen hints that the words will not be.
     const wl = this.room.word_length
       ? t('lobby.words.fixed', { n: this.room.word_length })
       : t('lobby.words.mixed');
-    const setup = t('lobby.setup', { rounds: this.room.total_rounds, words: wl });
+    const lang = languageOf(this.room.lang);
+    const setup = t('lobby.setup', {
+      rounds: this.room.total_rounds, words: wl, lang: `${lang.flag} ${lang.label}`,
+    });
     $('#lobby-note').textContent = this.isHost
       ? (enough ? setup : t('lobby.waitingOne'))
       : `${setup} ${t('lobby.waitingHost')}`;
@@ -1068,6 +1075,7 @@ export class Game {
     renderRailLeft({
       roundNo: this.round.round_no,
       totalRounds: this.room.total_rounds,
+      lang: this.room.lang ?? 'en',
       guessesUsed: visible.length,
       maxGuesses: this.round.max_guesses,
       eventEmoji: info?.emoji ?? null,

@@ -278,11 +278,18 @@ frequency lists (see the header of that file for the sources and the exact
 filtering). Rerunning it is deterministic: same dictionaries in, same lists
 out.
 
-**Accents are typed without them.** The board, the letter legend and the
-scoring all assume a 26-letter alphabet, so *café* is played as CAFE and
-*schön* as SCHON, in both lists alike — you never have to reach for a key
-your keyboard may not have. German ß is the one thing dropped rather than
-folded, since turning it into "ss" would change a word's length.
+**Accents fold away.** The board, the letter legend and the scoring all
+assume a 26-letter alphabet, so *café* is stored and played as CAFE and
+*schön* as SCHON, in both lists alike. You can still *type* the accents —
+pressing é puts down an E, à puts down an A — so you write the word the way
+you would write it and the board spells it the way it stores it. German ß is
+the one thing dropped rather than folded, since turning it into "ss" would
+put two tiles down for one keystroke and change the word's length.
+
+**Which language a room is in** is decided by whoever created it and shown
+to everyone who joins — on the lobby line and as a flag in the left rail
+during play. Your menus stay in your own language, so without that there
+would be nothing on screen to tell you the words are Italian.
 
 ## Licence
 

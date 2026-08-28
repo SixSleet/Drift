@@ -16,7 +16,7 @@
 
 import { loadDictionary } from './words.js';
 import { sfx } from './sfx.js';
-import { t } from './i18n.js';
+import { t, foldKey } from './i18n.js';
 
 const bestKey = (id) => `wf-best-${id}`;
 
@@ -196,8 +196,9 @@ async function wordHunt(root, api) {
       newRack();
       return;
     }
-    const ch = e.key.length === 1 ? e.key.toLowerCase() : '';
-    if (!/^[a-z]$/.test(ch) || typed.length >= 5) return;
+    // Accents fold to the letter underneath, same as the main board.
+    const ch = e.key.length === 1 ? foldKey(e.key)?.toLowerCase() : null;
+    if (!ch || typed.length >= 5) return;
     e.preventDefault();
     // Only letters actually left in the rack.
     const spent = countLetters(typed);
@@ -443,8 +444,9 @@ async function chain(root, api) {
       paintCue(); paintEntry();
       return;
     }
-    const ch = e.key.length === 1 ? e.key.toLowerCase() : '';
-    if (!/^[a-z]$/.test(ch) || typed.length >= 5) return;
+    // Accents fold to the letter underneath, same as the main board.
+    const ch = e.key.length === 1 ? foldKey(e.key)?.toLowerCase() : null;
+    if (!ch || typed.length >= 5) return;
     e.preventDefault();
     typed += ch;
     sfx.type();

@@ -2,7 +2,7 @@
 // requires a mouse. Guesses are physical-keyboard only, by design: there's
 // no on-screen keyboard to tap.
 
-import { t, getLang } from './i18n.js';
+import { t, getLang, languageOf } from './i18n.js';
 
 export const $ = (sel) => document.querySelector(sel);
 export const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -451,7 +451,17 @@ export function renderRailLeft(opts) {
   rail.innerHTML = '';
 
   const rounds = el('div', 'rail-block');
-  rounds.append(el('p', 'rail-label', t('rail.match')));
+  const head = el('p', 'rail-label', t('rail.match'));
+  // Which language this ROOM is in -- not the one the menus are in. A
+  // joiner keeps their own interface, so without this there is nothing on
+  // the playing screen that says the words are Italian.
+  if (opts.lang) {
+    const lang = languageOf(opts.lang);
+    const tag = el('span', 'rail-lang', lang.flag);
+    tag.title = lang.label;
+    head.appendChild(tag);
+  }
+  rounds.append(head);
   const dots = el('div', 'round-dots');
   for (let i = 1; i <= opts.totalRounds; i++) {
     const d = el('i', 'round-dot');

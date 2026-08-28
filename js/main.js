@@ -12,7 +12,7 @@ import { volume } from './audio.js';
 import { GAMES, startArcade, stopArcade, bestScore } from './arcade.js';
 import { music, tracks } from './music.js';
 import {
-  LANGUAGES, getLang, setLang, t, applyTranslations, modeLabel, modeBlurb,
+  LANGUAGES, getLang, setLang, t, applyTranslations, modeLabel, modeBlurb, foldKey,
 } from './i18n.js';
 
 const game = new Game();
@@ -285,8 +285,10 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest?.('input, select, textarea, .settings-panel')) return;
   if (e.key === 'Enter') { e.preventDefault(); game.handleKey('ENTER'); return; }
   if (e.key === 'Backspace') { e.preventDefault(); game.handleKey('BACK'); return; }
-  const ch = e.key.length === 1 ? e.key.toUpperCase() : '';
-  if (ch && /^[A-Z]$/.test(ch)) { e.preventDefault(); game.handleKey(ch); }
+  // é, ñ, ü and the rest land as the letter underneath them, because that is
+  // how the word lists store them -- see foldKey.
+  const ch = e.key.length === 1 ? foldKey(e.key) : null;
+  if (ch) { e.preventDefault(); game.handleKey(ch); }
 });
 
 // ── The jukebox ────────────────────────────────────────────────────────

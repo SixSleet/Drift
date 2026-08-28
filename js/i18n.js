@@ -55,7 +55,7 @@ const STRINGS = {
     'length.6.hint': 'Getting roomy', 'length.7.hint': 'Properly hard',
     'lobby.waitingOne': 'Waiting for one more player…',
     'lobby.waitingHost': 'Waiting for the host to start…',
-    'lobby.setup': '{rounds} rounds · {words}.',
+    'lobby.setup': '{rounds} rounds · {words} · {lang}.',
     'lobby.words.mixed': 'mixed 4- and 5-letter words',
     'lobby.words.fixed': '{n}-letter words',
     'hud.round': 'Round {n}/{total}', 'hud.getReady': 'Get ready',
@@ -212,7 +212,7 @@ const STRINGS = {
     'length.6.hint': 'Si allarga', 'length.7.hint': 'Davvero difficile',
     'lobby.waitingOne': 'In attesa di un altro giocatore…',
     'lobby.waitingHost': "In attesa che l'host inizi…",
-    'lobby.setup': '{rounds} round · {words}.',
+    'lobby.setup': '{rounds} round · {words} · {lang}.',
     'lobby.words.mixed': 'parole miste da 4 e 5 lettere',
     'lobby.words.fixed': 'parole da {n} lettere',
     'hud.round': 'Round {n}/{total}', 'hud.getReady': 'Preparati',
@@ -369,7 +369,7 @@ const STRINGS = {
     'length.6.hint': 'Wird geräumig', 'length.7.hint': 'Richtig schwer',
     'lobby.waitingOne': 'Warte auf einen weiteren Spieler…',
     'lobby.waitingHost': 'Warte auf den Host…',
-    'lobby.setup': '{rounds} Runden · {words}.',
+    'lobby.setup': '{rounds} Runden · {words} · {lang}.',
     'lobby.words.mixed': 'gemischte Wörter mit 4 und 5 Buchstaben',
     'lobby.words.fixed': 'Wörter mit {n} Buchstaben',
     'hud.round': 'Runde {n}/{total}', 'hud.getReady': 'Bereitmachen',
@@ -526,7 +526,7 @@ const STRINGS = {
     'length.6.hint': 'Se hace amplia', 'length.7.hint': 'Realmente difícil',
     'lobby.waitingOne': 'Esperando a un jugador más…',
     'lobby.waitingHost': 'Esperando a que el anfitrión empiece…',
-    'lobby.setup': '{rounds} rondas · {words}.',
+    'lobby.setup': '{rounds} rondas · {words} · {lang}.',
     'lobby.words.mixed': 'palabras mixtas de 4 y 5 letras',
     'lobby.words.fixed': 'palabras de {n} letras',
     'hud.round': 'Ronda {n}/{total}', 'hud.getReady': 'Prepárate',
@@ -683,7 +683,7 @@ const STRINGS = {
     'length.6.hint': 'Ça s’élargit', 'length.7.hint': 'Vraiment difficile',
     'lobby.waitingOne': 'En attente d’un joueur de plus…',
     'lobby.waitingHost': 'En attente de l’hôte…',
-    'lobby.setup': '{rounds} manches · {words}.',
+    'lobby.setup': '{rounds} manches · {words} · {lang}.',
     'lobby.words.mixed': 'mots mixtes de 4 et 5 lettres',
     'lobby.words.fixed': 'mots de {n} lettres',
     'hud.round': 'Manche {n}/{total}', 'hud.getReady': 'Préparez-vous',
@@ -881,6 +881,36 @@ export function t(key, vars) {
 export const eventLabel = (name) => t(`event.${name}.label`);
 export const eventBlurb = (name) => t(`event.${name}.blurb`);
 export const eventMid = (name) => t(`event.${name}.mid`);
+
+/**
+ * A typed key, folded to the 26-letter alphabet the board can show.
+ *
+ * The word lists were built by stripping accents (tools/build-words.mjs), so
+ * the answer is CAFE and the guess has to be too. Without this, pressing é
+ * on a French keyboard did nothing at all -- not a rejection, not a shake,
+ * just a key that appeared to be broken. Now you type the word the way you
+ * would write it and the board quietly spells it the way it stores it.
+ *
+ * Returns null for anything that is not a letter after folding. German ß is
+ * one of those: it does not decompose, and expanding it to "ss" would put
+ * two tiles down for one keystroke and change the length of the word.
+ */
+export function foldKey(key) {
+  if (typeof key !== 'string' || key.length === 0) return null;
+  const folded = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return /^[A-Z]$/.test(folded) ? folded : null;
+}
+
+/**
+ * A language's own name and flag, for showing which language a ROOM is
+ * played in -- which is not necessarily the reader's. Falls back to the
+ * code itself rather than to English: a room in a language this build does
+ * not know about should say so, not quietly claim to be English.
+ */
+export function languageOf(code) {
+  return LANGUAGES.find((l) => l.code === code)
+    ?? { code, label: String(code ?? '').toUpperCase(), flag: '🏳️' };
+}
 
 /** A mode's name and its one-line pitch on the title screen. */
 export const modeLabel = (mode) => t(`mode.${mode}`);
