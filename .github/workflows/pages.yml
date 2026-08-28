@@ -43,6 +43,7 @@ jobs:
       # build rather than shipping one quietly if that ever slips.
       - name: Stage the site
         run: |
+          mkdir -p _site
           cp -r index.html css js vendor _site/
           for lang in en it de es fr; do
             mkdir -p "_site/data/$lang"
