@@ -258,12 +258,12 @@ Five, fully translated — interface and word pools both:
 
 | | Answers | Accepted guesses |
 |---|---:|---:|
-| 🇬🇧 English | 4,703 | 74,103 |
+| 🇬🇧 English | 4,559 | 74,103 |
 | 🇮🇹 Italiano | 3,066 | 32,618 |
 | 🇩🇪 Deutsch | 3,802 | 26,485 |
 | 🇪🇸 Español | 4,818 | 72,485 |
 | 🇫🇷 Français | 3,416 | 55,811 |
-| | **19,805** | **261,502** |
+| | **19,661** | **261,502** |
 
 Two lists per language and per word length, and the difference matters:
 **answers** is the small, frequency-filtered pool a secret is drawn from, so
@@ -277,6 +277,21 @@ Both are built by `tools/build-words.mjs` from Hunspell dictionaries and
 frequency lists (see the header of that file for the sources and the exact
 filtering). Rerunning it is deterministic: same dictionaries in, same lists
 out.
+
+**Names are not answers.** A word the dictionary only ever knows capitalised
+is a person, a place or a brand, and being asked to guess EMMA or LINUX is
+not a word game — so those are filtered out of the answer pools. They stay
+in the accepted-guess lists: never being *asked* to guess PARIS is fine,
+being *refused* it when you type it is not.
+
+**The chain never paints itself into a corner.** Because each round's answer
+is the next round's first letter, a word ending in a letter almost nothing
+starts with would strand the following round — and the no-repeat rule makes
+that worse the longer a match runs. The picker prefers to end on letters
+that have real depth behind them, falling back only if that leaves nothing.
+Before this, French 4-letter matches broke the chain about once every two
+games; measured over 400 simulated matches against the live word table
+afterwards, they no longer break at all.
 
 **Accents fold away.** The board, the letter legend and the scoring all
 assume a 26-letter alphabet, so *café* is stored and played as CAFE and

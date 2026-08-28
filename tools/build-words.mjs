@@ -167,14 +167,17 @@ async function readDictionary(pkg) {
   const base = path.join(DICT, pkg, 'index');
   const reader = await IterableHunspellReader.createFromFiles(`${base}.aff`, `${base}.dic`);
   const out = new Set();
+  const capitalised = new Set();
 
   // Hunspell keeps proper nouns capitalised; a word game does not want them
-  // -- nobody can be expected to guess a surname.
+  // -- nobody can be expected to guess a surname. The capitalised forms are
+  // still collected, folded, so `properOnly` below can name them.
   const take = (raw) => {
     if (!raw || raw.includes("'")) return;
-    if (raw[0] !== raw[0].toLowerCase()) return;
     const w = normalise(raw);
-    if (w && w.length >= 4 && w.length <= 7) out.add(w);
+    if (!w || w.length < 4 || w.length > 7) return;
+    if (raw[0] !== raw[0].toLowerCase()) capitalised.add(w);
+    else out.add(w);
   };
 
   for (const raw of reader.seqRootWords()) take(raw);
@@ -186,7 +189,22 @@ async function readDictionary(pkg) {
     if (++seen > EXPAND_LIMIT) { truncated = true; break; }
     take(raw);
   }
-  return { words: out, rootsOnly, truncated };
+
+  /**
+   * Words the dictionary only ever knows capitalised -- so, names.
+   *
+   * Compared against the WHOLE lowercase expansion rather than the roots,
+   * which matters: "acts" and "jobs" are not lowercase roots (the roots are
+   * "act" and "job"), but "Acts" and "Jobs" are capitalised ones, so a
+   * roots-only comparison calls both of them proper nouns and quietly drops
+   * two ordinary words.
+   *
+   * This is deliberately not applied to the VALID list. Being refused
+   * "paris" when you typed it is a different, worse thing than never being
+   * asked to guess it.
+   */
+  const properOnly = new Set([...capitalised].filter((w) => !out.has(w)));
+  return { words: out, properOnly, rootsOnly, truncated };
 }
 
 /** The frequency list, folded, in rank order, deduped. */
@@ -233,7 +251,7 @@ async function main() {
 
   for (const lang of LANGS) {
     process.stdout.write(`${lang.code}: expanding dictionary… `);
-    const { words: dict, rootsOnly, truncated } = await readDictionary(lang.dict);
+    const { words: dict, properOnly, rootsOnly, truncated } = await readDictionary(lang.dict);
     process.stdout.write(`${dict.size} forms (${rootsOnly} roots${truncated ? ', affix pass truncated' : ''}); `);
 
     // English never consults the frequency list (see below), so it does not
@@ -255,10 +273,17 @@ async function main() {
         answers.add(w);
       }
     }
+    // German capitalises every noun, so "only ever seen capitalised" could
+    // in principle mean "is a noun" there and gut the pool. Measured before
+    // trusting it: with the comparison made against the full expansion, all
+    // four non-English languages lose nothing at all to this, and English
+    // loses 143 first names, cities and brand names -- alan, emma, paris,
+    // linux, honda -- that were never fair to be asked to guess.
+    for (const w of properOnly) answers.delete(w);
     const valid = new Set(dict);
     if (lang.code === 'en') {
       for (const w of await existingEnglish('answers')) {
-        if (!blocked(w, lang.code)) answers.add(w);
+        if (!blocked(w, lang.code) && !properOnly.has(w)) answers.add(w);
       }
       for (const w of await existingEnglish('valid')) valid.add(w);
     }

@@ -780,6 +780,9 @@ declare
   v_mid_at_ms int;
   v_pool text[];
   v_banned char(1) := null;
+  -- Last letters that at least MIN_SUCCESSORS words of this length begin
+  -- with -- i.e. letters it is safe to end a secret on. See the pick below.
+  v_live_letters text[];
 begin
   if v_room.current_round >= 1 then
     select * into v_round from public.wf_rounds
@@ -806,15 +809,49 @@ begin
     end if;
   end if;
 
+  -- Which letters are worth ENDING on.
+  --
+  -- The chain rule makes each round's secret the next round's constraint, so
+  -- picking a word that ends in a letter almost nothing starts with paints
+  -- the following round into a corner -- and the no-repeat rule above only
+  -- makes that corner tighter as a match goes on. French 4-letter matches
+  -- broke the chain about once every two games because of it.
+  --
+  -- So gather the letters that have real depth behind them once, and prefer
+  -- to end on those. Five is deliberately low: this is meant to rule out the
+  -- dead ends, not to narrow the game to its commonest letters.
+  select array_agg(ch) into v_live_letters
+    from (select left(word, 1) as ch
+            from public.wf_words
+           where lang = v_room.lang and length = v_len
+           group by 1
+          having count(*) >= 5) t;
+
+  -- Three passes, each giving up one thing. Ending well is the first to go,
+  -- because a slightly awkward next round beats a broken chain; the chain
+  -- itself only breaks when nothing at all can follow it.
   select word into v_secret from public.wf_words
    where lang = v_room.lang
      and length = v_len
      and (v_chain_letter is null or left(word, 1) = v_chain_letter)
+     and right(word, 1) = any(v_live_letters)
      and word not in (
        select rs.secret from public.wf_round_secrets rs
         join public.wf_rounds r2 on r2.id = rs.round_id
        where r2.room_id = p_room)
    order by random() limit 1;
+
+  if v_secret is null then
+    select word into v_secret from public.wf_words
+     where lang = v_room.lang
+       and length = v_len
+       and (v_chain_letter is null or left(word, 1) = v_chain_letter)
+       and word not in (
+         select rs.secret from public.wf_round_secrets rs
+          join public.wf_rounds r2 on r2.id = rs.round_id
+         where r2.room_id = p_room)
+     order by random() limit 1;
+  end if;
 
   if v_secret is null and v_chain_letter is not null then
     v_chain_broken := true;
