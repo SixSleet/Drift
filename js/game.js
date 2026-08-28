@@ -5,7 +5,7 @@
 import {
   MODES, ROUND_LEAD_MS, ROUND_TIME_MS, REVEAL_MS, BOARD_MS, SETTLE_RETRY_MS,
   POLL_MS, DEFAULT_ROUNDS, DEFAULT_WORD_LENGTH, TIER_RANK, EVENTS,
-  TICK_START_MS, EVENT_CARD_MS,
+  TICK_START_MS, EVENT_CARD_MS, FADE_INK_MS, WAGER_STAKES,
 } from './config.js';
 import { api, syncClock, serverNow, openRoomChannel, startClockResync } from './net.js';
 import { loadDictionary, isValidWord } from './words.js';
@@ -18,7 +18,8 @@ import {
 } from './ui.js';
 import { startRoomEvents } from './room-events.js';
 import {
-  applyDeceit, cipherCounts, lockdownViolation, headStartLabel,
+  cipherCounts, lockdownViolation, bannedLetterViolation,
+  isTotalMiss, suddenDeathOver, fadedRows,
 } from './round-rules.js';
 
 const CONFETTI_COLORS = ['#dfae52', '#cc6f56', '#94b073', '#e2a259', '#cf8465'];
@@ -39,7 +40,7 @@ export class Game {
     this.channel = null;
     this.ghost = null;               // pvp only: opponent's live aggregate
     // The two client-side rule slots, kept separate so a mid-round blackout
-    // can't switch off a cipher/deceit/lockdown round (see #showMidModifier).
+    // can't switch off a cipher/lockdown/fading-ink round (see #showMidModifier).
     this.roundRule = null;           // from the round-start event
     this.midRule = null;             // from the mid-round modifier
     this.local = this.#freshLocal();
@@ -54,6 +55,8 @@ export class Game {
       active: '', shake: false, revealAt: 0, boardAt: 0, lastSettleTry: 0, lastTickSecond: null,
       midModifierShown: false,     // we have applied this round's modifier client-side
       midModifierAnnounced: false, // ...and the banner/sound have been shown for it
+      stake: 0,                    // wager rounds: what we actually staked
+      diedAt: 0,                   // sudden death: when our total miss landed
     };
   }
 
@@ -218,8 +221,8 @@ export class Game {
 
     // `rule` actually changes how this round is played, not just how it
     // looks -- read directly off EVENTS elsewhere in the render loop instead
-    // of re-deriving it from row.event each time. blackout, deceit, cipher,
-    // lockdown and head_start all arrive this way.
+    // of re-deriving it from row.event each time. blackout, cipher, lockdown,
+    // fading_ink, banned_letter, sudden_death and wager all arrive this way.
     this.roundRule = EVENTS[row.event]?.rule ?? null;
     // Whatever the previous round's mid-round modifier was, it does not
     // carry over -- without this a blackout that fired last round would
@@ -227,23 +230,90 @@ export class Game {
     this.midRule = null;
     this.#paintLegendMode();
     paintLetterLegend(new Map());
-    this.#renderHint();
+    this.#renderRoundRulePill();
 
     this.#applyEvent(row.event);
+    this.#offerWager();
   }
 
   /**
-   * HEAD START's free letter, as a HUD pill that stays up for the whole
-   * round -- it is a fact about the word, so unlike the mid-round banner it
-   * has no reason to time out. hint_index/hint_letter are NULL on every
-   * other round, which is what hides the pill again.
+   * A standing rule that has to stay legible for the whole round, as a HUD
+   * pill. Unlike the mid-round banner these never time out -- a banned
+   * letter you can no longer see is a trap rather than a rule, and the same
+   * goes for knowing your round can end on one bad guess.
    */
-  #renderHint() {
+  #renderRoundRulePill() {
     const el = $('#hud-hint');
     if (!el) return;
-    const label = this.roundRule === 'head_start' ? headStartLabel(this.round) : null;
+    let label = null;
+    let tone = null;
+    if (this.roundRule === 'banned_letter' && this.round?.banned_letter) {
+      label = `🚫 no ${String(this.round.banned_letter).toUpperCase()}`;
+      tone = 'ban';
+    } else if (this.roundRule === 'sudden_death') {
+      label = '🩸 sudden death';
+      tone = 'ban';
+    } else if (this.roundRule === 'wager' && this.local.stake > 0) {
+      label = `🎲 staked ${this.local.stake}`;
+      tone = 'stake';
+    }
     el.hidden = !label;
     el.textContent = label ?? '';
+    if (tone) el.dataset.tone = tone; else el.removeAttribute('data-tone');
+  }
+
+  /**
+   * WAGER: three chips on the countdown card, live only while the round has
+   * not started. The stake is server-clamped to what the player has banked,
+   * so what comes back is what was actually staked -- which is what gets
+   * shown, rather than what was asked for.
+   */
+  #offerWager() {
+    const box = $('#wager-box');
+    if (!box) return;
+    box.innerHTML = '';
+    box.hidden = this.roundRule !== 'wager';
+    if (box.hidden) return;
+
+    const banked = this.leaderboard.find((r) => r.player_id === this.me?.id)?.total ?? 0;
+    const label = document.createElement('p');
+    label.className = 'wager-label';
+    label.textContent = banked > 0
+      ? `Stake up to ${banked} on solving this one`
+      : 'Nothing banked yet — nothing to stake';
+    box.appendChild(label);
+
+    if (banked <= 0) return;
+
+    const row = document.createElement('div');
+    row.className = 'wager-row';
+    for (const stake of WAGER_STAKES) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip wager-chip';
+      btn.textContent = String(stake);
+      btn.disabled = stake > banked;
+      btn.addEventListener('click', () => this.#placeWager(stake, row));
+      row.appendChild(btn);
+    }
+    box.appendChild(row);
+  }
+
+  async #placeWager(stake, row) {
+    try {
+      const got = await api.placeWager(this.round.id, stake);
+      this.local.stake = got ?? stake;
+      [...row.children].forEach((b) => {
+        b.classList.toggle('is-on', Number(b.textContent) === this.local.stake);
+      });
+      sfx.wagerPlaced();
+      toast(`Staked ${this.local.stake}.`);
+      this.#renderRoundRulePill();
+    } catch (e) {
+      // Too late, or the round moved on. Either way the stake did not land,
+      // and saying so is better than leaving a chip looking selected.
+      toast(e.code === 'P0028' ? 'Too late to stake on this one.' : (e.message || 'Stake rejected.'));
+    }
   }
 
   /** A round's random event — announced once, at the moment it starts. */
@@ -355,7 +425,7 @@ export class Game {
     sfx.event(kind);
     this.#announceMidModifier(kind);
     music.set(this.musicTheme());
-    // Kept apart from roundRule rather than overwriting it. A cipher, deceit
+    // Kept apart from roundRule rather than overwriting it. A cipher,
     // or lockdown round can also roll a mid-round blackout (wf_next_round
     // only excludes the round's OWN event from that pool), and assigning
     // over roundRule there would quietly switch the round-start modifier
@@ -436,6 +506,9 @@ export class Game {
 
   handleKey(key) {
     if (this.phase !== 'live') return;
+    // Out under sudden death: the board stays up to read, but there is
+    // nothing left to type into it.
+    if (this.#isDead()) return;
     if (key === 'ENTER') { this.#submit(); return; }
     if (key === 'BACK') {
       this.local.active = this.local.active.slice(0, -1);
@@ -460,17 +533,17 @@ export class Game {
       return;
     }
 
-    // LOCKDOWN: reject anything that throws away a letter the board has
-    // already confirmed. Checked here, before the guess is spent, so an
-    // illegal word costs nothing but the keystrokes -- it is a constraint on
-    // what you may play, not a trap that burns an attempt.
+    // LOCKDOWN and BANNED LETTER both rule words out rather than punishing
+    // them. Checked here, before the guess is spent, so an illegal word
+    // costs nothing but the keystrokes -- they are constraints on what you
+    // may play, not traps that burn an attempt.
     if (this.roundRule === 'lockdown') {
       const why = lockdownViolation(word, this.#myGuesses());
-      if (why) {
-        this.#invalidShake();
-        toast(why);
-        return;
-      }
+      if (why) { this.#invalidShake(); toast(why); return; }
+    }
+    if (this.roundRule === 'banned_letter') {
+      const why = bannedLetterViolation(word, this.round);
+      if (why) { this.#invalidShake(); toast(why); return; }
     }
 
     const roundId = this.round.id;
@@ -480,22 +553,28 @@ export class Game {
       if (!this.guessesByRound.has(roundId)) this.guessesByRound.set(roundId, []);
       this.guessesByRound.get(roundId).push(row);
 
-      // What you HEAR has to agree with what you see. Under deceit that
-      // means the lie, not the truth -- a tile showing miss while its chime
-      // says hit would give the whole modifier away in one row. Under cipher
-      // it means no per-tile chimes at all: they play in tile order with a
-      // different pitch per tier, so they would spell out the exact
-      // positions that cipher exists to withhold.
-      const heard = this.#displayFeedback(row);
+      // Under cipher there are no per-tile chimes: they play in tile order
+      // with a different pitch per tier, so they would spell out the exact
+      // positions cipher exists to withhold.
       if (this.roundRule === 'cipher') {
         sfx.cipherRow();
       } else {
-        heard.forEach((tier, i) => setTimeout(() => sfx.reveal(tier), i * 90));
+        row.feedback.forEach((tier, i) => setTimeout(() => sfx.reveal(tier), i * 90));
       }
-      // "Not even one" -- a distinct sting after the whole row's flipped, on
-      // top of the row's own is-whiff shake (see renderGrid).
-      if (heard.every((f) => f !== 'hit')) {
-        setTimeout(() => sfx.whiff(), heard.length * 90 + 80);
+
+      // SUDDEN DEATH: a guess that scored nothing at all is the end of it.
+      // The server reaches the same conclusion in wf_check_settle -- this is
+      // here so the board stops taking input the instant it happens, rather
+      // than staying live through a settle round-trip the player would spend
+      // typing a guess that can never land.
+      if (this.roundRule === 'sudden_death' && isTotalMiss(row.feedback)) {
+        this.local.diedAt = Date.now();
+        setTimeout(() => sfx.suddenDeath(), row.feedback.length * 90 + 60);
+        toast(this.mode === 'coop' ? 'Nothing at all. The round is over.' : "Nothing at all. You're out.");
+      } else if (row.feedback.every((f) => f !== 'hit')) {
+        // "Not even one" -- a distinct sting after the whole row's flipped,
+        // on top of the row's own is-whiff shake (see renderGrid).
+        setTimeout(() => sfx.whiff(), row.feedback.length * 90 + 80);
       }
 
       if (this.mode === 'pvp') {
@@ -531,7 +610,7 @@ export class Game {
   /**
    * The rows this player is playing against: the whole shared board in Coop,
    * only your own in PvP and Solo. Raw, server-truth feedback -- this is
-   * what lockdown reads, and what #displayGuesses starts from.
+   * what lockdown and sudden death both read.
    */
   #myGuesses() {
     const gs = this.guessesByRound.get(this.round.id) ?? [];
@@ -539,32 +618,12 @@ export class Game {
   }
 
   /**
-   * The board as it should be SHOWN, which under deceit is not the board as
-   * it is. Everything that decides anything -- solving, settling, scoring,
-   * lockdown's legality check -- keeps reading the raw rows instead.
+   * SUDDEN DEATH: are we (or, in Coop, the team) already out? Read off the
+   * board rather than off local state so it survives a refresh -- the rows
+   * are the record, `local.diedAt` only exists to time the sting.
    */
-  #displayGuesses(guesses) {
-    if (this.roundRule !== 'deceit') return guesses;
-    const shown = applyDeceit(guesses, this.round.id);
-    // renderGrid remembers which rows it has already flipped by setting
-    // `_rendered` on the row object itself. These are fresh copies every
-    // frame, so that mark would be thrown away as fast as it was written and
-    // every row on the board would replay its flip animation each time a new
-    // guess arrived. Point the flag at the row the copy was made from.
-    shown.forEach((copy, i) => {
-      const original = guesses[i];
-      Object.defineProperty(copy, '_rendered', {
-        get: () => original._rendered,
-        set: (v) => { original._rendered = v; },
-        configurable: true,
-      });
-    });
-    return shown;
-  }
-
-  /** One row's feedback as shown, for keeping the sound in step with it. */
-  #displayFeedback(g) {
-    return this.#displayGuesses([g])[0].feedback;
+  #isDead() {
+    return this.roundRule === 'sudden_death' && suddenDeathOver(this.#myGuesses());
   }
 
   #roundSeemsFinished() {
@@ -573,11 +632,16 @@ export class Game {
     if (serverNow() - Date.parse(this.round.starts_at) >= timeLimitMs) return true; // round's own clock (blitz shortens it)
 
     const gs = this.guessesByRound.get(this.round.id) ?? [];
+    // Sudden death ends it for whoever threw the total miss -- for the whole
+    // team in Coop, where the board and the guess pool are shared.
+    const dead = this.roundRule === 'sudden_death';
     if (this.mode === 'coop') {
-      return gs.length >= this.round.max_guesses || gs.some((g) => this.#allHit(g));
+      return gs.length >= this.round.max_guesses || gs.some((g) => this.#allHit(g))
+             || (dead && suddenDeathOver(gs));
     }
     const mine = gs.filter((g) => g.player_id === this.me?.id);
-    const myDone = mine.length >= this.round.max_guesses || mine.some((g) => this.#allHit(g));
+    const myDone = mine.length >= this.round.max_guesses || mine.some((g) => this.#allHit(g))
+                   || (dead && suddenDeathOver(mine));
     if (this.mode === 'solo') return myDone; // no opponent to wait for
 
     // PvP: first to solve wins, so the round ends the instant either side
@@ -888,26 +952,37 @@ export class Game {
       return;
     }
 
+    // Past the countdown the betting window has closed -- the server refuses
+    // a stake from here anyway (wf_place_wager checks starts_at), so leaving
+    // the chips up would only offer something that can no longer happen.
+    const wagerBox = $('#wager-box');
+    if (wagerBox && !wagerBox.hidden) wagerBox.hidden = true;
+
     const playerColor = this.mode === 'coop'
       ? new Map(this.players.map((p) => [p.id, p.color])) : null;
 
-    // Rails count guesses, so they read the real rows.
     this.#renderRails(visible);
 
-    // The board reads the display copies, so a deceit round draws its lie
-    // instead of the truth. Everything else on this screen still works off
-    // `visible`, which is never corrupted.
-    const shown = this.#displayGuesses(visible);
+    // FADING INK: which rows have held their colour long enough to lose it.
+    // Recomputed every frame off each row's own server timestamp, so this
+    // keeps working across a refresh and cannot be paused by looking away.
+    const faded = this.roundRule === 'fading_ink'
+      ? fadedRows(visible, serverNow(), FADE_INK_MS) : null;
+
+    // A player who is out under sudden death keeps their board but loses the
+    // caret -- there is nothing left to type.
+    const canType = phase === 'live' && !this.#isDead();
 
     renderGrid({
       wordLength: this.round.word_length, maxGuesses: this.round.max_guesses,
-      guesses: shown, active: this.local.active,
-      canType: phase === 'live', playerColor, meId: this.me?.id ?? null,
+      guesses: visible, active: this.local.active,
+      canType, playerColor, meId: this.me?.id ?? null,
       shake: this.local.shake,
       // Cipher hides where the hits are; the row is told only how many.
       cipher: this.roundRule === 'cipher',
       cipherCounts: this.roundRule === 'cipher'
-        ? shown.map((g) => cipherCounts(g.feedback)) : null,
+        ? visible.map((g) => cipherCounts(g.feedback)) : null,
+      faded,
     });
 
     // Cipher's legend would hand back exactly the per-letter knowledge the
@@ -918,14 +993,19 @@ export class Game {
       paintLetterLegend(new Map());
     } else {
       const tiers = new Map();
-      for (const g of shown) {
+      visible.forEach((g, i) => {
+        // Under fading ink the legend is built from the rows that still have
+        // their colour. Leaving it complete would make the modifier
+        // pointless: the board would forget and the legend would remember
+        // the same thing, one line further down the screen.
+        if (faded?.[i]) return;
         // g.word comes back lowercase from the server; the legend's letters
         // are uppercase, so this has to match case or nothing gets painted.
-        g.word.toUpperCase().split('').forEach((ch, i) => {
-          const t = g.feedback[i];
+        g.word.toUpperCase().split('').forEach((ch, j) => {
+          const t = g.feedback[j];
           if (!tiers.has(ch) || TIER_RANK[t] > TIER_RANK[tiers.get(ch)]) tiers.set(ch, t);
         });
-      }
+      });
       paintLetterLegend(tiers);
     }
 

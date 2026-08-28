@@ -221,16 +221,45 @@ export const sfx = {
       }
       PENTA.forEach((f, i) => chime({ freq: f, dur: 0.5, gain: 0.12, delay: 0.4 + i * 0.065 }));
       chime({ freq: PENTA[7] * 2, dur: 1.4, gain: 0.1, delay: 0.95 });
-    } else if (kind === 'deceit') {
-      // A phrase that starts sweet and goes wrong: a clean chime, then the
-      // same note again a semitone flat under it. Two pitches that close
-      // together beat against each other, which is the sound of something
-      // being not-quite-right -- exactly what this round is.
-      chime({ freq: 659.25, dur: 0.5, gain: 0.1 });
-      tone({ freq: 659.25 * 0.943, dur: 0.9, type: 'sine', gain: 0.075,
-             cutoff: 1600, attack: 0.06, delay: 0.16 });
-      tone({ freq: 440 * 0.943, to: 380, dur: 1.1, type: 'triangle', gain: 0.06,
-             cutoff: 1200, attack: 0.1, delay: 0.3 });
+    } else if (kind === 'sudden_death') {
+      // A blade: one bright scrape, then a low drop with nothing after it.
+      // Short and unfriendly, because the round now might be too.
+      const c = ensure();
+      if (c) {
+        const t0 = c.currentTime;
+        const src = noise(c);
+        const bp = c.createBiquadFilter();
+        const env = c.createGain();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(3200, t0);
+        bp.frequency.exponentialRampToValueAtTime(900, t0 + 0.28);
+        bp.Q.setValueAtTime(3, t0);
+        env.gain.setValueAtTime(0.0001, t0);
+        env.gain.linearRampToValueAtTime(0.09, t0 + 0.02);
+        env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+        src.connect(bp).connect(env).connect(buses.sfx);
+        src.start(t0); src.stop(t0 + 0.32);
+      }
+      tone({ freq: 220, to: 62, dur: 0.7, type: 'sawtooth', gain: 0.1, cutoff: 700, attack: 0.004, delay: 0.1 });
+    } else if (kind === 'fading_ink') {
+      // A note that will not hold: it swells, then loses its top end and
+      // its level together, which is the same gesture the tiles make.
+      tone({ freq: 587.33, dur: 1.6, type: 'sine', gain: 0.09, cutoff: 2400, attack: 0.12 });
+      tone({ freq: 440, dur: 2.0, type: 'sine', gain: 0.06, cutoff: 900, attack: 0.3, delay: 0.2 });
+      tone({ freq: 293.66, dur: 2.4, type: 'sine', gain: 0.04, cutoff: 400, attack: 0.5, delay: 0.5 });
+    } else if (kind === 'banned_letter') {
+      // A refusal: two flat, blunt notes with no resolution between them.
+      tone({ freq: 233.08, dur: 0.26, type: 'square', gain: 0.075, cutoff: 800, attack: 0.005 });
+      tone({ freq: 233.08, dur: 0.4, type: 'square', gain: 0.07, cutoff: 700, attack: 0.005, delay: 0.22 });
+    } else if (kind === 'wager') {
+      // Chips onto a table: three dry clicks, then a warm note under them
+      // to say the stake is live.
+      for (let i = 0; i < 3; i++) {
+        blip({ freq: 1500 + Math.random() * 700, dur: 0.03, type: 'triangle',
+               gain: 0.07, delay: i * 0.07 });
+      }
+      chime({ freq: 523.25, dur: 0.7, gain: 0.1, delay: 0.24 });
+      chime({ freq: 783.99, dur: 0.8, gain: 0.08, delay: 0.34 });
     } else if (kind === 'cipher') {
       // Colour draining out: four descending taps with the top end filtered
       // further off each one, ending somewhere flat and toneless.
@@ -259,13 +288,35 @@ export const sfx = {
         }
       }
       tone({ freq: 150, to: 70, dur: 0.5, type: 'square', gain: 0.09, cutoff: 400, attack: 0.004, delay: 0.14 });
-    } else if (kind === 'head_start') {
-      // A gift: one clean rising figure, over almost immediately. Small on
-      // purpose -- this is the friendliest thing in the set and does not
-      // need a fanfare to land.
-      [659.25, 880, 1174.66].forEach((f, i) =>
-        chime({ freq: f, dur: 0.5, gain: 0.1, delay: i * 0.09 }));
     }
+  },
+
+  /** A stake going down: one chip, placed. */
+  wagerPlaced() {
+    blip({ freq: 1700, dur: 0.03, type: 'triangle', gain: 0.08 });
+    chime({ freq: 659.25, dur: 0.45, gain: 0.09, delay: 0.04 });
+  },
+
+  /**
+   * Out. The one cue in the game that is meant to feel like a door closing:
+   * a hard low thud with a short, dead tail and nothing rising after it.
+   */
+  suddenDeath() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const src = noise(c);
+    const lp = c.createBiquadFilter();
+    const env = c.createGain();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(700, t0);
+    lp.frequency.exponentialRampToValueAtTime(180, t0 + 0.3);
+    env.gain.setValueAtTime(0.14, t0);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.34);
+    src.connect(lp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + 0.36);
+    tone({ freq: 130.81, to: 49, dur: 0.8, type: 'sine', gain: 0.13, cutoff: 300, attack: 0.003 });
+    tone({ freq: 196, to: 98, dur: 0.5, type: 'triangle', gain: 0.06, cutoff: 500, attack: 0.006, delay: 0.05 });
   },
 
   /**

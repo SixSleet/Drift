@@ -61,18 +61,22 @@ export const ROUND_TIME_MS = 5 * 60 * 1000; // default clock; a round's actual
 // legend's hint colours, and 'jackpot' stacks all of it.
 //
 // `rule` is the interesting one: it is read directly by game.js and changes
-// how the round is actually PLAYED. Four of the five rules below alter the
-// play loop itself rather than any number attached to it --
+// how the round is actually PLAYED rather than any number attached to it --
 //
-//   blackout   the legend stops tracking what you have ruled out
-//   deceit     one tile per row of feedback lies to you
-//   cipher     feedback loses its positions -- counts only, Mastermind-style
-//   lockdown   a guess is illegal unless it reuses every confirmed letter
-//   head_start one letter of the secret is given to you up front
+//   blackout      the legend stops tracking what you have ruled out
+//   cipher        feedback loses its positions -- counts only, Mastermind-style
+//   lockdown      a guess is illegal unless it reuses every confirmed letter
+//   fading_ink    colours fade off each row seconds after it lands
+//   banned_letter one letter is outlawed for the whole round
+//   sudden_death  a guess that scores nothing at all ends the round
+//   wager         stake points on solving it, before the round starts
 //
-// -- and all of them are client-side, exactly like blackout always was. The
+// The first five are client-side, exactly like blackout always was: the
 // feedback stored server-side is always the truth (see wf_score_guess), so
-// deceit and cipher can never change who solved a round or what it paid.
+// none of them can change who solved a round or what it paid. The last two
+// have to be server-side as well, because they decide when a round ends and
+// what it pays -- see wf_check_settle and wf_place_wager. What is here for
+// those two is the presentation and the input rules only.
 export const EVENTS = Object.freeze({
   none: null,
   double_points: { label: 'Double Points', emoji: '💰', tint: '#dfae52', blurb: 'This round pays double.',                                       midBlurb: 'Points doubled, from here on.',      fx: 'coins' },
@@ -84,11 +88,22 @@ export const EVENTS = Object.freeze({
   // Round-start only: wf_next_round's mid-round pool never contains these,
   // the same way it never contains jackpot. They rewrite the rules of the
   // round, which is not something to spring on someone halfway through it.
-  deceit:        { label: 'Deceit',        emoji: '🎭', tint: '#a98cb8', blurb: 'One tile in every row of feedback is lying to you.',              midBlurb: 'The board started lying to you.',    fx: 'eclipse', rule: 'deceit', rare: true },
   cipher:        { label: 'Cipher',        emoji: '🔢', tint: '#7f9bb5', blurb: 'No colours. You are told only how many hits and presents.',       midBlurb: 'The colours just went away.',        fx: 'eclipse', rule: 'cipher', rare: true },
   lockdown:      { label: 'Lockdown',      emoji: '🔒', tint: '#c2705a', blurb: 'Every guess must reuse every letter you have confirmed.',         midBlurb: 'Confirmed letters are now locked in.', fx: 'siren', rule: 'lockdown' },
-  head_start:    { label: 'Head Start',    emoji: '🎯', tint: '#94b073', blurb: 'One letter is yours for free, in the right place.',               midBlurb: 'Have a letter, on the house.',       fx: 'coins', rule: 'head_start' },
+  sudden_death:  { label: 'Sudden Death',  emoji: '🩸', tint: '#cc5544', blurb: 'A guess that scores nothing at all ends the round.',              midBlurb: 'One bad guess ends it now.',         fx: 'siren', rule: 'sudden_death', rare: true },
+  fading_ink:    { label: 'Fading Ink',    emoji: '🫥', tint: '#8fa9a0', blurb: 'Colours fade off each row a few seconds after it lands.',         midBlurb: 'The ink started fading.',            fx: 'eclipse', rule: 'fading_ink' },
+  banned_letter: { label: 'Banned Letter', emoji: '🚫', tint: '#c2705a', blurb: 'One letter is outlawed. It is not in the answer.',                midBlurb: 'A letter just got outlawed.',        fx: 'siren', rule: 'banned_letter' },
+  wager:         { label: 'Wager',         emoji: '🎲', tint: '#dfae52', blurb: 'Stake your points on solving this one.',                          midBlurb: 'Stakes are on the table.',           fx: 'coins', rule: 'wager', rare: true },
 });
+
+// How long a row keeps its colours under FADING INK before they drain away.
+// Long enough to read the row properly and take it in; short enough that you
+// cannot use the board as a notepad, which is the entire modifier.
+export const FADE_INK_MS = 8000;
+
+// The stakes offered on a WAGER round. Mirrored in wf_place_wager, which
+// rejects anything not in this set -- keep the two in step.
+export const WAGER_STAKES = [25, 50, 100];
 
 // ── Mid-round modifiers ──────────────────────────────────────────────────
 // A second, independent global roll made at mint time (wf_next_round: 55%

@@ -8,75 +8,9 @@
 // do.
 //
 // The load-bearing rule for the whole file: the feedback the server stored
-// is the truth, and nothing here ever edits it. `deceit` and `cipher` build
-// a separate DISPLAY copy, and the raw rows are what solving, settling and
-// scoring keep using. A lie can make you waste a guess; it can never take a
-// round you actually won.
-
-/** Tiers in the order wf_score_guess produces them. */
-const TIERS = ['hit', 'present', 'miss'];
-
-/**
- * FNV-1a. Any stable string->int would do; what matters is that it is
- * deterministic, because the lie for a given row has to be the SAME lie on
- * every re-render. Deriving it from Math.random() would mean the board
- * changed its story every time the render loop ran, which reads as a broken
- * game rather than a dishonest one.
- */
-function hash32(str) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
-}
-
-/**
- * DECEIT: corrupt exactly one tier in a row of feedback.
- *
- * Two rows are never touched:
- *   - a solved row (every tile a hit), because a player who has won must be
- *     told they have won;
- *   - a row where the lie would *manufacture* a win -- if every other tile
- *     is already a hit, flipping the last one to 'hit' would show a solve
- *     that did not happen, so it lies the other way instead.
- *
- * @param {string[]} feedback raw, server-truth tiers for one guess
- * @param {string} key stable identity for this row, e.g. `${roundId}:${attempt}`
- * @returns {string[]} a new array; the input is never mutated
- */
-export function lieAboutRow(feedback, key) {
-  if (!Array.isArray(feedback) || feedback.length === 0) return feedback;
-  if (feedback.every((f) => f === 'hit')) return feedback.slice();
-
-  const h = hash32(key);
-  const idx = h % feedback.length;
-  const truth = feedback[idx];
-  let options = TIERS.filter((t) => t !== truth);
-
-  // Would this lie invent a solve? Only possible when everything else is
-  // already a hit. Drop 'hit' from the options in that case.
-  const restAllHit = feedback.every((f, i) => i === idx || f === 'hit');
-  if (restAllHit) options = options.filter((t) => t !== 'hit');
-  if (options.length === 0) return feedback.slice();
-
-  const out = feedback.slice();
-  out[idx] = options[(h >>> 8) % options.length];
-  return out;
-}
-
-/**
- * Applies DECEIT across a whole board. Returns display copies, leaving the
- * caller's rows untouched so the real feedback stays available for solve
- * detection.
- */
-export function applyDeceit(guesses, roundId) {
-  return guesses.map((g) => ({
-    ...g,
-    feedback: lieAboutRow(g.feedback, `${roundId}:${g.player_id}:${g.attempt_no}`),
-  }));
-}
+// is the truth, and nothing here ever edits it. What these functions return
+// is what should be SHOWN or what should be ALLOWED; the raw rows are what
+// solving, settling and scoring keep using.
 
 /**
  * CIPHER: how many hits and presents a row scored, with no indication of
@@ -146,13 +80,55 @@ export function lockdownViolation(word, guesses) {
 }
 
 /**
- * HEAD START: the one letter the server handed out at mint time, as a
- * display string. The letter and its position live on the round row
- * (hint_index / hint_letter, set in wf_next_round) because picking them
- * requires reading the secret, which only the server may do.
+ * BANNED LETTER: is this guess using the letter that is outlawed this round?
+ *
+ * The letter comes off the round row, picked server-side from letters that
+ * are NOT in the secret -- so this only ever rules out guesses, never the
+ * answer.
+ *
+ * @returns {string|null} a player-facing reason, or null if the guess is legal
  */
-export function headStartLabel(round) {
-  if (!round || round.hint_index == null || !round.hint_letter) return null;
-  const ord = ORDINALS[round.hint_index] ?? `${round.hint_index + 1}th`;
-  return `${ord} letter is ${String(round.hint_letter).toUpperCase()}`;
+export function bannedLetterViolation(word, round) {
+  const banned = round?.banned_letter;
+  if (!banned) return null;
+  const b = String(banned).toLowerCase();
+  if (!(word || '').toLowerCase().includes(b)) return null;
+  return `${b.toUpperCase()} is banned this round.`;
+}
+
+/**
+ * SUDDEN DEATH: a guess that scored nothing at all -- not one letter of it
+ * anywhere in the word. This is the shape the server settles on too (see
+ * wf_check_settle); the client only needs it to stop taking input the
+ * instant it happens rather than waiting for the settle round-trip.
+ *
+ * Deliberately NOT "no hits": openers routinely come back with no greens,
+ * and ending on that would kill most rounds on the first guess.
+ */
+export function isTotalMiss(feedback) {
+  return Array.isArray(feedback) && feedback.length > 0
+    && feedback.every((f) => f === 'miss');
+}
+
+/** Has this player (or, in Coop, the team) already died this round? */
+export function suddenDeathOver(guesses) {
+  return guesses.some((g) => isTotalMiss(g.feedback));
+}
+
+/**
+ * FADING INK: which rows have had their colours long enough to lose them.
+ *
+ * Keyed off the guess's own server timestamp rather than when the client
+ * happened to render it, so a player who refreshes mid-round does not get
+ * the whole board's colours handed back to them.
+ *
+ * @param {number} now server-corrected clock, from net.js serverNow()
+ * @returns {boolean[]} one flag per guess, true where the colour has gone
+ */
+export function fadedRows(guesses, now, fadeMs) {
+  return guesses.map((g) => {
+    const at = Date.parse(g.created_at ?? '');
+    if (!Number.isFinite(at)) return false;
+    return now - at >= fadeMs;
+  });
 }

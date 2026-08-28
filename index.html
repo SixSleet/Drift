@@ -99,7 +99,7 @@
     <li>Most rounds must start with the last letter of the previous round's word. Watch the chain badge.</li>
     <li>Type guesses on your own keyboard — the one on the desk in front of you. There's nothing on screen to click. Each letter pops in as you type it. Tiles flip to show hit (right spot), present (wrong spot) or miss, and a guess that lands zero hits gets its own shake and sting. Any letter you've used that isn't in the word greys out in the legend below the board, so you never waste a guess retyping it.</li>
     <li>Every round has a 5-minute clock, ticking audibly in the last 10 seconds. Run out, and the round ends there — revealed, unsolved, for whoever hadn't gotten it yet.</li>
-    <li><b>Round-start events:</b> about 2 rounds in 3 draw one, announced across the whole screen for the full 5-second countdown so nobody misses it — 💰 double points, ⚡ a 90-second blitz, 🙈 blackout (the legend stops greying out known letters), and a rare (1 in 20) 🎰 <b>Jackpot</b>: extra guess AND double points, with confetti, a screen shake and a slot-machine fanfare.</li>
+    <li><b>Round-start events:</b> about 3 rounds in 5 draw one, announced across the whole screen for the full 5-second countdown so nobody misses it. Some move a number — 💰 double points, ⚡ a 90-second blitz, and a rare 🎰 <b>Jackpot</b> (extra guess AND double points, with confetti and a slot-machine fanfare). The rest change the rules: 🙈 blackout stops the legend tracking what you've ruled out, 🔢 <b>Cipher</b> takes the colours away and tells you only how many hits and presents you scored, 🔒 <b>Lockdown</b> makes every guess reuse the letters you've confirmed, 🫥 <b>Fading Ink</b> drains the colour off each row seconds after it lands, 🚫 <b>Banned Letter</b> outlaws a letter for the round, 🩸 <b>Sudden Death</b> ends the round on a guess that scores nothing at all, and 🎲 <b>Wager</b> lets you stake your points on solving it.</li>
     <li><b>Mid-round modifiers:</b> a round can spring a <i>second</i> modifier on you partway through instead of announcing it up front — 💰 double points from here, ⚡ the remaining clock halved, 🙈 the legend going dark, or (Co-op only) a 🔀 <b>Letter Swap</b> that makes two players' guesses trade tiles. These are global: everyone in the room gets the same one, at the same moment.</li>
     <li><b>Your room:</b> meanwhile the place you're sitting in carries on without you — 🐈 a cat strolls across the desk right in front of the screen, a moth finds the lamp, the phone buzzes, the light stutters, rain starts at the window. These are yours alone: nobody else sees them, they change nothing about the game, and the only cost is that they're in your way. Click one to clear it early.</li>
     <li><b>Solo:</b> no lobby, no code — just you against the word, same guess budget as a duel. Good for warming up or chasing a personal best.</li>
@@ -175,9 +175,9 @@
           <span class="pill" id="hud-round">Round 1/6</span>
           <span class="pill pill-phase" id="hud-phase">Get ready</span>
           <span class="pill pill-chain" id="hud-chain" hidden></span>
-          <!-- head_start's free letter. Stays up for the whole round, unlike
-               the mid-round banner: it is a fact about the word on the board,
-               not an event that happened once. -->
+          <!-- A standing rule for the round: a banned letter, sudden death,
+               a stake placed. Stays up for the whole round, unlike the
+               mid-round banner, because it is a rule rather than an event. -->
           <span class="pill pill-hint" id="hud-hint" hidden></span>
           <span class="pill pill-event" id="hud-event" hidden></span>
           <span class="pill pill-timer" id="hud-timer" hidden></span>
@@ -337,6 +337,9 @@
       <div class="event-card-emoji" id="event-card-emoji"></div>
       <div class="event-card-label" id="event-card-label"></div>
       <div class="event-card-blurb" id="event-card-blurb"></div>
+      <!-- Wager rounds only: the stake chips, live for the countdown and
+           then closed. Built by game.js #offerWager(). -->
+      <div class="wager-box" id="wager-box" hidden></div>
       <div class="event-card-count" id="event-card-count"></div>
     </div>
   </div>

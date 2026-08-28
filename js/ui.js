@@ -302,13 +302,16 @@ export function renderGrid(opts) {
   const shake = !!opts.shake;
   const cipher = !!opts.cipher;
   const counts = opts.cipherCounts ?? null;
+  const faded = opts.faded ?? null;
   const board = $('#board');
 
   // Structure only -- `active` and `shake` are deliberately absent.
-  // `cipher` IS in here: it changes what every revealed tile looks like, so
-  // a round that turns it on has to rebuild rather than repaint.
+  // `cipher` and `faded` ARE in here: both change what a revealed tile looks
+  // like, and `faded` flips partway through a round, so the board has to
+  // rebuild when a row's colour runs out rather than waiting for the next
+  // guess to trigger one.
   const sig = JSON.stringify([wordLength, maxGuesses, canType, opts.meId ?? null, cipher,
-    guesses.map((g) => `${g.player_id}:${g.attempt_no}`)]);
+    faded, guesses.map((g) => `${g.player_id}:${g.attempt_no}`)]);
   const activeIndex = guesses.length;
 
   if (sig !== _gridSig) {
@@ -351,6 +354,9 @@ export function renderGrid(opts) {
           // only feedback it gets.
           if (cipher) tile.classList.add('is-cipher');
           else tile.dataset.tier = g.feedback[j];
+          // Fading ink: the tier stays on the element (the CSS neutralises
+          // it) so the drain is a transition rather than a hard swap.
+          if (faded?.[i]) tile.classList.add('is-faded');
           // Only a guess appearing for the first time flips. A rebuild for
           // some later reason must not re-flip guesses already on the board.
           if (fresh) {

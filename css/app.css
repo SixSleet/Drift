@@ -1479,12 +1479,23 @@ html, body {
 .pill-phase { color: var(--accent); border-color: rgba(226, 162, 89, .38); }
 .pill-phase[data-tone="warn"] { color: var(--gold); border-color: rgba(223, 174, 82, .45); }
 .pill-chain { color: var(--gold); border-color: rgba(223, 174, 82, .45); text-transform: lowercase; }
-/* head_start's free letter -- sage, so it reads as something given to you
-   rather than as another constraint like the chain letter beside it. */
+/* A standing rule for the round -- a banned letter, sudden death, a stake
+   placed. Toned by what it is: a constraint you can fall foul of reads red,
+   a stake you chose reads gold. */
 .pill-hint {
   color: var(--sage);
   border-color: color-mix(in srgb, var(--sage) 48%, transparent);
   background: color-mix(in srgb, var(--sage) 10%, transparent);
+}
+.pill-hint[data-tone="ban"] {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 52%, transparent);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+}
+.pill-hint[data-tone="stake"] {
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 52%, transparent);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
 }
 .pill-timer { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .pill-timer.is-low {
@@ -1732,6 +1743,46 @@ html, body {
 .cipher-hit     { color: var(--sage); }
 .cipher-present { color: var(--gold); }
 .cipher-sep     { color: var(--ink-faint); font-style: normal; font-weight: 600; }
+
+/* ── Fading ink ────────────────────────────────────────────────────────
+   The colour drains out of a row a few seconds after it lands, leaving the
+   letters behind. A long transition rather than a swap, so you get a moment
+   of watching it go -- which is what makes it feel like ink rather than
+   like the board being redrawn. The tier attribute stays on the tile; these
+   rules simply outrank it. */
+.tile.is-faded[data-tier],
+.tile.is-faded {
+  background: #2b241d;
+  border-color: #4a3f34;
+  color: var(--ink-dim);
+  transition: background 1.4s ease, border-color 1.4s ease, color 1.4s ease;
+}
+
+/* ── The wager ─────────────────────────────────────────────────────────
+   Three chips on the countdown card. Only up while the round has not
+   started -- the server refuses a stake after that, so the offer goes with
+   it. */
+.wager-box {
+  margin-top: 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: auto;
+}
+.wager-label {
+  margin: 0;
+  font-size: 13px; font-weight: 700;
+  color: var(--ink-dim);
+}
+.wager-row { display: flex; gap: 8px; justify-content: center; }
+.wager-chip {
+  min-width: 62px;
+  font-family: var(--mono); font-weight: 800;
+}
+.wager-chip.is-on {
+  background: linear-gradient(180deg, #3d3327, #2b241b);
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 40%, transparent);
+}
 
 @keyframes tile-pop {
   0%   { transform: scale(1.4); }

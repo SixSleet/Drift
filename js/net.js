@@ -102,6 +102,10 @@ export const api = {
   checkSettle: (roundId) => rpc('wf_check_settle', { p_round: roundId }),
   applyMidModifier: (roundId) => rpc('wf_apply_mid_modifier', { p_round: roundId }),
   triggerLetterSwap: (roundId) => rpc('wf_trigger_letter_swap', { p_round: roundId }),
+  // Returns the stake actually recorded, which the server clamps to what the
+  // player has banked -- so the UI can show what was staked rather than what
+  // was asked for.
+  placeWager: (roundId, stake) => rpc('wf_place_wager', { p_round: roundId, p_stake: stake }),
 };
 
 // ── Realtime ───────────────────────────────────────────────────────────────

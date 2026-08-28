@@ -86,29 +86,25 @@ starts with that letter, the constraint quietly drops for that round.
 About three rounds in five roll one, announced full-screen for the whole
 5-second countdown so nobody misses it.
 
-Three of them move a number. The other four **change the rules of the round**
-— what the board tells you, whether you can believe it, and what you are
-allowed to type.
+Three of them move a number. The other six **change the rules of the round**
+— what the board tells you, what you are allowed to type, when the round
+ends, and what it is worth.
 
 | Event | Odds | What it does |
 | --- | --- | --- |
-| 💰 Double Points | 12% | The round pays double |
-| ⚡ Blitz | 12% | The clock is cut to 90 seconds |
-| 🙈 Blackout | 10% | The legend stops greying out letters you have ruled out |
-| 🎭 **Deceit** | 8% | One tile in every row of feedback is **lying to you** |
-| 🔢 **Cipher** | 7% | No colours at all — you are told only *how many* hits and presents |
+| 💰 Double Points | 10% | The round pays double |
+| ⚡ Blitz | 10% | The clock is cut to 90 seconds |
+| 🙈 Blackout | 7% | The legend stops greying out letters you have ruled out |
+| 🔢 **Cipher** | 6% | No colours at all — you are told only *how many* hits and presents |
 | 🔒 **Lockdown** | 6% | Every guess must reuse every letter you have confirmed |
-| 🎯 **Head Start** | 5% | One letter is handed to you, in the right place, before you begin |
+| 🩸 **Sudden Death** | 6% | A guess that scores **nothing at all** ends the round |
+| 🫥 **Fading Ink** | 6% | Colours drain off each row seconds after it lands |
+| 🚫 **Banned Letter** | 5% | One letter is outlawed for the whole round |
+| 🎰 **Jackpot** | 2% | An extra guess **and** double points |
+| 🎲 **Wager** | 2% | Stake your points on solving this one |
 | *(none)* | 40% | An ordinary round |
 
-### The four that change the rules
-
-**🎭 Deceit.** Exactly one tile in each row is wrong — a green that is really
-a black, a black that is really a yellow. You are never told which. It never
-lies about a row that solved the word, and it can never invent a solve that
-did not happen, so a lie can cost you a guess but never a round you actually
-won. Everything the server scores is the truth; the lie is only ever on your
-screen.
+### The six that change the rules
 
 **🔢 Cipher.** The tiles keep your letters and lose their colours entirely.
 Instead each row gets two numbers: how many letters are in the right place,
@@ -121,9 +117,30 @@ it: greens stay where you found them, and every yellow has to appear
 somewhere in every later guess. Illegal guesses are refused before they are
 spent, so the modifier costs you options rather than attempts.
 
-**🎯 Head Start.** One position of the word, free, before your first guess.
-The friendliest thing that can happen to you, and the only one that hands
-out information rather than taking it away.
+**🩸 Sudden Death.** A guess that comes back completely empty — not one of
+its letters anywhere in the word — ends the round on the spot. Not "no
+greens", which happens on most openers; a total miss. It turns a probing
+guess from something that costs an attempt into something that can cost you
+everything, and it makes playing safe a real strategy for once. In Co-op the
+board is shared, so the risk is too: one player's total miss ends it for the
+team.
+
+**🫥 Fading Ink.** Each row keeps its colours for about eight seconds and
+then loses them, letters left behind. The legend forgets along with the
+board, so there is nowhere to look it up — you have to actually hold the
+deductions in your head. Nothing is hidden from you; you just have to be
+paying attention when it arrives.
+
+**🚫 Banned Letter.** One letter is outlawed for the whole round and guesses
+containing it are refused before they are spent. It is picked from letters
+that are **not** in the answer, so the round is always winnable — it just
+takes your favourite opener away from you.
+
+**🎲 Wager.** During the countdown you stake 25, 50 or 100 of your points on
+solving the round. Solve it and you win the stake; fail and you lose it. You
+can never stake more than you have actually banked, so the worst case is
+losing what you earned rather than going into debt. It never comes up on
+round one, when nobody has anything to bet.
 
 ## Mid-round modifiers
 

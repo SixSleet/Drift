@@ -160,19 +160,29 @@ create table public.wf_rounds (
   pool_used          int  not null default 0,                  -- coop only
   event              text not null default 'none'
                        check (event in ('none', 'double_points', 'blitz', 'blackout', 'jackpot',
-                                        -- The four that change the RULES rather than the dials.
-                                        'deceit', 'cipher', 'lockdown', 'head_start',
-                                        -- Retired, kept legal so already-minted rows stay valid:
-                                        -- the first four never shipped, the last four were
-                                        -- clock/budget/multiplier re-skins and were replaced.
-                                        'extra_guess', 'sudden_death', 'shuffle', 'bullseye',
+                                        -- The ones that change the RULES rather than the dials.
+                                        'cipher', 'lockdown', 'sudden_death', 'fading_ink',
+                                        'banned_letter', 'wager',
+                                        -- Retired, kept legal so already-minted rows stay valid.
+                                        -- deceit/head_start were played and cut; the rest either
+                                        -- never shipped or were clock/budget/multiplier re-skins.
+                                        'deceit', 'head_start',
+                                        'extra_guess', 'shuffle', 'bullseye',
                                         'triple_points', 'marathon', 'bonus_guess', 'mega_jackpot')),
   time_limit_ms      int  not null default 300000 check (time_limit_ms > 0), -- blitz shortens this
-  -- head_start only: one position of the secret, handed out at mint time.
-  -- This is the ONLY thing that ever leaks a letter of an unsolved word, and
-  -- it leaks exactly one: the client reads these two columns off the round
-  -- row (wf_state returns the whole row) and shows "3rd letter is E".
-  -- NULL on every other round, which is what the client keys off.
+  -- banned_letter only: the letter outlawed for this round. Picked at mint
+  -- time from letters that are NOT in the secret, so a banned-letter round is
+  -- always still winnable. NULL on every other round.
+  banned_letter      char(1),
+  -- wager only: {player_id: stake}, written by wf_place_wager during the
+  -- countdown and read back at settle. A jsonb map rather than its own table
+  -- because it is one small value per player per round, it is only ever
+  -- touched under this row's lock, and wf_rounds is already readable by every
+  -- member -- a separate table would need its own policy and grant to say
+  -- exactly the same thing.
+  wagers             jsonb not null default '{}'::jsonb,
+  -- Retired with head_start, kept so the rounds minted while it was live
+  -- still render. Nothing writes these any more.
   hint_index         int  check (hint_index is null or hint_index between 0 and 6),
   hint_letter        char(1),
   -- A *second*, global modifier that strikes partway through live play
@@ -751,8 +761,7 @@ declare
   v_mid_roll double precision;
   v_mid_at_ms int;
   v_pool text[];
-  v_hint_index int := null;
-  v_hint_letter char(1) := null;
+  v_banned char(1) := null;
 begin
   if v_room.current_round >= 1 then
     select * into v_round from public.wf_rounds
@@ -811,23 +820,24 @@ begin
 
   -- Round-start modifier, announced full-screen before the round begins.
   --
-  -- Only three of these move a number (blitz's clock, jackpot's budget,
-  -- double_points' multiplier). The other four change how the round is
-  -- actually PLAYED, and are handled entirely client-side (see EVENTS in
-  -- js/config.js -- each carries a `rule` that game.js reads):
+  -- Three of these move a number (blitz's clock, jackpot's budget,
+  -- double_points' multiplier). The rest change how the round is actually
+  -- PLAYED. Most of those are handled client-side (see EVENTS in
+  -- js/config.js -- each carries a `rule` that game.js reads); the two that
+  -- cannot be, because they decide when a round ends and what it pays, are
+  -- sudden_death and wager, both settled in wf_check_settle below.
   --
   --   40% none            -- an ordinary round
-  --   12% double_points   -- pays double
-  --   12% blitz           -- clock cut to 90s
-  --   10% blackout        -- legend stops greying out known letters
-  --    8% deceit          -- exactly one tile per row of feedback LIES
-  --    7% cipher          -- feedback loses its positions: counts only
+  --   10% double_points   -- pays double
+  --   10% blitz           -- clock cut to 90s
+  --    7% blackout        -- legend stops greying out known letters
+  --    6% cipher          -- feedback loses its positions: counts only
   --    6% lockdown        -- every guess must reuse every confirmed letter
-  --    5% head_start      -- one letter handed to you, in position
-  --
-  -- deceit/cipher are display-side only: the feedback stored in wf_guesses
-  -- is always the truth, so solving, settling and scoring are untouched by
-  -- them and a lie can never cost anyone a round they actually won.
+  --    6% sudden_death    -- a guess that scores nothing at all ends you
+  --    6% fading_ink      -- colours fade off each row seconds after it lands
+  --    5% banned_letter   -- one letter is outlawed for the round
+  --    2% jackpot         -- +1 guess AND double points
+  --    2% wager           -- stake points on solving it
   --
   -- One shared roll against cumulative thresholds (NOT one random() per
   -- WHEN -- that silently skews the odds, since each branch would draw its
@@ -835,14 +845,24 @@ begin
   v_roll := random();
   v_event := case
     when v_roll < 0.40 then 'none'
-    when v_roll < 0.52 then 'double_points'
-    when v_roll < 0.64 then 'blitz'
-    when v_roll < 0.74 then 'blackout'
-    when v_roll < 0.82 then 'deceit'
-    when v_roll < 0.89 then 'cipher'
-    when v_roll < 0.95 then 'lockdown'
-    else 'head_start'
+    when v_roll < 0.50 then 'double_points'
+    when v_roll < 0.60 then 'blitz'
+    when v_roll < 0.67 then 'blackout'
+    when v_roll < 0.73 then 'cipher'
+    when v_roll < 0.79 then 'lockdown'
+    when v_roll < 0.85 then 'sudden_death'
+    when v_roll < 0.91 then 'fading_ink'
+    when v_roll < 0.96 then 'banned_letter'
+    when v_roll < 0.98 then 'jackpot'
+    else 'wager'
   end;
+
+  -- Nobody has anything to stake on round 1, so a wager there is a dead
+  -- round with a card promising drama. Demote it rather than re-rolling:
+  -- re-rolling would quietly bias every other outcome on round 1.
+  if v_event = 'wager' and v_no = 1 then
+    v_event := 'none';
+  end if;
 
   -- Guess-budget bumps are capped at 12, wf_rounds' own ceiling on
   -- max_guesses -- a length-7 Coop round already starts at 10, so an
@@ -852,13 +872,18 @@ begin
     v_time_limit_ms := 90000;
   elsif v_event = 'jackpot' then
     v_max_guesses := least(12, v_max_guesses + 1);
-  elsif v_event = 'head_start' then
-    -- Hand out exactly one position of the secret. Chosen here rather than
-    -- client-side for the obvious reason: the client has never seen the
-    -- word and must not, so the one letter it is allowed to know has to be
-    -- picked by the only code that can read wf_round_secrets.
-    v_hint_index := floor(random() * v_len)::int;
-    v_hint_letter := substr(v_secret, v_hint_index + 1, 1);
+  elsif v_event = 'banned_letter' then
+    -- A letter the player will actually miss, that is NOT in the answer --
+    -- banning a letter the secret needs would make the round unwinnable.
+    -- Picked here because only this function can read the secret.
+    select ch into v_banned
+      from unnest(string_to_array('a,e,i,o,u,r,s,t,l,n,c,d,m,p,h,b,g,y,f,k', ',')) as ch
+     where position(ch in v_secret) = 0
+     order by random() limit 1;
+    -- A word using every letter of that pool is not a thing, but if the
+    -- pick ever came back empty the round simply has no modifier rather
+    -- than a ban on nothing.
+    if v_banned is null then v_event := 'none'; end if;
   end if;
 
   -- Mid-round modifier: a *second*, independent global roll that lands
@@ -889,13 +914,14 @@ begin
 
   insert into public.wf_rounds
     (room_id, round_no, word_length, max_guesses, chain_letter, chain_broken, starts_at,
-     event, time_limit_ms, mid_modifier, mid_modifier_at_ms, hint_index, hint_letter)
+     event, time_limit_ms, mid_modifier, mid_modifier_at_ms, banned_letter)
   values (
     p_room, v_no, v_len, v_max_guesses,
     case when v_chain_broken then null else v_chain_letter end,
     v_chain_broken,
     now() + interval '5 seconds',
-    v_event, v_time_limit_ms, v_mid_modifier, v_mid_at_ms, v_hint_index, v_hint_letter
+    v_event, v_time_limit_ms, v_mid_modifier, v_mid_at_ms,
+    case when v_event = 'banned_letter' then v_banned end
   )
   returning * into v_round;
 
@@ -1001,6 +1027,8 @@ declare
   v_winner uuid;
   v_best_time timestamptz := null;
   v_mult int;
+  v_sudden boolean;
+  v_stake int;
   rec record;
 begin
   select * into v_round from public.wf_rounds where id = p_round for update;
@@ -1029,10 +1057,24 @@ begin
     else 1
   end;
 
+  -- SUDDEN DEATH: a guess that scores nothing at all -- no hit, no present,
+  -- not one letter of it in the word -- ends the round there. Defined on a
+  -- total miss rather than on "no greens" deliberately: openers routinely
+  -- come back with no greens, so ending on that would kill most rounds on
+  -- the first guess and make the modifier a coin flip rather than a risk.
+  v_sudden := v_round.event = 'sudden_death';
+
   if v_mode = 'coop' then
     v_done := v_time_up
               or v_round.pool_used >= v_round.max_guesses
-              or exists (select 1 from public.wf_guesses where round_id = p_round and feedback = v_all_hit);
+              or exists (select 1 from public.wf_guesses where round_id = p_round and feedback = v_all_hit)
+              -- One player's total miss ends it for the whole team: the
+              -- board and the guess pool are shared, so the risk is too.
+              or (v_sudden and exists (
+                    select 1 from public.wf_guesses g
+                     where g.round_id = p_round
+                       and not ('hit' = any(g.feedback))
+                       and not ('present' = any(g.feedback))));
   else
     -- PvP and Solo: the round ends the instant anyone solves it (first to
     -- the word wins the round), once everyone still playing has run out of
@@ -1043,9 +1085,17 @@ begin
     ) into v_any_solved
     from public.wf_players p where p.room_id = v_round.room_id;
 
+    -- Under sudden death a player who has thrown a total miss is out, which
+    -- counts as finished for the purpose of ending the round -- otherwise a
+    -- duel would sit waiting for a player who can no longer play.
     select bool_and(
       (select count(*) from public.wf_guesses g2
         where g2.round_id = p_round and g2.player_id = p.id) >= v_round.max_guesses
+      or (v_sudden and exists (
+            select 1 from public.wf_guesses g3
+             where g3.round_id = p_round and g3.player_id = p.id
+               and not ('hit' = any(g3.feedback))
+               and not ('present' = any(g3.feedback))))
     ) into v_all_exhausted
     from public.wf_players p where p.room_id = v_round.room_id;
 
@@ -1065,8 +1115,13 @@ begin
     select count(*) into v_used from public.wf_guesses where round_id = p_round;
     v_pts := case when v_solved then greatest(0, v_round.max_guesses - v_used + 1) * 10 * v_mult else 0 end;
     update public.wf_rounds set team_solved = v_solved where id = p_round;
+    -- Everyone scores the same for the round, but each player staked their
+    -- own wager, so the payout is per row rather than folded into v_pts.
     insert into public.wf_results (round_id, player_id, solved, guesses_used, points)
-      select p_round, p.id, v_solved, v_used, v_pts from public.wf_players p where p.room_id = v_round.room_id;
+      select p_round, p.id, v_solved, v_used,
+             v_pts + case when v_solved then 1 else -1 end
+                     * coalesce((v_round.wagers ->> p.id::text)::int, 0)
+        from public.wf_players p where p.room_id = v_round.room_id;
   else
     for rec in
       select p.id as player_id,
@@ -1089,6 +1144,12 @@ begin
         v_elapsed_ms := null;
         v_pts := 0;
       end if;
+
+      -- WAGER: whatever this player staked during the countdown, won on a
+      -- solve and lost otherwise. Zero on every other round, and zero for
+      -- anyone who never placed one, so this line is a no-op elsewhere.
+      v_stake := coalesce((v_round.wagers ->> rec.player_id::text)::int, 0);
+      v_pts := v_pts + case when rec.solved then v_stake else -v_stake end;
 
       insert into public.wf_results (round_id, player_id, solved, guesses_used, elapsed_ms, points)
       values (p_round, rec.player_id, rec.solved, rec.used, v_elapsed_ms, v_pts);
@@ -1164,6 +1225,68 @@ begin
   end if;
 
   return v_round;
+end;
+$$;
+
+-- WAGER: stake points on solving this round, placed during the 5-second
+-- countdown and settled in wf_check_settle. Server-side because it decides
+-- what a round pays, which is the one thing a client may never assert.
+--
+-- Three guards, all of them load-bearing:
+--   * only during the countdown (now() < starts_at). Letting a bet be
+--     placed once play has started would mean betting on a board you have
+--     already begun to read, and in Coop on one your team has been guessing
+--     at -- the whole point is that the stake is set before anyone knows
+--     anything.
+--   * only a stake from the offered set, so the client cannot invent one.
+--   * never more than the player already has. Losing everything you have
+--     earned is the intended worst case; being driven negative by a single
+--     round is not, and a negative total is a miserable thing to look at in
+--     the standings for the rest of a match.
+create or replace function public.wf_place_wager(p_token text, p_round uuid, p_stake integer)
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_player public.wf_players := public.wf_player_in_round(p_token, p_round);
+  v_round  public.wf_rounds;
+  v_total  int;
+  v_stake  int;
+begin
+  select * into v_round from public.wf_rounds where id = p_round for update;
+
+  if v_round.event <> 'wager' then
+    raise exception 'wordforge: nothing to stake on this round' using errcode = 'P0027';
+  end if;
+  if v_round.status <> 'active' then
+    raise exception 'wordforge: round is over' using errcode = 'P0015';
+  end if;
+  if now() >= v_round.starts_at then
+    raise exception 'wordforge: too late to place a stake' using errcode = 'P0028';
+  end if;
+  if p_stake is null or p_stake not in (0, 25, 50, 100) then
+    raise exception 'wordforge: not a valid stake' using errcode = 'P0029';
+  end if;
+
+  -- What this player has actually banked so far, across every settled round
+  -- of this room. Rounds settle strictly before the next one is minted, so
+  -- this can never include the round being bet on.
+  select coalesce(sum(res.points), 0) into v_total
+    from public.wf_results res
+    join public.wf_rounds r on r.id = res.round_id
+   where r.room_id = v_round.room_id and res.player_id = v_player.id;
+
+  v_stake := greatest(0, least(p_stake, v_total));
+
+  update public.wf_rounds
+     set wagers = jsonb_set(wagers, array[v_player.id::text], to_jsonb(v_stake), true)
+   where id = p_round;
+
+  -- The clamped value, so the client shows what was actually staked rather
+  -- than what was asked for.
+  return v_stake;
 end;
 $$;
 
@@ -1322,6 +1445,7 @@ begin
     'wf_check_settle(text, uuid)',
     'wf_trigger_letter_swap(text, uuid)',
     'wf_apply_mid_modifier(text, uuid)',
+    'wf_place_wager(text, uuid, integer)',
     'wf_state(text, uuid)',
     'wf_server_time()'
   ] loop
