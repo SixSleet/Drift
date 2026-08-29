@@ -17,6 +17,7 @@
 import { loadDictionary } from './words.js';
 import { sfx } from './sfx.js';
 import { t, foldKey } from './i18n.js';
+import { buildKeyboard, wantsOnScreenKeys } from './ui.js';
 
 const bestKey = (id) => `wf-best-${id}`;
 
@@ -98,7 +99,7 @@ async function wordHunt(root, api) {
     loadDictionary(4), loadDictionary(5), loadDictionary(6),
   ]);
   if (!d6.size || !d5.size || !d4.size) {
-    root.appendChild(el('p', 'arcade-note', 'The word list could not be loaded, so this one is unavailable offline.'));
+    root.appendChild(el('p', 'arcade-note', t('arcade.offline')));
     return () => {};
   }
   const sixes = [...d6];
@@ -108,7 +109,7 @@ async function wordHunt(root, api) {
   const foundBox = el('div', 'found-words');
   const progress = el('p', 'arcade-note');
   const hint = el('p', 'hint hint-inline',
-    'Type a 4- or 5-letter word using only these letters. Enter to submit, Tab for new letters.');
+    t(wantsOnScreenKeys() ? 'arcade.hunt.hintTouch' : 'arcade.hunt.hint'));
   root.append(rackEl, entry, progress, foundBox, hint);
 
   let rack = '', solutions = new Set(), found = new Set(), typed = '';
@@ -185,21 +186,15 @@ async function wordHunt(root, api) {
     entry.classList.add(kind === 'bad' ? 'is-bad' : kind === 'dupe' ? 'is-dupe' : 'is-clear');
   };
 
-  const onKey = (e) => {
+  // One place both a keystroke and a tap arrive at, so the two cannot drift
+  // apart: 'ENTER', 'BACK', 'TAB', or a single letter.
+  const press = (key) => {
     if (over) return;
-    if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (e.key === 'Enter') { e.preventDefault(); submit(); return; }
-    if (e.key === 'Backspace') { e.preventDefault(); typed = typed.slice(0, -1); paintRack(); paintEntry(); return; }
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      api.penalise(REROLL_PENALTY_S);
-      newRack();
-      return;
-    }
-    // Accents fold to the letter underneath, same as the main board.
-    const ch = e.key.length === 1 ? foldKey(e.key)?.toLowerCase() : null;
-    if (!ch || typed.length >= 5) return;
-    e.preventDefault();
+    if (key === 'ENTER') { submit(); return; }
+    if (key === 'BACK') { typed = typed.slice(0, -1); paintRack(); paintEntry(); return; }
+    if (key === 'TAB') { api.penalise(REROLL_PENALTY_S); newRack(); return; }
+    const ch = key.toLowerCase();
+    if (!/^[a-z]$/.test(ch) || typed.length >= 5) return;
     // Only letters actually left in the rack.
     const spent = countLetters(typed);
     const have = countLetters(rack);
@@ -209,7 +204,46 @@ async function wordHunt(root, api) {
     paintRack(); paintEntry();
   };
 
+  const onKey = (e) => {
+    if (over) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key === 'Enter') { e.preventDefault(); press('ENTER'); return; }
+    if (e.key === 'Backspace') { e.preventDefault(); press('BACK'); return; }
+    if (e.key === 'Tab') { e.preventDefault(); press('TAB'); return; }
+    // Accents fold to the letter underneath, same as the main board.
+    const ch = e.key.length === 1 ? foldKey(e.key) : null;
+    if (!ch) return;
+    e.preventDefault();
+    press(ch);
+  };
+
   document.addEventListener('keydown', onKey);
+  // The rack tiles are already the letters you are allowed to use, so with a
+  // finger they are the keyboard -- tapping the one you want beats hunting
+  // for it in a QWERTY grid where twenty of the keys do nothing.
+  if (wantsOnScreenKeys()) {
+    rackEl.classList.add('is-tappable');
+    rackEl.addEventListener('pointerdown', (e) => {
+      const tile = e.target.closest?.('.rack-tile');
+      if (!tile || !rackEl.contains(tile)) return;
+      e.preventDefault();
+      press(tile.textContent.trim());
+    });
+    const actions = el('div', 'arcade-actions');
+    for (const [key, label] of [['BACK', '⌫'], ['TAB', t('arcade.newLetters')], ['ENTER', '⏎']]) {
+      const b = el('button', `legend-key legend-action${key === 'TAB' ? ' legend-wide' : ''}`, label);
+      b.type = 'button';
+      b.dataset.key = key;
+      actions.appendChild(b);
+    }
+    actions.addEventListener('pointerdown', (e) => {
+      const b = e.target.closest?.('.legend-key');
+      if (!b || !actions.contains(b)) return;
+      e.preventDefault();
+      press(b.dataset.key);
+    });
+    root.insertBefore(actions, foundBox);
+  }
   newRack();
   api.setScore(0);
 
@@ -249,7 +283,7 @@ function mothSwat(root, api) {
   const arena = el('div', 'swat-arena');
   const strikeRow = el('div', 'swat-strikes');
   root.append(strikeRow, arena,
-    el('p', 'hint hint-inline', `Swat them before they get across. ${SWAT_STRIKES} misses and it's over.`));
+    el('p', 'hint hint-inline', t('arcade.swat.hint', { n: SWAT_STRIKES })));
 
   let score = 0, strikes = 0, over = false, spawnTimer = null;
   const live = new Set();
@@ -366,7 +400,7 @@ function chainStart(root, api) {
   const entry = el('div', 'rack-entry');
   const chainBox = el('div', 'chain-links');
   const hint = el('p', 'hint hint-inline',
-    'Type a 4- or 5-letter word starting with that letter. Its last letter starts the next one. Tab to pass.');
+    t(wantsOnScreenKeys() ? 'arcade.chain.hintTouch' : 'arcade.chain.hint'));
   root.append(cue, entry, chainBox, hint);
   return { cue, entry, chainBox, hint };
 }
@@ -374,7 +408,7 @@ function chainStart(root, api) {
 async function chain(root, api) {
   const [d4, d5] = await Promise.all([loadDictionary(4), loadDictionary(5)]);
   if (!d4.size || !d5.size) {
-    root.appendChild(el('p', 'arcade-note', 'The word list could not be loaded, so this one is unavailable offline.'));
+    root.appendChild(el('p', 'arcade-note', t('arcade.offline')));
     return () => {};
   }
   const { cue, entry, chainBox } = chainStart(root, api);
@@ -431,29 +465,44 @@ async function chain(root, api) {
     paintCue(); paintEntry(); paintChain();
   };
 
-  const onKey = (e) => {
+  const press = (key) => {
     if (over) return;
-    if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (e.key === 'Enter') { e.preventDefault(); submit(); return; }
-    if (e.key === 'Backspace') { e.preventDefault(); typed = typed.slice(0, -1); paintEntry(); return; }
-    if (e.key === 'Tab') {
-      e.preventDefault();
+    if (key === 'ENTER') { submit(); return; }
+    if (key === 'BACK') { typed = typed.slice(0, -1); paintEntry(); return; }
+    if (key === 'TAB') {
       api.penalise(CHAIN_PASS_S);
       letter = KIND_LETTERS[Math.floor(Math.random() * KIND_LETTERS.length)];
       typed = '';
       paintCue(); paintEntry();
       return;
     }
-    // Accents fold to the letter underneath, same as the main board.
-    const ch = e.key.length === 1 ? foldKey(e.key)?.toLowerCase() : null;
-    if (!ch || typed.length >= 5) return;
-    e.preventDefault();
+    const ch = key.toLowerCase();
+    if (!/^[a-z]$/.test(ch) || typed.length >= 5) return;
     typed += ch;
     sfx.type();
     paintEntry();
   };
 
+  const onKey = (e) => {
+    if (over) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key === 'Enter') { e.preventDefault(); press('ENTER'); return; }
+    if (e.key === 'Backspace') { e.preventDefault(); press('BACK'); return; }
+    if (e.key === 'Tab') { e.preventDefault(); press('TAB'); return; }
+    // Accents fold to the letter underneath, same as the main board.
+    const ch = e.key.length === 1 ? foldKey(e.key) : null;
+    if (!ch) return;
+    e.preventDefault();
+    press(ch);
+  };
+
   document.addEventListener('keydown', onKey);
+  // Any letter is legal here, so this one needs the whole keyboard.
+  if (wantsOnScreenKeys()) {
+    const keys = el('div');
+    buildKeyboard(keys, press, { tab: t('arcade.newLetter') });
+    root.appendChild(keys);
+  }
   paintCue(); paintEntry(); paintChain();
   api.setScore(0);
 

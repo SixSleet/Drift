@@ -747,33 +747,61 @@ function fallingLeaf(done) {
 }
 
 // Weights, not equal odds: the cat is the headline act, ambience is filler.
+//
+// `flat` marks the ones that still work when the room is not being drawn --
+// a phone drops the geometry (see the flat fallback in app.css) and shows
+// the app full-screen instead. Two kinds survive that:
+//
+//   rigs placed relative to the camera rather than to a prop -- the cat
+//   walks in front of the screen, the neighbour's light comes through the
+//   near edge of frame, so both still land where you are looking;
+//   effects that were never in the room to begin with -- the storm takes
+//   over the music, the power cut darkens the app itself and puts a bat on
+//   the screen, the lamp flicker and the headlights wash the whole view.
+//
+// The rest are pinned to furniture: the moth circles the lamp, the leaf
+// falls past the window, the spider comes down the wall, the mouse runs the
+// skirting board. With no lamp, window, wall or skirting board on screen
+// they play out somewhere off the side of a phone, so they are left to the
+// desktop rather than fired invisibly.
 const KINDS = [
-  { run: cat,          weight: 24 },
+  { run: cat,          weight: 24, flat: true },
   { run: moth,         weight: 15 },
   { run: phone,        weight: 13 },
   { run: paperPlane,   weight: 12 },
-  { run: lampFlicker,  weight: 14 },
-  { run: neighbour,    weight: 11 },
+  { run: lampFlicker,  weight: 14, flat: true },
+  { run: neighbour,    weight: 11, flat: true },
   { run: spider,       weight: 11 },
   { run: bird,         weight: 10 },
-  { run: storm,        weight: 10 },
+  { run: storm,        weight: 10, flat: true },
   { run: fieldMouse,   weight: 10 },
   { run: fallingLeaf,  weight: 9 },
   { run: frameTilt,    weight: 9 },
   { run: firefly,      weight: 8 },
-  { run: headlights,   weight: 8 },
+  { run: headlights,   weight: 8, flat: true },
   // The most intrusive one in here, so the rarest.
-  { run: powerCut,     weight: 6 },
+  { run: powerCut,     weight: 6, flat: true },
 ];
-const TOTAL_WEIGHT = KINDS.reduce((n, k) => n + k.weight, 0);
+
+/**
+ * Checked per pick rather than once at load: a tablet can be rotated and a
+ * window can be dragged across the breakpoint mid-match, and the answer
+ * should follow the layout rather than whatever it was at boot.
+ */
+function pool() {
+  const flatOnly = getComputedStyle(document.getElementById('room-scene')).perspective === 'none';
+  return flatOnly ? KINDS.filter((k) => k.flat) : KINDS;
+}
 
 function pick() {
-  let r = Math.random() * TOTAL_WEIGHT;
-  for (const k of KINDS) {
+  const kinds = pool();
+  const total = kinds.reduce((n, k) => n + k.weight, 0);
+  let r = Math.random() * total;
+  for (const k of kinds) {
     r -= k.weight;
     if (r <= 0) return k.run;
   }
-  return KINDS[0].run;
+  return kinds[0].run;
 }
 
 const between = ([lo, hi]) => lo + Math.random() * (hi - lo);

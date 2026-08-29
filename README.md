@@ -6,8 +6,9 @@ share one board with your whole team.
 
 **Play: <https://sixsleet.github.io/Drift/>**
 
-Built for a desktop screen. Guesses are typed on your own keyboard; there is
-nothing on screen to click.
+Plays on a desktop, a phone or a tablet, and the same room takes all three at
+once — the platform someone joins on is nobody else's business. See
+[Playing on a phone](#playing-on-a-phone).
 
 <p align="center">
   <img src="assets/screenshots/01-menu.jpg" width="49%" alt="The main menu, in the room the whole game is staged in.">
@@ -305,6 +306,37 @@ put two tiles down for one keystroke and change the word's length.
 to everyone who joins — on the lobby line and as a flag in the left rail
 during play. Your menus stay in your own language, so without that there
 would be nothing on screen to tell you the words are Italian.
+
+## Playing on a phone
+
+The whole game, not a cut-down version of it: every mode, every round event,
+the wager, the language picker, the minigames and the soundtrack. A phone can
+host a room a desktop joins, and the other way round.
+
+Two things change, and only because they have to.
+
+**The keyboard.** On a desktop you type on the one on the desk, and the A–Z
+strip under the board is a read-only note of which letters you have ruled
+out. With a finger there is no such keyboard, so that same strip becomes one:
+laid out QWERTY, with ⏎ and ⌫ on the ends of the bottom row. Merging the two
+is the point rather than a compromise — the letters that have gone dark are
+exactly the keys not worth pressing again. A physical keyboard keeps working
+alongside it, so a tablet in a case keyboard can use either, in the same
+round, without a setting.
+
+Word Hunt does the same trick with its rack: the six letters you are allowed
+to use are already on screen, so you tap those rather than hunt for them in a
+grid where twenty keys do nothing.
+
+**The room.** The desk, the monitor and the walls are geometry that needs a
+wide screen, so below 1080px they are dropped and the app fills the display —
+that part predates this. The room *events* still run: the cat still walks in
+front of what you are reading, the lights still stutter, the storm still
+takes over the music, and the power cut still puts a bat on your screen. The
+ones that are pinned to furniture — the moth circling the lamp, a leaf past
+the window, the spider coming down the wall — stay on desktop, because with
+no lamp, window or wall drawn they would play out somewhere off the side of
+the phone. They are not fired invisibly; the picker knows which is which.
 
 ## Licence
 

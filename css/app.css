@@ -1859,6 +1859,77 @@ html, body {
 .legend-key[data-tier="present"] { background: var(--gold); border-color: var(--gold); color: #241a05; }
 .legend-key[data-tier="miss"]    { background: #131009; border-color: #2a231b; color: #453c31; }
 
+/* ── The legend as a keyboard ──────────────────────────────────────────
+   On a touch device the same strip is what you type on, so it grows into
+   three staggered rows with ENTER and DEL on the ends of the bottom one.
+   The tier colours are shared with the desktop legend above and are the
+   point of merging the two: the keys that have gone dark are exactly the
+   ones not worth pressing again. */
+
+.letter-legend.is-keyboard {
+  flex-direction: column; flex-wrap: nowrap; gap: 6px;
+  width: 100%; max-width: 560px;
+  /* A key is a target, not text. Without this a fast double-tap zooms the
+     page and a held press pops up the selection callout. */
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.letter-legend.is-keyboard .legend-row {
+  display: flex; gap: 5px; justify-content: center; width: 100%;
+}
+.letter-legend.is-keyboard .legend-key {
+  /* Flexible width so the ten-key top row sets the size and the shorter
+     rows inherit it -- a fixed width leaves the bottom row floating. */
+  flex: 1 1 0; min-width: 0; max-width: 46px;
+  height: 46px; font-size: 15px; padding: 0;
+  appearance: none; cursor: pointer;
+  color: var(--ink);
+}
+/* The action keys carry a glyph rather than a letter and never take a tier
+   colour, so they are sized by content and tinted to read as controls. */
+.letter-legend.is-keyboard .legend-action {
+  flex: 0 0 auto; max-width: none; min-width: 46px; padding: 0 12px;
+  font-size: 17px; color: var(--ink-dim);
+}
+/* Word Hunt's rack is the keyboard on touch, so the tiles have to look and
+   feel like keys rather than like a readout. */
+.rack.is-tappable .rack-tile { cursor: pointer; touch-action: manipulation; }
+.rack.is-tappable .rack-tile:not(.is-used):active { transform: translateY(1px) scale(.94); }
+.arcade-actions { display: flex; gap: 6px; justify-content: center; width: 100%; max-width: 340px; }
+.arcade-actions .legend-key {
+  height: 44px; border-radius: 5px; appearance: none; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--line);
+  color: var(--ink-dim); font-weight: 700; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.arcade-actions .legend-wide { flex: 1 1 auto; font-size: 13px; }
+.arcade-actions .legend-key:not(.legend-wide) { flex: 0 0 64px; }
+
+/* The same keys, used standalone by the arcade's word games. */
+.touch-keys {
+  display: flex; flex-direction: column; gap: 6px;
+  width: 100%; max-width: 560px; margin: 0 auto;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.touch-keys .legend-row { display: flex; gap: 5px; justify-content: center; width: 100%; }
+.touch-keys .legend-key {
+  flex: 1 1 0; min-width: 0; max-width: 46px; height: 46px;
+  font-size: 15px; padding: 0; appearance: none; cursor: pointer; color: var(--ink);
+}
+.touch-keys .legend-action {
+  flex: 0 0 auto; max-width: none; min-width: 46px; padding: 0 12px;
+  font-size: 17px; color: var(--ink-dim);
+}
+.touch-keys .legend-wide { flex: 1 1 auto; max-width: none; font-size: 13px; }
+.touch-keys .legend-key.is-pressed,
+.letter-legend.is-keyboard .legend-key.is-pressed {
+  transform: translateY(1px) scale(.94);
+  border-color: var(--accent);
+  transition-duration: .04s;
+}
+
 /* ── Event flash / card / confetti ─────────────────────────────────── */
 
 .event-flash {
@@ -2131,8 +2202,6 @@ html, body {
 @media (max-height: 860px) { .room { --zoom: .86; } }
 @media (max-height: 760px) { .room { --zoom: .76; } }
 
-.small-screen-note { display: none; }
-
 /* Below this the room stops being worth rendering: the monitor would be
    smaller than the text on it. Drop the geometry, keep the game — same
    warm palette, just flat. */
@@ -2151,11 +2220,33 @@ html, body {
     padding: 0; border-radius: 0; box-shadow: none; background: none;
   }
   .monitor-screen { display: none; }
-  .room-front { display: none; }
+  /* The room events keep happening on a phone -- the cat, the moth, the
+     spider, the phone buzzing. They are half the character of the thing and
+     "no room" is not a reason to lose them.
+     
+     Crucially the front stage keeps its perspective. Every rig is authored
+     in that 3D space, so flattening it collapses them all to nothing; what
+     changes instead is only the zoom, so the same cat walks the same path
+     at a size that suits a phone. The back room stays hidden -- that is
+     scenery, and there is no room to draw it in. */
+  .room-front { display: block; --zoom: .34; }
+  /* Explicit, not merely un-hidden: the blanket `.room-stage > *:not(.monitor)`
+     above still matches this layer, and a rule that only matches its siblings
+     cannot override it. */
+  .room-front .room-3d-fx { display: block; }
+  .room-front .room-stage > *:not(.room-3d-fx) { display: none; }
+  /* The fuse box is bolted to a wall that is not being drawn. */
+  .room-front > *:not(.room-stage) { display: none; }
   .app-overlay {
     position: fixed; inset: 0;
     width: auto; height: auto;
     font-size: 16px; border-radius: 0; box-shadow: none;
+    /* dvh, not vh: mobile browsers count the address bar into vh, so a
+       100vh layout is taller than the screen until you scroll. The keyboard
+       is at the bottom of this, which is exactly what would be cut off. */
+    height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+             env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
   /* Back to normal reading sizes — nothing is being scaled down now. */
@@ -2189,9 +2280,7 @@ html, body {
      there, it just runs across rather than down, and the board keeps the
      full width. */
   .play-area {
-    /* The "open this on a bigger display" note is fixed to the bottom of
-       the viewport; without this the legend's second row hides behind it. */
-    padding: 16px 14px 46px; gap: 12px;
+    padding: 12px 10px; gap: 10px;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     align-items: stretch;
@@ -2214,7 +2303,7 @@ html, body {
   .team-list { flex-direction: row; flex-wrap: wrap; gap: 4px 10px; }
   .team-row { padding: 2px 4px; }
 
-  .tile-grid { --tile: min(46px, calc((52vh - (var(--rows) - 1) * 6px) / var(--rows))); }
+  .tile-grid { --tile: min(46px, calc((52dvh - (var(--rows) - 1) * 6px) / var(--rows))); }
   .ghost-bar i { width: 16px; height: 16px; }
   .status-line { font-size: 14px; }
   .status-line .big { font-size: 40px; }
@@ -2230,14 +2319,87 @@ html, body {
   .mid-banner-blurb { font-size: 12.5px; }
   .hint-inline { font-size: 12px; }
 
-  .small-screen-note {
-    display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
-    margin: 0; padding: 9px 16px;
-    background: rgba(28, 24, 19, .94);
-    border-top: 1px solid var(--line);
-    color: var(--ink-faint); font-size: 12px; text-align: center;
-  }
 }
+
+/* ── Playing with a thumb ──────────────────────────────────────────────
+   The flat fallback above already reflows the room away and turns the rails
+   into strips. What is left is a fitting problem: the board and the keyboard
+   both have to be on screen at once, without either scrolling, on a phone
+   held in portrait with a notch at one end and a home bar at the other.
+
+   So the play area becomes a three-part column that owns the viewport
+   height: rails on top, board taking whatever is left, keyboard pinned at
+   the bottom. The board is the only part that flexes -- the keyboard's size
+   is fixed by thumbs, not by the layout. */
+
+@media (pointer: coarse), (max-width: 1080px), (max-height: 620px) {
+  .screen-game[data-active] { min-height: 0; height: 100%; }
+
+  .play-area {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'railL railR'
+      'board board'
+      'keys  keys';
+    height: 100%; min-height: 0;
+    padding: 8px 8px 6px;
+  }
+  /* The left rail is the round and guess readout, the right one is who else
+     is here. Side by side across the top: the board and the keys need every
+     other pixel, and neither rail is worth a column of its own at this
+     width. Nothing is dropped -- they are the same blocks, laid flat. */
+  .rail-left  { grid-area: railL; }
+  .rail-right { grid-area: railR; }
+  .play-main  { grid-area: board; min-height: 0; }
+  .letter-legend { grid-area: keys; }
+  /* One line each, side by side, so the row is as tall as the tallest single
+     block rather than the sum of two wrapped lines -- worth about 80px of
+     board, which is two tile rows on a small phone. `min-width: 0` is what
+     makes that work: without it the in-play block refuses to shrink below
+     its modifier name and shoves the others onto a second line. */
+  .rail { flex-direction: row; flex-wrap: nowrap; gap: 6px; max-width: none; }
+  .rail-block { flex: 1 1 0; min-width: 0; padding: 5px 7px; }
+  .rail-label { font-size: 9px; margin-bottom: 3px; white-space: nowrap; }
+  .rail-big { font-size: 19px; line-height: 1.1; }
+  .rail-name, .rail-mod, .team-name {
+    font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .tile-grid {
+    /* Whatever the keyboard and rails leave. Measured rather than guessed:
+       three 46px rows plus their gaps is 150px, the rails about 64, and the
+       status line and HUD the rest. */
+    --tile: min(52px, calc((100dvh - 330px - (var(--rows) - 1) * 6px) / var(--rows)));
+  }
+  .status-line { font-size: 13px; min-height: 0; }
+  .status-line .big { font-size: 34px; }
+}
+
+/* A phone on its side is short, not narrow. Stacking the keyboard under the
+   board there leaves about 160px for seven rows of tiles, which is a board
+   you cannot read. There is 800px of width going spare instead, so the
+   keyboard moves beside the board and both get room. */
+@media (pointer: coarse) and (max-height: 560px) and (orientation: landscape) {
+  .play-area {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'railL railR'
+      'board keys';
+    padding: 6px 10px;
+  }
+  .letter-legend { align-self: center; }
+  .tile-grid { --tile: min(44px, calc((100dvh - 160px - (var(--rows) - 1) * 5px) / var(--rows))); }
+  .letter-legend.is-keyboard .legend-key { height: 40px; font-size: 14px; }
+  /* Kept, not dropped -- just thin. Losing the round counter because the
+     phone is on its side would be losing a feature. */
+  .rail-block { padding: 4px 7px; }
+  .rail-big { font-size: 16px; }
+  .round-dots i { width: 5px; height: 5px; }
+}
+
+
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
@@ -3130,4 +3292,37 @@ html, body {
   border: 1px solid rgba(255, 240, 220, .12);
   font-size: 9.5px; font-weight: 800; font-style: normal;
   letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint);
+}
+
+/* ── Touch affordances ─────────────────────────────────────────────────
+   Last in the file on purpose: every rule here overrides a size that was
+   chosen for a cursor, and these are plain class selectors, so source order
+   is what decides. Moved up the file and they silently lose. */
+
+@media (pointer: coarse) {
+  #app { -webkit-tap-highlight-color: transparent; }
+  /* Thumbs need about 44px. Everything below was sized for a cursor, which
+     can be aimed at a 26px square; a thumb cannot, and these are all things
+     you do not want to hit by accident either. */
+  .btn-icon { width: 44px; height: 44px; font-size: 17px; }
+  .settings-close { width: 40px; height: 40px; font-size: 15px; }
+  .btn-quiet { padding: 13px 10px; font-size: 14px; }
+  .jukebox-track { min-height: 44px; align-items: center; font-size: 15px; }
+  .wager-chip { min-height: 46px; min-width: 64px; }
+  .legend-key { touch-action: manipulation; }
+  /* Bigger buttons pushed the HUD onto two lines, which is 46px off the
+     board. Tighten the pills rather than hide any of them: the round, the
+     phase, the chain letter, a standing rule and the clock are all things
+     you look at mid-guess. It still wraps when every one of them is live,
+     which is the right way round -- nothing disappears, the board gives up
+     a row for the few seconds that state lasts. */
+  .hud { padding: 6px 8px; gap: 6px; }
+  .hud-left, .hud-right { gap: 6px; }
+  .pill { font-size: 11.5px; padding: 4px 9px; }
+  #hud-you { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #app button, #app .chip, #app .legend-key, #app .rack-tile, #app .tile {
+    user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  }
+  /* iOS zooms the page when a focused input's text is under 16px. */
+  #app input[type="text"] { font-size: 16px; }
 }

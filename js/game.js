@@ -16,7 +16,7 @@ import { sfx } from './sfx.js';
 import { music } from './music.js';
 import {
   $, showScreen, toast, renderPlayers, renderBoard, renderGrid,
-  setPhase, setStatusLine, selectChip, buildLetterLegend, paintLetterLegend,
+  setPhase, setStatusLine, selectChip, buildLetterLegend, paintLetterLegend, TOUCH_QUERY,
   renderRailLeft, renderRailRight, resetRails, setRoundRecap,
 } from './ui.js';
 import { startRoomEvents } from './room-events.js';
@@ -50,7 +50,17 @@ export class Game {
     this.host = { advancing: false };
     this.settling = false;
     this.frame = this.frame.bind(this);
-    buildLetterLegend();
+    // On a touch device the legend IS the keyboard, so it needs somewhere to
+    // send a tap. Same entry point as a physical key: nothing downstream can
+    // tell the two apart.
+    buildLetterLegend((key) => this.handleKey(key));
+    // The layout can flip under it -- a tablet rotating, a desktop window
+    // dragged narrow -- and the strip and the keyboard are different DOM.
+    // Rebuild on the crossing, then repaint what the round already knows.
+    window.matchMedia?.(TOUCH_QUERY)?.addEventListener?.('change', () => {
+      buildLetterLegend((key) => this.handleKey(key));
+      if (this.round) this.#paintLegendMode();
+    });
   }
 
   #freshLocal() {

@@ -129,22 +129,134 @@ export function flashKey(ch) {
 }
 
 /**
- * Renders the A-Z letter legend once -- a compact, non-interactive strip
- * showing which letters are known hit/present/miss so far this round.
- * There's no on-screen keyboard to tap: input is the physical keyboard
- * only, since the whole point of the room is that you're looking at a
- * monitor someone's actually typing at.
+ * Where a finger is the pointer, or the window is small enough that the room
+ * has already been dropped for the flat layout.
+ *
+ * `pointer: coarse` is the primary-input test, so it is phones and tablets
+ * rather than any laptop that happens to have a touchscreen -- those keep
+ * the desktop legend and their keyboard. The size clauses match the flat
+ * fallback in app.css exactly: if the room is gone, the keys are wanted.
  */
-export function buildLetterLegend() {
+export const TOUCH_QUERY = '(pointer: coarse), (max-width: 1080px), (max-height: 620px)';
+export const wantsOnScreenKeys = () => window.matchMedia?.(TOUCH_QUERY).matches ?? false;
+
+/** Staggered like a real keyboard, because that is the shape thumbs know. */
+const KEY_ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+
+/**
+ * The A-Z letter legend, which on a touch device is also the keyboard.
+ *
+ * On a desktop this is what it has always been: a compact, non-interactive
+ * strip showing which letters are known hit/present/miss, because the whole
+ * point of the room is that you are looking at a monitor someone is actually
+ * typing at.
+ *
+ * With a finger there is no such keyboard to type at, so the same strip
+ * becomes the input -- laid out QWERTY, with ENTER and DEL on the ends of
+ * the bottom row. Merging the two is the point: the letters you have ruled
+ * out are exactly the keys you do not want to press again, so the reference
+ * and the input want to be the same object. The physical keyboard keeps
+ * working either way; nothing here replaces it.
+ *
+ * `onKey` receives 'ENTER', 'BACK' or a single A-Z letter -- the same
+ * vocabulary game.handleKey already speaks.
+ */
+export function buildLetterLegend(onKey) {
   const legend = $('#letter-legend');
   legend.innerHTML = '';
-  for (const ch of ALPHABET) {
-    const cell = document.createElement('i');
-    cell.className = 'legend-key';
-    cell.dataset.key = ch;
-    cell.textContent = ch;
-    legend.appendChild(cell);
+  const touch = wantsOnScreenKeys();
+  legend.classList.toggle('is-keyboard', touch);
+
+  if (!touch) {
+    for (const ch of ALPHABET) {
+      const cell = document.createElement('i');
+      cell.className = 'legend-key';
+      cell.dataset.key = ch;
+      cell.textContent = ch;
+      legend.appendChild(cell);
+    }
+    return;
   }
+
+  for (const [i, row] of KEY_ROWS.entries()) {
+    const line = el('div', 'legend-row');
+    if (i === 2) line.appendChild(actionKey('ENTER', '⏎'));
+    for (const ch of row) {
+      const cell = el('button', 'legend-key');
+      cell.type = 'button';
+      cell.dataset.key = ch;
+      cell.textContent = ch;
+      line.appendChild(cell);
+    }
+    if (i === 2) line.appendChild(actionKey('BACK', '⌫'));
+    legend.appendChild(line);
+  }
+
+  // One listener on the container rather than 28: the keys are rebuilt
+  // whenever the layout flips, and a per-key listener would leak with them.
+  //
+  // pointerdown, not click: a tap has a ~300ms click delay on some mobile
+  // browsers, and typing a five-letter word through that feels broken.
+  legend.addEventListener('pointerdown', (e) => {
+    const key = e.target.closest?.('.legend-key');
+    if (!key || !legend.contains(key)) return;
+    e.preventDefault();          // no focus ring, no text selection, no zoom
+    key.classList.add('is-pressed');
+    setTimeout(() => key.classList.remove('is-pressed'), 110);
+    onKey?.(key.dataset.key);
+  });
+}
+
+/**
+ * A standalone on-screen keyboard, for anywhere that takes typed letters and
+ * is not the main board -- the arcade's two word games.
+ *
+ * Same key vocabulary as the legend ('ENTER', 'BACK', a letter) plus 'TAB',
+ * which is what both of those games call their reroll. Returns nothing: the
+ * element is filled in place and the container owns the listener, so tearing
+ * a game down takes its keyboard with it.
+ */
+export function buildKeyboard(host, onKey, { tab = null } = {}) {
+  host.innerHTML = '';
+  host.classList.add('touch-keys');
+  for (const [i, row] of KEY_ROWS.entries()) {
+    const line = el('div', 'legend-row');
+    if (i === 2) line.appendChild(actionKey('ENTER', '⏎'));
+    for (const ch of row) {
+      const cell = el('button', 'legend-key');
+      cell.type = 'button';
+      cell.dataset.key = ch;
+      cell.textContent = ch;
+      line.appendChild(cell);
+    }
+    if (i === 2) line.appendChild(actionKey('BACK', '⌫'));
+    host.appendChild(line);
+  }
+  if (tab) {
+    const line = el('div', 'legend-row');
+    const b = el('button', 'legend-key legend-action legend-wide', tab);
+    b.type = 'button';
+    b.dataset.key = 'TAB';
+    line.appendChild(b);
+    host.appendChild(line);
+  }
+  host.addEventListener('pointerdown', (e) => {
+    const key = e.target.closest?.('.legend-key');
+    if (!key || !host.contains(key)) return;
+    e.preventDefault();
+    key.classList.add('is-pressed');
+    setTimeout(() => key.classList.remove('is-pressed'), 110);
+    onKey(key.dataset.key);
+  });
+}
+
+function actionKey(key, glyph) {
+  const b = el('button', 'legend-key legend-action');
+  b.type = 'button';
+  b.dataset.key = key;
+  b.textContent = glyph;
+  b.setAttribute('aria-label', key === 'ENTER' ? 'Enter' : 'Delete');
+  return b;
 }
 
 /** tiers: Map<letter, 'hit'|'present'|'miss'> — the best status seen so far. */
