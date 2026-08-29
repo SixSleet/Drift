@@ -181,10 +181,25 @@ Meanwhile the room you are sitting in carries on without you.
 | 🚗 **Headlights** | A car passes outside; its lights sweep the back wall for a moment |
 | 🐦 **Bird** | Lands on the sill outside. Nothing to do; it is just there |
 | ⛈ **Thunderstorm** | Rain, lightning, and the lights going with it |
+| 🐾 **Paw** | A paw comes up over the front edge of the desk and bats at nothing. Click to shoo it |
+| 🌫 **Dust** | Motes turning over in the lamplight. Goes when the lamp does |
+| 🛩 **Plane** | A light crossing the sky in the window, blinking, with a drone under everything |
+| 🔧 **Pipes** | The heating knocks behind the wall. Nothing to see, which is the point |
+| 🌬 **Gust** | Air finds the open sash and moves the curtain. Only if you have the window up |
+| 📌 **Note** | One of the pinboard notes gives up on its pin and drops behind the desk |
 
 **These are yours alone.** Nobody else sees them, they change nothing about
 the game, and the only cost is that they are in your way. Most can be cleared
 with a click.
+
+**Two clocks, not one.** The events that cost you something — a cat on the
+board, a phone to silence — arrive every 6 to 17 seconds. The ones that cost
+you nothing run on their own clock beside them, closer together, so there is
+usually something moving somewhere. A single queue at the old spacing meant
+that a round solved in ninety seconds showed you one or two events and the
+room read as empty. The two never stack up: at most one demanding thing is
+in front of you at a time, the same event never runs twice at once, and the
+quiet clock sits out anything that washes the whole screen.
 
 ## The power cut
 
@@ -256,7 +271,8 @@ the curtain moves in it, and you can hear outside.
 Both are remembered in your browser. The event scheduler knows about them
 too: a lamp you have switched off has nothing to flicker and no light for a
 moth to circle, so those events are taken out of the pool rather than firing
-invisibly and turning your lamp back on.
+invisibly and turning your lamp back on. Same for a closed window and the
+gust that would come through it.
 ## Joining, renaming and leaving
 
 Create a room and share the four-character code, or the link — anyone

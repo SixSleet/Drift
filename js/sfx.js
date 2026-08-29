@@ -719,6 +719,67 @@ export const sfx = {
   },
 
   /**
+   * Heating pipes knocking somewhere behind the wall. Two or three hits,
+   * unevenly spaced, each one a dull thud with a short metallic ring on
+   * top -- pipe is a tube, so the knock rings a little before the water
+   * damps it. Unevenly spaced because a knock on a metronome is a machine.
+   */
+  pipeKnock() {
+    const hits = 2 + Math.floor(Math.random() * 2);
+    let at = 0;
+    for (let i = 0; i < hits; i++) {
+      blip({ freq: 128 - i * 9, to: 58, dur: 0.1, type: 'sine', gain: 0.075, delay: at });
+      blip({ freq: 940 + Math.random() * 220, to: 620, dur: 0.06, type: 'triangle',
+             gain: 0.022, delay: at + 0.004 });
+      at += 0.16 + Math.random() * 0.2;
+    }
+  },
+
+  /**
+   * A plane, high up and a long way off. Almost all of this is below where
+   * the music sits: a wide noise band rolled off hard, swelling in and out
+   * over several seconds. If you notice it as a sound rather than as the
+   * sky, it is too loud.
+   */
+  planeDrone(seconds = 7) {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const src = noise(c);
+    const lp = c.createBiquadFilter();
+    const env = c.createGain();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(180, t0);
+    lp.Q.setValueAtTime(0.6, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.05, t0 + seconds * 0.4);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + seconds);
+    src.connect(lp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + seconds + 0.05);
+  },
+
+  /** A gust finding the gap under the sash: softer and lower than a leaf. */
+  gust() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const dur = 1.9;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(520, t0);
+    bp.frequency.linearRampToValueAtTime(950, t0 + dur * 0.45);
+    bp.frequency.linearRampToValueAtTime(420, t0 + dur);
+    bp.Q.setValueAtTime(0.7, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.026, t0 + 0.5);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
+
+  /**
    * A breaker tripping: a hard mechanical clack, then everything the room
    * was humming winding down at once. The wind-down is what sells it --
    * silence arriving is more convincing than a noise.

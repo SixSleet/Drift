@@ -19,10 +19,27 @@ import { sfx } from './sfx.js';
 import { music } from './music.js';
 import { roomState } from './room.js';
 
+// Two clocks, not one.
+//
+// The room used to run a single queue: one event at a time, sixteen to
+// forty-two seconds apart. On paper that is eight events in a five-minute
+// round. In practice almost no round lasts five minutes -- most are solved
+// or dead inside ninety seconds -- so what a player actually saw was two
+// events, sometimes one, and the room read as empty.
+//
+// So the interrupting events come faster, AND the ambient ones (a mote of
+// dust, a light in the sky, a knock in the pipes) run on their own clock
+// beside them. Those cost you nothing, cannot be missed and cannot pile up
+// on each other -- a kind already on screen is never picked twice -- so
+// running them in parallel makes the room continuously alive without
+// making it any harder to play.
 /** How long after the round goes live before the room can first interrupt. */
-const FIRST_GAP_MS = [9000, 26000];
+const FIRST_GAP_MS = [3500, 11000];
 /** Gap between one event ending and the next being scheduled. */
-const NEXT_GAP_MS = [16000, 42000];
+const NEXT_GAP_MS = [6000, 17000];
+/** The ambient clock: sooner, and closer together, because it costs nothing. */
+const AMBIENT_FIRST_GAP_MS = [1500, 6000];
+const AMBIENT_NEXT_GAP_MS = [4000, 13000];
 
 const layer = () => $('#room-3d-fx');
 
@@ -747,6 +764,185 @@ function fallingLeaf(done) {
   return () => { clearTimeout(timer); over = true; el.remove(); };
 }
 
+/* ── Dust in the lamplight ────────────────────────────────────────────────
+   Motes turning over in the cone under the shade. This is the quietest
+   thing in the file on purpose: no sound, nothing to click, no cost to you
+   at all. It exists because a room where SOMETHING is always moving reads
+   as lived in, and the events that cost you something cannot be frequent
+   enough to do that job on their own without becoming a nuisance.
+
+   It lives in the FLAT layer, at the lamp's projected screen coordinates,
+   not in the 3D one -- the same trick the moth uses to sit on a tile.
+   Nine elements animating a transform inside the room's preserve-3d
+   subtree cannot be composited: the browser has to re-rasterise the whole
+   room every frame for them, which is what the curtain taught us. In
+   #screen-fx they are plain 2D boxes that a compositor can promote and
+   leave alone. Nobody can tell that a 3px dot is not in perspective.
+
+   Worth being straight about what was and was not measured. On the test
+   machine (software rendering, no GPU) this costs about the same either
+   way -- there is no compositor there to do the promoting, so it cannot
+   show the win. What it does show is the bar: the firefly that already
+   ships costs nearly twice this, so nine motes are not the expensive thing
+   in this file. The flat layer is the right call for real hardware
+   regardless. */
+function dustMotes(done) {
+  const fx = $('#screen-fx');
+  const lamp = $('.lamp')?.getBoundingClientRect();
+  if (!fx || !lamp || lamp.width < 20) return done();
+
+  // The cone hangs below the shade. Everything below is in lamp-rig units
+  // (the prop is 360x500 in room space) scaled by however big it landed on
+  // screen, so the dust is the right size at any zoom.
+  const k = lamp.width / 360;
+  const el = document.createElement('i');
+  el.className = 'dust-rig';
+  el.style.left = `${Math.round(lamp.left + lamp.width / 2)}px`;
+  el.style.top = `${Math.round(lamp.top + lamp.height * 0.55)}px`;
+  for (let i = 0; i < 9; i++) {
+    const m = document.createElement('i');
+    m.className = 'dust-mote';
+    m.style.setProperty('--dx', `${Math.round((-70 + Math.random() * 140) * k)}px`);
+    m.style.setProperty('--dy', `${Math.round((-40 + Math.random() * 150) * k)}px`);
+    m.style.setProperty('--drift', `${Math.round((Math.random() < 0.5 ? -1 : 1) * (14 + Math.random() * 34) * k)}px`);
+    m.style.setProperty('--rise', `${Math.round(70 * k)}px`);
+    m.style.setProperty('--dur', `${7 + Math.random() * 7}s`);
+    m.style.setProperty('--delay', `${-Math.random() * 8}s`);
+    m.style.setProperty('--size', `${(2 + Math.random() * 2.6) * Math.max(0.6, k)}px`);
+    el.appendChild(m);
+  }
+  fx.appendChild(el);
+
+  let gone = null;
+  const fade = () => {
+    if (gone) return;
+    clearTimeout(life);
+    clearInterval(watch);
+    el.classList.add('is-gone');
+    gone = setTimeout(() => { el.remove(); done(); }, 1200);
+  };
+  const life = setTimeout(fade, 13000);
+  // The motes are made of lamplight. If the player reaches over and pulls
+  // the switch while they are drifting, they have to go with it -- dust
+  // still turning over in a dark room is the room arguing with them.
+  const watch = setInterval(() => { if (!roomState.lampOn) fade(); }, 1000);
+  return () => {
+    clearTimeout(life); clearInterval(watch); clearTimeout(gone);
+    el.remove();
+  };
+}
+
+/* ── A plane going over ───────────────────────────────────────────────────
+   A light crossing the sky in the window, blinking, taking its time, with a
+   drone so far under the music you register it as weather. It lives inside
+   the .window prop rather than in the fx layer, because the window is a
+   hole in the back wall and anything in the sky has to be behind the glass
+   and clipped by the frame -- put it in the fx layer and it flies across
+   the wall. */
+function planeLight(done) {
+  const sky = document.querySelector('.window .window-sky');
+  if (!sky) return done();
+  const el = document.createElement('i');
+  el.className = 'plane-rig';
+  el.style.setProperty('--dir', Math.random() < 0.5 ? 1 : -1);
+  el.style.setProperty('--alt', `${12 + Math.random() * 34}%`);
+  sky.parentElement.insertBefore(el, sky.nextSibling);
+  sfx.planeDrone(9);
+  const t = setTimeout(() => { el.remove(); done(); }, 9200);
+  return () => { clearTimeout(t); el.remove(); };
+}
+
+/* ── The heating ──────────────────────────────────────────────────────────
+   Pipes knocking behind the wall. There is nothing to see -- that is the
+   event: a room makes noises with no visible cause, and one that only ever
+   makes a sound when something is on screen to explain it is a stage set.
+   The faint shudder is there so it does not read as a stray sound effect
+   from the game itself. Works flat, since it is barely visual. */
+function pipes(done) {
+  const room = $('#room-scene');
+  sfx.pipeKnock();
+  room?.classList.add('is-knocking');
+  const t = setTimeout(() => { room?.classList.remove('is-knocking'); done(); }, 1400);
+  return () => { clearTimeout(t); room?.classList.remove('is-knocking'); };
+}
+
+/* ── A gust at the window ─────────────────────────────────────────────────
+   Only when the window is actually open: air cannot come through a closed
+   sash, and firing this against the player's own switch would be the room
+   contradicting them. The curtain gets the same breathe animation the
+   opening gust uses -- retriggered by removing and re-adding the class,
+   because restarting a CSS animation needs a reflow between the two. */
+function curtainBreeze(done) {
+  const win = document.querySelector('.window');
+  if (!win || !roomState.windowOpen) return done();
+  win.classList.remove('is-gusting');
+  void win.offsetWidth;              // forces the restart; do not remove
+  win.classList.add('is-gusting');
+  sfx.gust();
+  const t = setTimeout(() => { win.classList.remove('is-gusting'); done(); }, 5200);
+  return () => { clearTimeout(t); win.classList.remove('is-gusting'); };
+}
+
+/* ── A note off the pinboard ──────────────────────────────────────────────
+   One of the notes gives up on its pin and drops behind the desk. It does
+   not come back this round, which is the small thing that makes it worth
+   having: most of these events undo themselves, and one that leaves the
+   room slightly different is a room rather than a loop. (The next round
+   restores it -- see the reset in stop().) */
+function pinNote(done) {
+  const notes = [...document.querySelectorAll('.pin-note:not(.is-fallen)')];
+  if (!notes.length) return done();
+  const el = notes[Math.floor(Math.random() * notes.length)];
+  el.style.setProperty('--fall-spin', `${(Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 50)}deg`);
+  el.classList.add('is-fallen');
+  sfx.paperGlide();
+  const t = setTimeout(done, 2400);
+  // Cancel puts it back. Cancel only ever runs at the end of the round,
+  // which is exactly when the board is meant to reset anyway -- and an
+  // event that cannot undo itself is the one thing every other event here
+  // promises it can.
+  return () => { clearTimeout(t); el.classList.remove('is-fallen'); };
+}
+
+/* ── A paw over the desk edge ─────────────────────────────────────────────
+   The cat, without the cat: a single paw comes up over the front edge of
+   the desk and bats at nothing twice before dropping back down. Costs you
+   the corner of the screen for a couple of seconds rather than the middle
+   of it, which is why it can be common where the cat has to be rare.
+   Camera-relative like the cat, so it survives the flat layout. */
+function pawSwipe(done) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'paw-rig';
+  el.setAttribute('aria-label', 'Shoo the paw off the desk');
+  el.style.setProperty('--dir', Math.random() < 0.5 ? 1 : -1);
+  el.innerHTML = `
+    <svg viewBox="0 0 120 150" aria-hidden="true">
+      <path class="paw-leg" d="M40 150 L40 62 C 40 40, 80 40, 80 62 L80 150 Z"/>
+      <ellipse class="paw-pad" cx="60" cy="52" rx="40" ry="34"/>
+      <ellipse class="paw-toe" cx="26" cy="30" rx="14" ry="16"/>
+      <ellipse class="paw-toe" cx="52" cy="18" rx="15" ry="17"/>
+      <ellipse class="paw-toe" cx="80" cy="20" rx="15" ry="17"/>
+      <ellipse class="paw-toe" cx="102" cy="36" rx="13" ry="15"/>
+    </svg>`;
+  layer().appendChild(el);
+  sfx.catChirp();
+
+  let over = false;
+  const finish = (shooed) => {
+    if (over) return;
+    over = true;
+    clearTimeout(timer);
+    if (shooed) sfx.catShoo();
+    el.classList.add('is-gone');
+    el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
+    setTimeout(() => { if (el.isConnected) { el.remove(); done(); } }, 700);
+  };
+  const timer = setTimeout(() => finish(false), 4200);
+  el.addEventListener('click', () => finish(true));
+  return () => { clearTimeout(timer); over = true; el.remove(); };
+}
+
 // Weights, not equal odds: the cat is the headline act, ambience is filler.
 //
 // `flat` marks the ones that still work when the room is not being drawn --
@@ -765,23 +961,34 @@ function fallingLeaf(done) {
 // skirting board. With no lamp, window, wall or skirting board on screen
 // they play out somewhere off the side of a phone, so they are left to the
 // desktop rather than fired invisibly.
+//
+// `ambient` marks the ones the second clock is allowed to draw from: no
+// click to make, nothing covered, nothing taken away. Everything ambient is
+// still in the main pool too -- the two clocks share the table, they just
+// weight it differently.
 const KINDS = [
-  { run: cat,          weight: 24, flat: true },
-  { run: moth,         weight: 15, needsLamp: true },
-  { run: phone,        weight: 13 },
-  { run: paperPlane,   weight: 12 },
-  { run: lampFlicker,  weight: 14, flat: true, needsLamp: true },
-  { run: neighbour,    weight: 11, flat: true },
-  { run: spider,       weight: 11 },
-  { run: bird,         weight: 10 },
-  { run: storm,        weight: 10, flat: true },
-  { run: fieldMouse,   weight: 10 },
-  { run: fallingLeaf,  weight: 9 },
-  { run: frameTilt,    weight: 9 },
-  { run: firefly,      weight: 8 },
-  { run: headlights,   weight: 8, flat: true },
+  { key: 'cat',        run: cat,          weight: 22, flat: true },
+  { key: 'moth',       run: moth,         weight: 14, needsLamp: true },
+  { key: 'phone',      run: phone,        weight: 12 },
+  { key: 'paperPlane', run: paperPlane,   weight: 11 },
+  { key: 'lampFlicker',run: lampFlicker,  weight: 13, flat: true, needsLamp: true },
+  { key: 'pawSwipe',   run: pawSwipe,     weight: 13, flat: true },
+  { key: 'neighbour',  run: neighbour,    weight: 10, flat: true, heavy: true },
+  { key: 'spider',     run: spider,       weight: 10 },
+  { key: 'bird',       run: bird,         weight: 10, ambient: true },
+  { key: 'storm',      run: storm,        weight: 9,  flat: true, heavy: true },
+  { key: 'fieldMouse', run: fieldMouse,   weight: 10 },
+  { key: 'fallingLeaf',run: fallingLeaf,  weight: 9 },
+  { key: 'frameTilt',  run: frameTilt,    weight: 8,  ambient: true },
+  { key: 'firefly',    run: firefly,      weight: 8,  ambient: true },
+  { key: 'headlights', run: headlights,   weight: 9,  flat: true, ambient: true, heavy: true },
+  { key: 'dustMotes',  run: dustMotes,    weight: 12, needsLamp: true, ambient: true },
+  { key: 'pipes',      run: pipes,        weight: 10, flat: true, ambient: true },
+  { key: 'planeLight', run: planeLight,   weight: 9,  ambient: true },
+  { key: 'pinNote',    run: pinNote,      weight: 7,  ambient: true },
+  { key: 'curtainBreeze', run: curtainBreeze, weight: 9, ambient: true, needsWindow: true },
   // The most intrusive one in here, so the rarest.
-  { run: powerCut,     weight: 6, flat: true },
+  { key: 'powerCut',   run: powerCut,     weight: 5,  flat: true, heavy: true },
 ];
 
 /**
@@ -789,25 +996,32 @@ const KINDS = [
  * window can be dragged across the breakpoint mid-match, and the answer
  * should follow the layout rather than whatever it was at boot.
  */
-function pool() {
+function pool({ ambientOnly = false, exclude = null } = {}) {
   const flatOnly = getComputedStyle(document.getElementById('room-scene')).perspective === 'none';
   let kinds = flatOnly ? KINDS.filter((k) => k.flat) : KINDS;
   // A lamp the player has switched off has nothing to flicker, and a moth
   // has nothing to circle. Firing either would either do nothing visible or
   // -- worse -- flick the lamp back on behind the player's own decision.
+  // Same for a gust through a sash the player has shut.
   if (!roomState.lampOn) kinds = kinds.filter((k) => !k.needsLamp);
+  if (!roomState.windowOpen) kinds = kinds.filter((k) => !k.needsWindow);
+  if (ambientOnly) kinds = kinds.filter((k) => k.ambient);
+  // Two of the same thing at once is not a busier room, it is a bug: one
+  // frame cannot be crooked twice and two dust rigs are just dimmer dust.
+  if (exclude?.size) kinds = kinds.filter((k) => !exclude.has(k.key));
   return kinds;
 }
 
-function pick() {
-  const kinds = pool();
+function pick(opts) {
+  const kinds = pool(opts);
+  if (!kinds.length) return null;
   const total = kinds.reduce((n, k) => n + k.weight, 0);
   let r = Math.random() * total;
   for (const k of kinds) {
     r -= k.weight;
-    if (r <= 0) return k.run;
+    if (r <= 0) return k;
   }
-  return kinds[0].run;
+  return kinds[0];
 }
 
 const between = ([lo, hi]) => lo + Math.random() * (hi - lo);
@@ -819,7 +1033,10 @@ export const __events = {
   cat, moth, phone, paperPlane, spider, bird,
   lampFlicker, neighbour, storm, powerCut,
   fieldMouse, fallingLeaf, frameTilt, firefly, headlights,
+  dustMotes, pipes, planeLight, pinNote, curtainBreeze, pawSwipe,
 };
+/** The weight table, so a test can check the pools without re-declaring it. */
+export const __kinds = KINDS;
 /** The blackout is reached through the storm, so the tests need it directly. */
 export const __power = { cutPower, jumpscare, restorePower, BLACKOUT_GRACE_MS };
 
@@ -830,34 +1047,69 @@ export const __power = { cutPower, jumpscare, restorePower, BLACKOUT_GRACE_MS };
  */
 export function startRoomEvents() {
   let stopped = false;
-  let timer = null;
-  let running = false;
-  let cancelActive = null;
+  const timers = new Set();
+  // key -> cancel, for everything on screen right now. Doubles as the
+  // exclusion set the pickers use, so nothing is ever running twice.
+  const active = new Map();
 
-  const schedule = (gap) => {
+  /**
+   * One clock. `ambientOnly` is the difference between the two: the main
+   * clock draws from the whole table, the ambient one only from the events
+   * that cost the player nothing, so at most one demanding thing is ever
+   * in front of you even though the room is busier than it was.
+   */
+  const loop = (gap, ambientOnly) => {
     if (stopped) return;
-    timer = setTimeout(() => {
-      if (stopped || running) return;
-      running = true;
-      cancelActive = pick()(() => {
-        running = false;
-        cancelActive = null;
-        schedule(between(NEXT_GAP_MS));
-      }) || null;
+    const timer = setTimeout(() => {
+      timers.delete(timer);
+      if (stopped) return;
+      const next = () => loop(between(ambientOnly ? AMBIENT_NEXT_GAP_MS : NEXT_GAP_MS), ambientOnly);
+      // The main clock still waits its turn behind a demanding event -- a
+      // cat and a power cut at once is not atmosphere, it is chaos. Ambient
+      // events do not count toward that, so the room keeps moving under it.
+      const live = [...active.keys()].map((k) => KINDS.find((x) => x.key === k)).filter(Boolean);
+      const busy = live.some((k) => !k.ambient);
+      // And the ambient clock sits out anything that washes the whole
+      // screen. Two clocks doubles the worst case for how much is animating
+      // at once, and a mote of dust drifting over a lightning strike is
+      // both invisible and the one moment it could actually cost a frame.
+      const heavy = live.some((k) => k.heavy);
+      const blocked = ambientOnly ? heavy : busy;
+      const kind = blocked ? null : pick({ ambientOnly, exclude: new Set(active.keys()) });
+      if (!kind) return next();
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        active.delete(kind.key);
+        next();
+      };
+      // Set the slot before running: an event that finishes synchronously
+      // (a guard clause bailing out) would otherwise delete a slot that was
+      // never taken, and then never be excluded again.
+      active.set(kind.key, () => {});
+      const cancel = kind.run(finish);
+      if (settled) return;                       // it bailed out immediately
+      active.set(kind.key, cancel || (() => {}));
     }, gap);
+    timers.add(timer);
   };
 
-  schedule(between(FIRST_GAP_MS));
+  loop(between(FIRST_GAP_MS), false);
+  loop(between(AMBIENT_FIRST_GAP_MS), true);
 
   return function stop() {
     stopped = true;
-    clearTimeout(timer);
-    if (cancelActive) { cancelActive(); cancelActive = null; }
+    for (const t of timers) clearTimeout(t);
+    timers.clear();
+    for (const cancel of active.values()) { try { cancel(); } catch { /* already gone */ } }
+    active.clear();
     const l = layer();
     if (l) l.innerHTML = '';
     const room = $('#room-scene');
     if (room) room.classList.remove('is-flickering', 'is-storm', 'is-lightning',
-                                    'is-neighbour', 'is-powercut', 'is-headlights');
+                                    'is-neighbour', 'is-powercut', 'is-headlights',
+                                    'is-knocking');
     $('#app-overlay')?.classList.remove('is-powercut');
     // Any event that took the music has to hand it back, even if the round
     // ended mid-storm -- otherwise the standings play thunder.
@@ -866,6 +1118,14 @@ export function startRoomEvents() {
     // frame-a/frame-b live outside #room-3d-fx (they're back-wall props), so
     // clearing that layer below does not reach a crooked one.
     document.querySelectorAll('.frame.is-crooked').forEach((f) => f.classList.remove('is-crooked'));
+    // Same story for the props the new ambient events touch: they live in
+    // the room's own markup, not in the fx layer, so clearing that layer
+    // does not reach them. The pinboard gets its note back for the next
+    // round -- the room resets between rounds even though it does not
+    // within one.
+    document.querySelectorAll('.pin-note.is-fallen').forEach((n) => n.classList.remove('is-fallen'));
+    document.querySelector('.window')?.classList.remove('is-gusting');
+    document.querySelectorAll('.plane-rig').forEach((n) => n.remove());
     // A round that ends mid-blackout must not leave the next one in the
     // dark, and must certainly not leave a bat on screen.
     restorePower();

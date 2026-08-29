@@ -3375,6 +3375,141 @@ html, body {
   to { opacity: 0; transform: translate(-50%, -50%) translateY(200px) translateZ(-1250px) translateX(820px) scale(.4) rotate(180deg); }
 }
 
+/* ── Dust in the lamplight ─────────────────────────────────────────────
+   In the flat #screen-fx layer, positioned at the lamp's projected
+   coordinates by the JS -- see the note in room-events.js for why these
+   are deliberately NOT in the room's 3D subtree. `will-change` is doing
+   real work here rather than being sprinkled on: nine small boxes each get
+   their own compositor layer and the main thread stops repainting for
+   them. The negative animation-delay means they are already mid-drift when
+   they appear rather than all starting together. */
+.dust-rig {
+  position: absolute;
+  width: 0; height: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity .9s linear;
+}
+.dust-rig.is-gone { opacity: 0; }
+.dust-mote {
+  position: absolute; left: 0; top: 0;
+  width: var(--size); height: var(--size); border-radius: 50%;
+  background: rgba(255, 236, 200, .85);
+  box-shadow: 0 0 5px 1px rgba(255, 224, 170, .4);
+  will-change: transform, opacity;
+  animation: dust-turn var(--dur) linear var(--delay) infinite;
+}
+@keyframes dust-turn {
+  0%   { transform: translate3d(var(--dx), calc(var(--dy) + var(--rise)), 0); opacity: 0; }
+  18%  { opacity: .75; }
+  82%  { opacity: .55; }
+  100% { transform: translate3d(calc(var(--dx) + var(--drift)), calc(var(--dy) - var(--rise)), 0); opacity: 0; }
+}
+
+/* ── A plane going over ────────────────────────────────────────────────
+   Lives inside the window, so the frame clips it: a light that crosses the
+   wall as well as the sky is a light in the room. The blink is a second
+   animation on the ::before so it is independent of the crossing -- a
+   navigation light does not blink in step with how fast the plane is
+   travelling. */
+.plane-rig {
+  position: absolute; left: 0; top: var(--alt);
+  width: 5px; height: 5px; border-radius: 50%;
+  pointer-events: none;
+  background: #ffe9c4;
+  box-shadow: 0 0 7px 2px rgba(255, 210, 150, .7);
+  animation: plane-cross 9s linear forwards;
+}
+.plane-rig::before {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: 50%;
+  background: #ff8f7a;
+  box-shadow: 0 0 9px 3px rgba(255, 110, 90, .75);
+  animation: plane-blink 1.6s steps(1, end) infinite;
+}
+/* Centre of the window's content box, plus or minus a bit more than half
+   its width -- so --dir: -1 starts at the right edge and flies left rather
+   than starting at the left edge and flying straight out of frame. */
+@keyframes plane-cross {
+  0%   { transform: translateX(calc(223px - var(--dir) * 263px)); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateX(calc(223px + var(--dir) * 263px)); opacity: 0; }
+}
+@keyframes plane-blink { 0%, 12% { opacity: .9; } 13%, 100% { opacity: 0; } }
+
+/* ── The heating ───────────────────────────────────────────────────────
+   Nothing to draw. The clock is the one thing on the back wall light
+   enough to answer a knock through it, so it is the only thing that
+   moves -- three small nudges and done. Rotating one 60px prop, not the
+   room: a transform on the scene itself would re-rasterise the whole 3D
+   subtree three times over, which is what the curtain taught us. */
+.room.is-knocking .wall-clock { animation: pipe-knock .42s ease-out 3; }
+@keyframes pipe-knock {
+  0%, 100% { transform: rotate(0deg); }
+  22%      { transform: rotate(.9deg); }
+  58%      { transform: rotate(-.6deg); }
+}
+
+/* ── A gust at the window ──────────────────────────────────────────────
+   The same curtain, moved harder and for less time than the one you get
+   for opening the sash. After .room.is-window-open's rule on purpose:
+   both are one class and one element deep, so source order is what
+   decides which animation the curtain ends up running. */
+.window.is-gusting::before {
+  animation: curtain-gust 1.3s ease-in-out 2;
+  transform-origin: 100% 0;
+}
+@keyframes curtain-gust {
+  0%, 100% { transform: skewX(0deg) scaleX(1); }
+  35%      { transform: skewX(-3.6deg) scaleX(1.08); }
+  72%      { transform: skewX(1.4deg) scaleX(.97); }
+}
+
+/* ── A note off the pinboard ───────────────────────────────────────────
+   Peels, drops behind the desk, and stays gone for the rest of the round
+   (`forwards`). The next round puts it back -- see stop() in
+   room-events.js. */
+.pin-note.is-fallen { animation: pin-fall 1.5s cubic-bezier(.5, 0, .9, .6) forwards; }
+@keyframes pin-fall {
+  0%   { transform: rotate(0deg) translateY(0); opacity: 1; }
+  12%  { transform: rotate(calc(var(--fall-spin) * .12)) translateY(-6px); }
+  100% { transform: rotate(var(--fall-spin)) translateY(420px); opacity: 0; }
+}
+
+/* ── A paw over the desk edge ──────────────────────────────────────────
+   Comes up from below the front edge of the desk, bats twice, drops. The
+   whole rig is at z = -640, nearer the camera than the monitor, so it
+   passes in front of the corner of the screen rather than behind it --
+   the same reason the cat sits at -700. */
+.paw-rig {
+  position: absolute; left: 50%; top: 50%;
+  width: 120px; height: 150px;
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: paw-up 4.2s cubic-bezier(.3, .7, .4, 1) forwards;
+}
+@keyframes paw-up {
+  0%   { transform: translate(-50%, -50%) translateY(560px) translateZ(-640px) translateX(calc(var(--dir) * 520px)) rotate(0deg); opacity: 0; }
+  10%  { transform: translate(-50%, -50%) translateY(318px) translateZ(-640px) translateX(calc(var(--dir) * 520px)) rotate(0deg); opacity: 1; }
+  26%  { transform: translate(-50%, -50%) translateY(298px) translateZ(-640px) translateX(calc(var(--dir) * 490px)) rotate(calc(var(--dir) * -14deg)); }
+  40%  { transform: translate(-50%, -50%) translateY(322px) translateZ(-640px) translateX(calc(var(--dir) * 530px)) rotate(calc(var(--dir) * 6deg)); }
+  56%  { transform: translate(-50%, -50%) translateY(294px) translateZ(-640px) translateX(calc(var(--dir) * 486px)) rotate(calc(var(--dir) * -16deg)); }
+  74%  { transform: translate(-50%, -50%) translateY(324px) translateZ(-640px) translateX(calc(var(--dir) * 524px)) rotate(calc(var(--dir) * 4deg)); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translateY(560px) translateZ(-640px) translateX(calc(var(--dir) * 520px)) rotate(0deg); opacity: 0; }
+}
+.paw-rig.is-gone { animation: paw-drop .5s cubic-bezier(.4, 0, .9, .5) forwards; }
+@keyframes paw-drop {
+  to { transform: translate(-50%, -50%) translateY(580px) translateZ(-640px) translateX(calc(var(--dir) * 520px)); opacity: 0; }
+}
+.paw-rig svg { width: 100%; height: 100%; display: block; overflow: visible;
+  filter: drop-shadow(0 -4px 10px rgba(0, 0, 0, .5)); }
+.paw-leg { fill: #4a3a29; }
+.paw-pad { fill: #5b4732; }
+.paw-toe { fill: #6b5540; }
+
 /* The way into the minigames. It was a small underlined link under two big
    buttons, which is where you put something you do not expect anyone to
    click -- and nobody did. It is a real action, so it looks like one: full
