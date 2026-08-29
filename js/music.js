@@ -31,6 +31,20 @@
 // Plus swing, which on its own is most of the difference between the Solo
 // bed and the Co-op one.
 //
+// ── ...and what was still wrong after that ───────────────────────────────
+//
+// All of the above still described ONE LOOP. Patterns repeat on
+// `n % length` and chords on `bar % chords.length`, so a theme was two to
+// four bars long and then played those same bars for the rest of the round.
+// At 84bpm the Solo bed came back around every 5.7 seconds; a five-minute
+// round played it fifty times. Better instruments do not fix that -- they
+// just make a more interesting thing repeat.
+//
+// So a theme can now have `sections`: a running order rather than a loop.
+// See the block above scheduleStep. Solo went from 2 bars to 24 before
+// anything repeats, and inside those it opens on pad and bass alone, brings
+// the tune in, lifts, drops the lead for a break and thins out again.
+//
 // ── Patterns ─────────────────────────────────────────────────────────────
 //
 // Drums are strings, one character per 16th note: `x` a hit, `X` an accent,
@@ -112,7 +126,18 @@ const THEMES = {
       pattern: [4, H, H, H, _, _, 2, H, H, _, _, _, 0, H, H, H,
                 _, _, _, _, 7, H, H, H, _, _, 4, H, H, _, _, _] },
     arp: { gain: 0.024, every: 4, span: 5, jitter: 0.4, cutoff: 2200 },
+    counter: { gain: 0.02, wave: 'triangle', cutoff: 1600, octave: 0, legato: 2.2,
+      pattern: [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+                7, H, H, H, H, H, H, H, _, _, _, _, _, _, _, _] },
     drums: null,
+    // It opens on the pad alone, which is what a title screen wants; the
+    // tune arrives once you have had a moment to look at it.
+    sections: [
+      { bars: 2, mute: ['lead', 'counter', 'arp'] },
+      { bars: 6, mute: ['counter'] },
+      { bars: 8 },
+      { bars: 4, mute: ['lead'] },
+    ],
   },
 
   // Waiting for people. The title's key, given a pulse and a walking bass:
@@ -126,8 +151,20 @@ const THEMES = {
     lead: { gain: 0.03, wave: 'triangle', cutoff: 2600, octave: 1,
       pattern: [_, _, 0, _, 2, _, _, 4, H, _, _, 2, _, _, _, _,
                 _, _, 4, _, 5, _, _, 7, H, H, _, _, 4, _, 2, _] },
+    counter: { gain: 0.02, wave: 'sine', bell: true, cutoff: 3600, octave: 2,
+      pattern: [_, _, _, _, _, _, _, _, 7, H, H, _, _, _, _, _,
+                _, _, _, _, _, _, _, _, _, _, _, _, 4, H, H, _,
+                _, _, _, _, 9, H, _, _, _, _, _, _, _, _, _, _] },
     drums: { gain: 0.02, kick: 'x.......x.......', hat: '..x...x...x...x.',
              rim: '....x.......x...' },
+    sections: [
+      { bars: 4, mute: ['drums', 'counter'] },
+      { bars: 8, mute: ['counter'] },
+      { bars: 8 },
+      { bars: 4, mute: ['lead'],
+        drums: { gain: 0.022, kick: 'x...x...x...x...', shaker: '..x...x...x...x.',
+                 rim: '....x.......x...' } },
+    ],
   },
 
   // ── Under live play ────────────────────────────────────────────────────
@@ -143,9 +180,30 @@ const THEMES = {
     bpm: 84, root: -21, scale: 'penta', chords: [0, 2, 3, 4],
     pad: { gain: 0.05, cutoff: 900, wave: 'triangle' },
     bass: { gain: 0.05, wave: 'sine', cutoff: 420, octave: -1, legato: 1.4,
-      pattern: [0, _, _, _, _, _, _, _, 0, _, _, _, _, _, _, _] },
-    lead: null,
-    drums: { gain: 0.012, kick: 'x...............', hat: '........x.......' },
+      pattern: [0, _, _, _, _, _, _, _, 0, _, _, _, _, _, 4, _,
+                0, _, _, _, _, _, _, _, 2, _, _, _, _, _, _, _] },
+    // Sparse on purpose: this plays while somebody is trying to think.
+    lead: { gain: 0.026, wave: 'sine', bell: true, cutoff: 3000, octave: 1,
+      pattern: [_, _, _, _, 4, H, H, _, _, _, _, _, _, _, _, _,
+                _, _, 2, H, H, _, _, _, _, _, _, _, 0, H, H, _] },
+    counter: { gain: 0.018, wave: 'triangle', cutoff: 1800, octave: 1, legato: 1.6,
+      pattern: [_, _, _, _, _, _, _, _, _, _, 7, H, H, H, _, _,
+                _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+                _, _, _, _, _, _, 5, H, H, _, _, _, _, _, _, _] },
+    drums: { gain: 0.012, kick: 'x...............', hat: '........x.......',
+             shaker: '..x...x...x...x.' },
+    // Twenty-four bars before anything repeats, and the shape of it is a
+    // round: settle, work, a lift when it has gone on a while, then back
+    // down. A two-bar loop under a five-minute round is a metronome.
+    sections: [
+      { bars: 4,  mute: ['lead', 'counter', 'drums'] },
+      { bars: 6,  mute: ['counter'] },
+      { bars: 6 },
+      { bars: 4,  mute: ['lead'],
+        drums: { gain: 0.014, kick: 'x.......x.......', hat: '..x...x...x...x.',
+                 shaker: 'x.x.x.x.x.x.x.x.' } },
+      { bars: 4,  mute: ['drums', 'counter'] },
+    ],
   },
 
   // PvP. Someone else is racing you through the same word right now.
@@ -169,8 +227,25 @@ const THEMES = {
     lead: { gain: 0.032, wave: 'sawtooth', cutoff: 2100, q: 7, sweep: 4, spread: 11, octave: 1,
       pattern: [7, H, _, 4, _, 7, _, 9, 11, H, H, _, 9, _, 7, _,
                 4, H, _, 7, _, 4, _, 2, 0, H, H, _, 2, 4, _, _] },
+    // A stab answering the lead across the bar line.
+    counter: { gain: 0.024, wave: 'square', cutoff: 1400, q: 5, sweep: 2, octave: 0,
+      pattern: [_, _, _, _, _, _, _, _, _, _, _, _, 0, 0, _, _,
+                _, _, _, _, _, _, _, _, _, _, _, _, 5, _, 5, _] },
     drums: { gain: 0.028, kick: 'x...x...x...x...', snare: '....X.......X...',
              hat: '..x...x...x...x.', open: '..............x.' },
+    // Eight bars of build, eight of everything, then four where the kick
+    // drops out and only the hats carry it -- which is what makes the kick
+    // coming back land. A duel that is flat out from the first bar has
+    // nowhere left to go by the third round.
+    sections: [
+      { bars: 4, mute: ['lead', 'counter'],
+        drums: { gain: 0.024, kick: 'x...x...x...x...', hat: '..x...x...x...x.' } },
+      { bars: 8, mute: ['counter'] },
+      { bars: 8 },
+      { bars: 4, mute: ['pad'],
+        drums: { gain: 0.03, snare: '....X.......X..X', hat: 'x.x.x.x.x.x.x.x.',
+                 ride: '....x.......x...' } },
+    ],
   },
 
   // Co-op. Nobody is racing anybody -- you are all looking at one board --
@@ -196,8 +271,25 @@ const THEMES = {
     lead: { gain: 0.03, wave: 'sine', bell: true, cutoff: 3200, octave: 1,
       pattern: [_, _, 4, _, 5, _, 7, H, _, 4, _, 2, _, _, _, _,
                 _, _, 7, _, 9, _, 7, H, _, 5, _, 4, 2, _, _, _] },
+    counter: { gain: 0.02, wave: 'triangle', cutoff: 1500, octave: 0, legato: 1.5,
+      pattern: [_, _, _, _, _, _, _, _, 5, H, H, _, _, _, _, _,
+                _, _, _, _, 2, H, H, _, _, _, _, _, _, _, _, _,
+                _, _, 7, H, H, H, _, _, _, _, _, _, _, _, _, _,
+                _, _, _, _, _, _, _, _, _, _, 4, H, H, _, _, _] },
     drums: { gain: 0.016, kick: 'x.....x.x.......', rim: '....x.......x...',
              hat: '..x...x...x...x.', open: '..............x.' },
+    // The counter line is 48 steps against the lead's 32, so the two only
+    // line up every three bars -- which is most of why this one keeps
+    // sounding like it is going somewhere.
+    sections: [
+      { bars: 4,  mute: ['lead', 'counter', 'drums'] },
+      { bars: 8,  mute: ['counter'] },
+      { bars: 8 },
+      { bars: 4,  mute: ['lead'],
+        drums: { gain: 0.018, kick: 'x.......x.......', shaker: '..x...x...x...x.',
+                 rim: '....x.......x...', tom: '..............x.' } },
+      { bars: 4,  mute: ['drums'] },
+    ],
   },
 
   // ── Round modifiers ────────────────────────────────────────────────────
@@ -589,14 +681,21 @@ function bell({ freq, at, dur, gain, cutoff }) {
 // Small, dry and mixed low. This is a bed under a word game, not a kit in a
 // room -- but it is a kit, which the single soft thump it replaced was not.
 
-function noiseHit({ at, gain, dur, filterType, freq, q = 1 }) {
+function noiseHit({ at, gain, dur, filterType, freq, q = 1, attack = 0 }) {
   const src = noiseSource();
   const f = ctx.createBiquadFilter();
   const env = ctx.createGain();
   f.type = filterType;
   f.frequency.setValueAtTime(freq, at);
   f.Q.setValueAtTime(q, at);
-  env.gain.setValueAtTime(gain, at);
+  // A shaker is the one percussion sound with no transient -- straight to
+  // full gain gives it a click on the front and turns it into a hat.
+  if (attack > 0) {
+    env.gain.setValueAtTime(0.0001, at);
+    env.gain.linearRampToValueAtTime(gain, at + attack);
+  } else {
+    env.gain.setValueAtTime(gain, at);
+  }
   env.gain.exponentialRampToValueAtTime(0.0001, at + dur);
   src.connect(f).connect(env).connect(out);
   src.start(at);
@@ -642,7 +741,33 @@ function clap(at, g) {
 const hat = (at, g) => noiseHit({ at, gain: g, dur: 0.028, filterType: 'highpass', freq: 7200 });
 const openHat = (at, g) => noiseHit({ at, gain: g * 0.85, dur: 0.18, filterType: 'highpass', freq: 6400 });
 
-const DRUM_VOICES = { kick, snare, rim, clap, hat, open: openHat };
+/** A shaker: noise with a fast, soft envelope -- no click at the front. */
+function shaker(at, g) {
+  noiseHit({ at, gain: g * 0.5, dur: 0.055, filterType: 'highpass', freq: 5200, attack: 0.008 });
+}
+
+/** A floor tom. Same trick as the kick, an octave up and slower. */
+function tom(at, g) {
+  const osc = ctx.createOscillator();
+  const env = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(210, at);
+  osc.frequency.exponentialRampToValueAtTime(96, at + 0.18);
+  env.gain.setValueAtTime(0.0001, at);
+  env.gain.exponentialRampToValueAtTime(g * 1.5, at + 0.006);
+  env.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+  osc.connect(env).connect(out);
+  osc.start(at);
+  osc.stop(at + 0.34);
+}
+
+/** A ride: a long, bright wash that a closed hat cannot give you. */
+function ride(at, g) {
+  noiseHit({ at, gain: g * 0.34, dur: 0.42, filterType: 'highpass', freq: 7200 });
+  noiseHit({ at, gain: g * 0.16, dur: 0.9, filterType: 'bandpass', freq: 4200 });
+}
+
+const DRUM_VOICES = { kick, snare, rim, clap, hat, open: openHat, shaker, tom, ride };
 
 // ── Patterns ─────────────────────────────────────────────────────────────
 
@@ -681,51 +806,118 @@ function playPattern(layer, { at, n, scale, chordRoot, stepSec }) {
   });
 }
 
+// ── Arrangement ──────────────────────────────────────────────────────────
+//
+// Without this a theme is one loop: the patterns repeat on `n % length` and
+// the chords on `bar % chords.length`, so after two bars you have heard
+// everything the piece will ever do. A four-minute round then plays that
+// same two bars sixty times.
+//
+// `sections` fixes it by making the theme a running order rather than a
+// loop. Each section says how many bars it lasts and what is playing during
+// them -- `mute` drops layers out, and naming a layer replaces it for those
+// bars only. Which is how arrangement actually works: the parts do not
+// change, what changes is which of them you can hear.
+//
+//   sections: [
+//     { bars: 4, mute: ['lead', 'drums'] },              // intro
+//     { bars: 8 },                                       // everything
+//     { bars: 4, mute: ['lead'], drums: { ...quieter } } // breakdown
+//   ]
+//
+// A theme with no `sections` behaves exactly as it did before.
+//
+// The lookup is memoised on the bar number: it runs once every sixteen
+// steps rather than on all of them, which matters because the scheduler is
+// on a 25ms timer and everything in here is on the main thread.
+let sectionCache = { theme: null, bar: -1, value: null };
+
+function sectionFor(bar) {
+  const list = theme.sections;
+  if (!list?.length) return null;
+  if (sectionCache.theme === theme && sectionCache.bar === bar) return sectionCache.value;
+
+  const total = list.reduce((sum, sec) => sum + sec.bars, 0);
+  let at = bar % total;
+  let found = list[list.length - 1];
+  for (const sec of list) {
+    if (at < sec.bars) { found = sec; break; }
+    at -= sec.bars;
+  }
+  sectionCache = { theme, bar, value: found };
+  return found;
+}
+
+/**
+ * The layer as this bar wants it: the theme's own, unless the section
+ * silences it or supplies a different one.
+ */
+function layerFor(name, section) {
+  const base = theme[name];
+  if (!section) return base;
+  if (section.mute?.includes(name)) return null;
+  const over = section[name];
+  if (!over) return base;
+  return base ? { ...base, ...over } : over;
+}
+
 /** Everything that happens on one 16th note. */
 function scheduleStep(n, at) {
   const scale = SCALES[theme.scale];
   const bar = Math.floor(n / STEPS_PER_BAR);
   const inBar = n % STEPS_PER_BAR;
+  const section = sectionFor(bar);
   const chordRoot = theme.chords[bar % theme.chords.length];
   const stepSec = stepDuration();
   const barSeconds = stepSec * STEPS_PER_BAR;
 
+  const pad = layerFor('pad', section);
+  const bass = layerFor('bass', section);
+  const lead = layerFor('lead', section);
+  const counter = layerFor('counter', section);
+  const arp = layerFor('arp', section);
+  const drums = layerFor('drums', section);
+
   // Pad: one sustained chord per bar, three voices a third apart.
-  if (theme.pad && inBar === 0) {
+  if (pad && inBar === 0) {
     for (const offset of [0, 2, 4]) {
       const semis = theme.root + degree(scale, chordRoot + offset);
       voice({
         freq: hz(semis), at, dur: barSeconds * 1.05,
-        type: theme.pad.wave ?? 'triangle',
-        gain: theme.pad.gain, cutoff: theme.pad.cutoff,
+        type: pad.wave ?? 'triangle',
+        gain: pad.gain, cutoff: pad.cutoff,
         attack: barSeconds * 0.3,
-        detune: theme.pad.detune ? (offset - 2) * theme.pad.detune : 0,
+        detune: pad.detune ? (offset - 2) * pad.detune : 0,
       });
     }
   }
 
-  if (theme.bass) playPattern(theme.bass, { at, n, scale, chordRoot, stepSec });
-  if (theme.lead) playPattern(theme.lead, { at, n, scale, chordRoot, stepSec });
+  if (bass) playPattern(bass, { at, n, scale, chordRoot, stepSec });
+  if (lead) playPattern(lead, { at, n, scale, chordRoot, stepSec });
+  // A second written line. The point of having one is that it can answer
+  // the lead rather than double it -- so it gets its own pattern, usually a
+  // different length, and the two drift in and out of phase.
+  if (counter) playPattern(counter, { at, n, scale, chordRoot, stepSec });
 
   // Arp: walks the chord with `jitter` of its notes nudged off the pattern,
   // so a long round never settles into something you can hum along to. Kept
   // for the two themes that want movement without a tune -- the title
   // screen's shimmer and the storm's chaos.
-  if (theme.arp && inBar % theme.arp.every === 0) {
-    const idx = Math.floor(n / theme.arp.every);
-    let d = chordRoot + (idx % theme.arp.span);
-    if (Math.random() < theme.arp.jitter) d += [2, 4, -2, 7][Math.floor(Math.random() * 4)];
+  if (arp && inBar % arp.every === 0) {
+    const idx = Math.floor(n / arp.every);
+    let d = chordRoot + (idx % arp.span);
+    if (Math.random() < arp.jitter) d += [2, 4, -2, 7][Math.floor(Math.random() * 4)];
     const semis = theme.root + 12 + degree(scale, d);
-    const g = theme.arp.gain * (0.65 + Math.random() * 0.35);
-    voice({ freq: hz(semis), at, dur: 0.45, type: 'triangle', gain: g, cutoff: theme.arp.cutoff, attack: 0.01 });
+    const g = arp.gain * (0.65 + Math.random() * 0.35);
+    voice({ freq: hz(semis), at, dur: 0.45, type: 'triangle', gain: g, cutoff: arp.cutoff, attack: 0.01 });
   }
 
   // Drums. Each part carries its own pattern, so they can disagree with each
   // other -- which is the only way a pattern ends up with any groove in it.
-  if (theme.drums) {
-    const g = theme.drums.gain;
+  if (drums) {
+    const g = drums.gain;
     for (const part of Object.keys(DRUM_VOICES)) {
-      const pat = theme.drums[part];
+      const pat = drums[part];
       if (!pat) continue;
       const c = pat[n % pat.length];
       if (c === 'x') DRUM_VOICES[part](at, g);

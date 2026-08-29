@@ -231,6 +231,32 @@ moment you leave the menu, so a lobby and a match sound like they should.
 Music and effects have **separate volume sliders**, under the ⚙ in the HUD or
 "Sound settings" on the title screen, and both are remembered.
 
+**The themes are arranged, not looped.** Each one is a running order: a
+number of bars with only the pad and bass, then the tune, then everything,
+then a break where the lead drops out and the drums change. Solo runs 24
+bars before anything repeats and Co-op 28 — and inside that the counter
+melody is written in 48 steps against the lead's 32, so the two only line up
+every third bar. Underneath there are written parts for bass, lead and a
+counter line, and nine drum voices (kick, snare, rim, clap, closed and open
+hats, shaker, tom, ride) each on their own pattern.
+
+## The room, and switching bits of it off
+
+The desk, the lamp, the window and everything on the shelf are CSS 3D — no
+images, no canvas. Two things in it answer to you rather than to a timer:
+
+**The lamp.** Click the shade to pull the switch. The whole room relights.
+What is left is the monitor, which is the only other light in here, so the
+room does not go black — it goes blue, which is what a room lit by a screen
+actually looks like.
+
+**The window.** Click it and the lower sash slides up. Night air comes in,
+the curtain moves in it, and you can hear outside.
+
+Both are remembered in your browser. The event scheduler knows about them
+too: a lamp you have switched off has nothing to flicker and no light for a
+moth to circle, so those events are taken out of the pool rather than firing
+invisibly and turning your lamp back on.
 ## Joining, renaming and leaving
 
 Create a room and share the four-character code, or the link — anyone
