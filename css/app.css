@@ -2021,6 +2021,15 @@ html, body {
 .ghost-bar i[data-tier="hit"] { background: var(--sage); border-color: var(--sage); }
 .ghost-bar i[data-tier="present"] { background: var(--gold); border-color: var(--gold); }
 
+/* Two to four rivals. Same dots, smaller, one row each -- a duel's bar is
+   the whole block, but four of those would be taller than the board. */
+.ghost-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ghost-row { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ghost-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-dim); }
+.ghost-row.is-solved .ghost-head { color: var(--sage); font-weight: 700; }
+.ghost-list .ghost-bar { gap: 4px; }
+.ghost-list .ghost-bar i { width: 10px; height: 10px; border-radius: 3px; }
+
 .board-wrap { display: flex; justify-content: center; flex: 0 1 auto; min-height: 0; }
 /* Tiles size themselves to fit the row count in whatever height the panel
    actually has. `--panel-h` is published by js/screen-fit.js (the overlay is
@@ -2647,6 +2656,10 @@ html, body {
   .guess-pips, .rail-sub { display: none; }
   .team-list { flex-direction: row; flex-wrap: wrap; gap: 4px 10px; }
   .team-row { padding: 2px 4px; }
+  /* Rivals side by side rather than stacked -- the rail is a strip here. */
+  .ghost-list { flex-direction: row; flex-wrap: wrap; gap: 6px 12px; }
+  .ghost-row { flex: 0 1 auto; }
+  .ghost-list .ghost-bar i { width: 9px; height: 9px; }
 
   .tile-grid { --tile: min(46px, calc((52dvh - (var(--rows) - 1) * 6px) / var(--rows))); }
   .ghost-bar i { width: 16px; height: 16px; }
@@ -2755,6 +2768,19 @@ html, body {
   .round-dots { flex-wrap: nowrap; }
   .ghost-bar { flex: 1 1 auto; min-width: 0; }
   .team-list { flex: 1 1 auto; min-width: 0; }
+  /* One rival keeps its dots (there is room for one bar). Four do not: four
+     stacked bars is four times the height of everything else in the strip,
+     so they keep the name and the count, which is what the dots were
+     counting anyway. */
+  .ghost-list { flex: 1 1 auto; min-width: 0; flex-direction: row; align-items: center; gap: 4px 10px; }
+  .ghost-row { flex-direction: row; align-items: center; gap: 6px; }
+  .ghost-row .ghost-bar { display: none; }
+  .ghost-head { gap: 5px; font-size: 12px; }
+  .ghost-head .team-count { margin-left: 0; }
+  /* "RIVAU…" is a worse label than a shorter rival name: the names are
+     already ellipsised, so let them absorb the squeeze rather than the one
+     word saying what the block is. */
+  .rail-ghosts .rail-label { flex: 0 0 auto; }
 
   .tile-grid {
     /* Whatever the keyboard and rails leave. Measured rather than guessed:

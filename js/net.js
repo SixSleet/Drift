@@ -123,11 +123,13 @@ export const api = {
  *           row-level-security-gated visibility rules. Kept content-free on
  *           purpose so it can be sent after *any* change (round transitions,
  *           a Co-op teammate's guess) without duplicating access logic here.
- *   ghost — PvP only, and never anything but an aggregate: {attempts, hits,
- *           present, solved} describing the SENDER's own progress. The
- *           receiver renders it as "my opponent's progress" (self:false means
- *           you never receive your own). No word, no per-letter feedback —
- *           an opponent can feel the pressure without ever seeing a letter.
+ *   ghost — PvP only, and never anything but an aggregate: {from, attempts,
+ *           hits, present, solved} describing the SENDER's own progress.
+ *           `from` is the sender's player id, which is what lets a room of
+ *           five keep five separate ghosts apart; it says WHO, never WHAT.
+ *           Everything else is still a count (self:false means you never
+ *           receive your own). No word, no per-letter feedback — a rival can
+ *           feel the pressure without ever seeing a letter.
  *
  * Broadcast rather than postgres_changes because a realtime replication
  * stream carries no request headers and so could not evaluate the row-level

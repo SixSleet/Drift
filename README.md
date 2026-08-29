@@ -1,8 +1,8 @@
 # Wordforge
 
 A browser word game for 1–10 players. Guess the hidden word before your
-guesses — or the clock — run out. Play alone, race a rival head to head, or
-share one board with your whole team.
+guesses — or the clock — run out. Play alone, race up to four rivals for the
+same word, or share one board with your whole team.
 
 **Play: <https://sixsleet.github.io/Drift/>**
 
@@ -45,11 +45,11 @@ revealed, unsolved.
 ## Modes
 
 - **Solo** — just you and the clock. Same rules and the same guess budget as
-  your half of a duel.
-- **PvP Duel** — you and a rival race the same word at the same time. You
-  only ever see your own board; a bar shows how many guesses your rival has
-  burned and nothing else. **First to solve it wins the round**, however many
-  guesses it took — so there is no reason to wait.
+  your seat in a live match.
+- **Versus** — up to five players race the same word at the same time. You
+  only ever see your own board; one bar per rival shows how many guesses each
+  of them has burned and nothing else. **First to solve it wins the round**,
+  however many guesses it took — so there is no reason to wait.
 - **Co-op** — the whole room shares one board and one guess pool. Anyone can
   play the next guess. Coordinate, or waste attempts.
 
@@ -69,7 +69,7 @@ and it sets the language of the *words* in any room you go on to create.
 Joining somebody else's room does not change your menus; you keep them and
 guess in whatever the room was made in.
 
-**Guess budgets** are word length + 2 in Solo and PvP, and word length + 3 in
+**Guess budgets** are word length + 2 in Solo and Versus, and word length + 3 in
 Co-op — no bigger a pool just because you invited more people.
 
 ## Scoring
@@ -78,7 +78,7 @@ Co-op — no bigger a pool just because you invited more people.
 points = max(0, guesses allowed − guesses used + 1) × 10
 ```
 
-Plus a speed bonus in Solo and PvP (+20 for a near-instant solve, +10 for a
+Plus a speed bonus in Solo and Versus (+20 for a near-instant solve, +10 for a
 quick one), and doubled if the round rolled Double Points. Co-op scores the
 same way off the shared attempt count and splits it across the team.
 
@@ -216,7 +216,7 @@ Everything you hear is generated as you play — there are no audio files.
 
 **Each mode has its own soundtrack.** Solo is a quiet bed with nothing moving
 over it, on purpose — anything with a tune in it pulls your eye off the word.
-PvP is fast and driving, because somebody is racing you. Co-op is the calm one
+Versus is fast and driving, because somebody is racing you. Co-op is the calm one
 and swings, which is what stops it being Solo in a different key.
 
 **And each minigame has its own**, as does everything that happens to you: the
@@ -275,8 +275,10 @@ happens to everyone else depends on when:
   points — but you are marked as having left.
 - **If you were the host**, the room is handed to whoever has been there
   longest, so it can still be started and advanced.
-- **In a duel**, the remaining player is taken to the final standings rather
-  than left waiting for a rival who is not coming back.
+- **In Versus**, the round settles around you: someone who has left can
+  neither solve it nor burn a guess, so it no longer waits on them. If that
+  leaves a single player, they are taken to the final standings rather than
+  left racing a rival who is not coming back.
 - **In Co-op**, the match carries on with whoever is left.
 
 ## Languages

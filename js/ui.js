@@ -618,10 +618,30 @@ export function renderRailLeft(opts) {
 }
 
 /**
+ * A rival's guess budget as dots, and nothing else: you never see a rival's
+ * letters, only how much of their budget is gone. `hits` colours the dots
+ * that landed a letter, so a rival closing in looks different from a rival
+ * flailing -- still without naming a single letter.
+ */
+function ghostBar(ghost, maxGuesses) {
+  const bar = el('div', 'ghost-bar');
+  const filled = ghost?.attempts ?? 0;
+  for (let i = 0; i < maxGuesses; i++) {
+    const dot = el('i');
+    if (i < filled) {
+      dot.dataset.tier = ghost.solved && i === filled - 1 ? 'hit'
+        : i < (ghost.hits ?? 0) ? 'hit' : 'present';
+    }
+    bar.appendChild(dot);
+  }
+  return bar;
+}
+
+/**
  * opts: {
  *   mode,
  *   rows: [{ id, name, color, isMe, guesses, solved, total }],  // coop/pvp/solo
- *   ghost: { attempts, hits, solved } | null,   // pvp only
+ *   ghosts: { [playerId]: { attempts, hits, solved } | null } | null,  // pvp only
  *   maxGuesses,
  * }
  */
@@ -636,24 +656,42 @@ export function renderRailRight(opts) {
 
   if (opts.mode === 'pvp') {
     const block = el('div', 'rail-block');
-    block.append(el('p', 'rail-label', t('rail.rival')));
-    const rival = opts.rows.find((r) => !r.isMe);
-    block.append(el('div', 'rail-name', rival?.name ?? t('rail.waiting')));
-    // You never see a rival's letters -- only how much of their budget is
-    // gone. The dots are that, and nothing more.
-    const bar = el('div', 'ghost-bar');
-    bar.id = 'ghost-bar';
-    const filled = opts.ghost?.attempts ?? 0;
-    for (let i = 0; i < opts.maxGuesses; i++) {
-      const dot = el('i');
-      if (i < filled) {
-        dot.dataset.tier = opts.ghost.solved && i === filled - 1 ? 'hit'
-          : i < (opts.ghost.hits ?? 0) ? 'hit' : 'present';
-      }
-      bar.appendChild(dot);
+    const rivals = opts.rows.filter((r) => !r.isMe);
+
+    // One rival is a duel and gets the duel readout: their name, and their
+    // whole guess budget spelled out dot by dot. Four rivals cannot have
+    // that -- four full-size bars is a column taller than the board -- so
+    // they get a name and a bar each at list scale.
+    if (rivals.length <= 1) {
+      const rival = rivals[0];
+      block.append(el('p', 'rail-label', t('rail.rival')));
+      block.append(el('div', 'rail-name', rival?.name ?? t('rail.waiting')));
+      const g = rival ? opts.ghosts?.[rival.id] : null;
+      const bar = ghostBar(g, opts.maxGuesses);
+      bar.id = 'ghost-bar';
+      block.appendChild(bar);
+      block.append(el('p', 'rail-sub',
+        t('rail.burned', { used: g?.attempts ?? 0, max: opts.maxGuesses })));
+      rail.appendChild(block);
+      return;
     }
-    block.appendChild(bar);
-    block.append(el('p', 'rail-sub', t('rail.burned', { used: filled, max: opts.maxGuesses })));
+
+    block.classList.add('rail-ghosts');
+    block.append(el('p', 'rail-label', `${t('rail.rivals')} · ${rivals.length}`));
+    const list = el('ul', 'ghost-list');
+    for (const r of rivals) {
+      const g = opts.ghosts?.[r.id] ?? null;
+      const li = el('li', 'ghost-row');
+      if (g?.solved) li.classList.add('is-solved');
+      const head = el('div', 'ghost-head');
+      const dot = el('i', 'team-dot');
+      dot.style.background = r.color;
+      head.append(dot, el('span', 'team-name', r.name));
+      head.append(el('span', 'team-count', `${g?.attempts ?? 0}/${opts.maxGuesses}`));
+      li.append(head, ghostBar(g, opts.maxGuesses));
+      list.appendChild(li);
+    }
+    block.appendChild(list);
     rail.appendChild(block);
     return;
   }

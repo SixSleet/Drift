@@ -41,7 +41,7 @@ export class Game {
     this.phase = 'idle';
     this.won = false;              // set once the match ends; drives the final theme
     this.channel = null;
-    this.ghost = null;               // pvp only: opponent's live aggregate
+    this.ghosts = new Map();         // pvp only: player_id -> rival's live aggregate
     // The two client-side rule slots, kept separate so a mid-round blackout
     // can't switch off a cipher/lockdown/fading-ink round (see #showMidModifier).
     this.roundRule = null;           // from the round-start event
@@ -109,7 +109,12 @@ export class Game {
     this.channel?.close();
     this.channel = openRoomChannel(roomId, {
       onPoke: () => this.refreshState(),
-      onGhost: (payload) => { this.ghost = payload; },
+      // Keyed by sender, because PvP is up to five: one shared slot would
+      // have every rival overwriting every other and the rails would show
+      // whoever typed last, attributed to whoever they happened to be.
+      onGhost: (payload) => {
+        if (payload?.from) this.ghosts.set(payload.from, payload);
+      },
     });
 
     await this.refreshState();
@@ -223,7 +228,7 @@ export class Game {
   #startRound(row) {
     this.round = row;
     this.local = this.#freshLocal();
-    this.ghost = null;
+    this.ghosts.clear();
     this.host.advancing = false;
     this.settling = false;
     showScreen('screen-game');
@@ -599,6 +604,7 @@ export class Game {
       if (this.mode === 'pvp') {
         const mine = this.guessesByRound.get(roundId).filter((g) => g.player_id === this.me.id);
         this.channel?.sendGhost({
+          from: this.me.id,
           attempts: mine.length,
           hits: row.feedback.filter((f) => f === 'hit').length,
           present: row.feedback.filter((f) => f === 'present').length,
@@ -670,11 +676,23 @@ export class Game {
                    || (dead && suddenDeathOver(mine));
     if (this.mode === 'solo') return myDone; // no opponent to wait for
 
-    // PvP: first to solve wins, so the round ends the instant either side
-    // gets it — no need to wait for the other player to also finish.
-    if (mine.some((g) => this.#allHit(g)) || this.ghost?.solved) return true;
-    const oppExhausted = this.ghost ? this.ghost.attempts >= this.round.max_guesses : false;
-    return myDone && oppExhausted;
+    // PvP: first to solve wins, so the round ends the instant ANY player
+    // gets it — no need to wait for the rest of the table to also finish.
+    if (mine.some((g) => this.#allHit(g))) return true;
+    const rivals = this.players.filter((p) => p.id !== this.me?.id);
+    // Everyone else walked out. Nobody is going to solve it or burn a guess,
+    // so there is nothing left to wait for -- without this the round would
+    // sit there until the clock ran it out.
+    if (rivals.length === 0) return myDone;
+    if (rivals.some((p) => this.ghosts.get(p.id)?.solved)) return true;
+    // Otherwise everyone has to be out of guesses. A rival we have not heard
+    // a single ghost from counts as still playing: silence is a player
+    // thinking, not a player finished.
+    const allSpent = rivals.every((p) => {
+      const g = this.ghosts.get(p.id);
+      return !!g && g.attempts >= this.round.max_guesses;
+    });
+    return myDone && allSpent;
   }
 
   async #trySettle() {
@@ -860,7 +878,7 @@ export class Game {
           : '';
       } else {
         $('#board-title').textContent = t('board.finalStandings');
-        $('#board-note').textContent = rows.length ? t('board.duelWinner', { name: rows[0].name }) : '';
+        $('#board-note').textContent = rows.length ? t('board.matchWinner', { name: rows[0].name }) : '';
       }
       $('#btn-again').hidden = false;
       setRoundRecap('');
@@ -1038,9 +1056,7 @@ export class Game {
     }
 
     if (phase === 'live') {
-      setStatusLine(this.mode === 'pvp' && this.ghost
-        ? `<div class="small">${t('status.opponent', { used: this.ghost.attempts, max: this.round.max_guesses })}</div>`
-        : '');
+      setStatusLine(this.mode === 'pvp' ? this.#rivalLine() : '');
     } else if (phase === 'settling') {
       setStatusLine(`<div class="small">${t('status.settling')}</div>`);
     } else if (phase === 'reveal') {
@@ -1069,6 +1085,32 @@ export class Game {
       setRoundRecap(this.#roundRecap());
       renderBoard(this.#standings());
     }
+  }
+
+  /**
+   * The one line under the board that says how the rest of the table is
+   * doing. With a single rival it is their guess count, which is the whole
+   * tension of a duel. With four it cannot be: five bars do not fit on one
+   * line, and the rail already draws them. What is left — and what actually
+   * changes how you play — is how many people are still in the round.
+   */
+  #rivalLine() {
+    if (!this.round) return '';
+    const rivals = this.players.filter((p) => p.id !== this.me?.id);
+    if (rivals.length === 0) return '';
+    if (rivals.length === 1) {
+      const g = this.ghosts.get(rivals[0].id);
+      return g
+        ? `<div class="small">${t('status.opponent', { used: g.attempts, max: this.round.max_guesses })}</div>`
+        : '';
+    }
+    // Nobody has sent a ghost yet == everybody is still playing, so an
+    // unheard-from rival counts as live.
+    const live = rivals.filter((p) => {
+      const g = this.ghosts.get(p.id);
+      return !g || (!g.solved && g.attempts < this.round.max_guesses);
+    }).length;
+    return `<div class="small">${t('status.opponents', { live, total: rivals.length })}</div>`;
   }
 
   /**
@@ -1101,12 +1143,20 @@ export class Game {
     renderRailRight({
       mode: this.mode,
       maxGuesses: this.round.max_guesses,
-      ghost: this.ghost ? {
-        attempts: this.ghost.attempts, hits: this.ghost.hits ?? 0,
-        solved: !!this.ghost.solved,
-      } : null,
+      // A plain object rather than the Map, because renderRailRight diffs
+      // its whole opts with JSON.stringify and a Map stringifies to {}.
+      ghosts: this.mode === 'pvp'
+        ? Object.fromEntries(this.players
+            .filter((p) => p.id !== this.me?.id)
+            .map((p) => {
+              const g = this.ghosts.get(p.id);
+              return [p.id, g
+                ? { attempts: g.attempts, hits: g.hits ?? 0, solved: !!g.solved }
+                : null];
+            }))
+        : null,
       rows: this.players.map((p) => ({
-        name: p.name, color: p.color,
+        id: p.id, name: p.name, color: p.color,
         isMe: p.id === this.me?.id,
         guesses: perPlayer.get(p.id) ?? 0,
         total: byId.get(p.id) ?? 0,

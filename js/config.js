@@ -12,7 +12,7 @@ export const SUPABASE_KEY = 'sb_publishable_9XEu26xpqmLoP3t41iFZ1w_9lxZu9Vr';
 // and none of this does.
 export const MODES = Object.freeze({
   solo: { tint: '#e2a259', maxPlayers: 1 },
-  pvp:  { tint: '#cf8465', maxPlayers: 2 },
+  pvp:  { tint: '#cf8465', maxPlayers: 5 },
   coop: { tint: '#94b073', maxPlayers: 10 },
 });
 

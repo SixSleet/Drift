@@ -581,7 +581,7 @@ begin
   perform 1 from public.wf_rooms where id = v_room.id for update;
 
   -- seats 0..cap; solo has none to spare beyond the host who created it
-  v_cap := case when v_room.mode = 'pvp' then 1
+  v_cap := case when v_room.mode = 'pvp' then 4
                 when v_room.mode = 'solo' then 0
                 else 9 end;
   select min(s.n) into v_seat
@@ -721,9 +721,10 @@ begin
                   order by seat limit 1);
   end if;
 
-  -- An empty room is over. So is a duel with one player left in it: they
-  -- cannot race nobody, and leaving them waiting on a rival who is not
-  -- coming back is worse than showing them the standings.
+  -- An empty room is over. So is a versus room with one player left in it:
+  -- they cannot race nobody, and leaving them waiting on rivals who are not
+  -- coming back is worse than showing them the standings. Two of five
+  -- leaving is fine -- the remaining three carry on.
   if v_left = 0 or (v_room.mode = 'pvp' and v_room.status = 'playing' and v_left < 2) then
     update public.wf_rooms set status = 'finished', updated_at = now()
      where id = p_room and status <> 'finished';
@@ -1158,11 +1159,20 @@ begin
     -- PvP and Solo: the round ends the instant anyone solves it (first to
     -- the word wins the round), once everyone still playing has run out of
     -- guesses, or when time runs out — whichever comes first.
+    --
+    -- `left_at is null` throughout. It did not matter while PvP was two
+    -- players, because a duel losing one of them ends the whole room (see
+    -- wf_leave_room) and the question never got asked. With up to five it
+    -- matters a great deal: someone who walks out mid-round leaves a row
+    -- with no guesses against it, and a bool_and over every row that ever
+    -- existed can then never be true -- so the round would hang until the
+    -- clock ran out no matter how finished the remaining players were.
     select bool_or(
       exists (select 1 from public.wf_guesses g
                where g.round_id = p_round and g.player_id = p.id and g.feedback = v_all_hit)
     ) into v_any_solved
-    from public.wf_players p where p.room_id = v_round.room_id;
+    from public.wf_players p
+     where p.room_id = v_round.room_id and p.left_at is null;
 
     -- Under sudden death a player who has thrown a total miss is out, which
     -- counts as finished for the purpose of ending the round -- otherwise a
@@ -1176,7 +1186,8 @@ begin
                and not ('hit' = any(g3.feedback))
                and not ('present' = any(g3.feedback))))
     ) into v_all_exhausted
-    from public.wf_players p where p.room_id = v_round.room_id;
+    from public.wf_players p
+     where p.room_id = v_round.room_id and p.left_at is null;
 
     v_done := v_time_up or coalesce(v_any_solved, false) or coalesce(v_all_exhausted, false);
   end if;
