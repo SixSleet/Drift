@@ -664,6 +664,36 @@ export const sfx = {
   },
 
   /** A leaf drifting down: a soft, brief papery rustle. */
+  /** The lamp's pull-switch: a small mechanical click, twice. */
+  lampSwitch(on) {
+    blip({ freq: on ? 1500 : 1150, to: on ? 700 : 520, dur: 0.035, type: 'square', gain: 0.07 });
+    blip({ freq: on ? 900 : 700, to: 380, dur: 0.05, type: 'triangle', gain: 0.05, delay: 0.035 });
+  },
+
+  /** A sash window in a wooden frame: friction, then the thump of the stop. */
+  windowSlide(open) {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const dur = 0.42;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(open ? 620 : 520, t0);
+    bp.frequency.linearRampToValueAtTime(open ? 1150 : 380, t0 + dur);
+    bp.Q.value = 1.1;
+    const env = c.createGain();
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.055, t0 + 0.07);
+    env.gain.linearRampToValueAtTime(0.03, t0 + dur * 0.8);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0);
+    src.stop(t0 + dur + 0.05);
+    // The sash hitting the top of its travel.
+    blip({ freq: 150, to: 70, dur: 0.11, type: 'sine', gain: 0.09, delay: dur - 0.03 });
+  },
+
   leafRustle() {
     const c = ensure();
     if (!c) return;

@@ -291,8 +291,38 @@ html, body {
   width: 470px; height: 360px;
   border-radius: 6px;
   background: #0f1620;
+  /* Uneven border: a window is set INTO a wall, so the reveal on the top
+     and one side is in shadow and the other side catches the room. A even
+     frame all the way round reads as a picture hung on the wall. */
   border: 12px solid #3a2f26;
-  box-shadow: 0 0 70px rgba(120, 160, 200, .12), inset 0 0 40px rgba(0, 0, 0, .6);
+  border-top-color: #241d17;
+  border-left-color: #2c241c;
+  border-bottom-width: 16px;
+  box-shadow:
+    0 0 70px rgba(120, 160, 200, .12),
+    inset 0 0 40px rgba(0, 0, 0, .6),
+    inset 0 14px 22px -12px rgba(0, 0, 0, .8);   /* the reveal's own shadow */
+}
+/* Glass. One soft diagonal sheen across the pane, so it reads as something
+   between you and the night rather than a hole in the wall. */
+.window::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(122deg,
+    rgba(214, 232, 255, .10) 0%, rgba(214, 232, 255, .03) 26%,
+    transparent 44%, transparent 100%);
+}
+/* A curtain gathered down one side. Breaks the rectangle, and gives the
+   window somewhere for the open/closed state to show. */
+.window::before {
+  content: ''; position: absolute; top: -12px; bottom: -16px; right: -12px;
+  width: 108px; z-index: 2;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, .30) 0 6px, rgba(255, 226, 190, .05) 6px 13px,
+      rgba(0, 0, 0, .16) 13px 22px),
+    linear-gradient(180deg, #5d4433, #3a2a1f);
+  border-radius: 0 5px 8px 0;
+  box-shadow: -14px 0 26px rgba(0, 0, 0, .45);
 }
 /* Cool night outside, so the warm room reads as warm by comparison. */
 .window-sky {
@@ -309,9 +339,18 @@ html, body {
 .window-bar-v { top: 0; bottom: 0; left: 50%; width: 10px; transform: translateX(-50%); }
 .window-bar-h { left: 0; right: 0; top: 50%; height: 10px; transform: translateY(-50%); }
 .window-sill {
-  position: absolute; left: -22px; right: -22px; bottom: -34px; height: 22px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, #4a3b2e, #2c231b);
+  position: absolute; left: -30px; right: -30px; bottom: -46px; height: 28px;
+  border-radius: 3px 3px 5px 5px;
+  background: linear-gradient(180deg, #6a5540 0 5px, #4a3b2e 5px 60%, #241c15 100%);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 224, 180, .3);
+}
+/* Something left on the sill. A ledge with nothing on it looks like a
+   moulding; a ledge with one object on it looks like a windowsill. */
+.window-sill::after {
+  content: ''; position: absolute; left: 44px; bottom: 28px;
+  width: 42px; height: 52px; border-radius: 4px 4px 7px 7px;
+  background: linear-gradient(96deg, #7a4b31, #a9673f 45%, #5d3823);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, .5);
 }
 
 /* Right edge at x = +1150, just clear of the corner at +1250. */
@@ -322,24 +361,254 @@ html, body {
   background: linear-gradient(180deg, var(--wood-hi), var(--wood-lo));
   box-shadow: 0 14px 26px rgba(0, 0, 0, .45);
 }
-/* Spines as one repeating gradient — 30-odd books, zero extra elements. */
+/* Spines as one repeating gradient — 30-odd books, zero extra elements.
+   The clip-path gives them uneven heights; the two overlaid gradients add
+   the title bands and the shadow each spine casts on the next, which is
+   what stops the row reading as painted stripes. A stack of leaning books
+   at the end keeps the line from being suspiciously perfect. */
 .shelf-books {
   position: absolute; left: 24px; bottom: 20px;
   width: 420px; height: 150px;
-  background: repeating-linear-gradient(90deg,
-    #8d5a3d 0 22px, #6b4531 22px 40px, #a9763f 40px 58px,
-    #5e4a37 58px 74px, #93684a 74px 96px, #7a5238 96px 112px,
-    #b0854f 112px 128px, #6d5340 128px 150px);
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, .42) 0 3px, transparent 3px 18px),
+    repeating-linear-gradient(180deg,
+      transparent 0 34px, rgba(255, 226, 180, .16) 34px 40px,
+      transparent 40px 92px, rgba(255, 226, 180, .09) 92px 95px, transparent 95px 150px),
+    repeating-linear-gradient(90deg,
+      #8d5a3d 0 22px, #6b4531 22px 40px, #a9763f 40px 58px,
+      #5e4a37 58px 74px, #93684a 74px 96px, #7a5238 96px 112px,
+      #b0854f 112px 128px, #6d5340 128px 150px);
   clip-path: polygon(0 8%, 6% 0, 14% 6%, 22% 2%, 34% 9%, 46% 3%, 58% 8%, 70% 1%, 82% 7%, 92% 3%, 100% 10%, 100% 100%, 0 100%);
   box-shadow: inset 0 -30px 40px rgba(0, 0, 0, .5);
   opacity: .92;
 }
+/* Two more lying flat on top of the upright ones. */
+.shelf-books::after {
+  content: ''; position: absolute; right: -104px; bottom: 0;
+  width: 96px; height: 26px; border-radius: 2px;
+  background: linear-gradient(180deg, #9c6a41 0 12px, #7c5334 12px 14px, #8a5d3a 14px 26px);
+  box-shadow: 0 -4px 10px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 226, 180, .18);
+}
+/* Was a single green oval, which read as a balloon. A pot with a trailing
+   vine reads as a plant because of the pot -- the leaves alone never did. */
 .shelf-plant {
   position: absolute; right: 40px; bottom: 20px;
   width: 90px; height: 96px;
   border-radius: 50% 50% 12% 12% / 60% 60% 12% 12%;
-  background: radial-gradient(circle at 36% 30%, #6f8f56, #384a2b 76%);
+  background:
+    radial-gradient(22px 26px at 22% 34%, rgba(150, 185, 118, .55), transparent 70%),
+    radial-gradient(20px 24px at 74% 28%, rgba(130, 168, 100, .45), transparent 70%),
+    radial-gradient(circle at 36% 30%, #6f8f56, #384a2b 76%);
   box-shadow: 0 10px 20px rgba(0, 0, 0, .4);
+}
+/* The terracotta pot it is actually growing out of. */
+.shelf-plant::before {
+  content: ''; position: absolute; left: 16px; right: 16px; bottom: -2px; height: 34px;
+  border-radius: 4px 4px 8px 8px;
+  background: linear-gradient(96deg, #7a4b31, #a9673f 40%, #5d3823);
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, .35);
+}
+/* One vine over the edge of the shelf. */
+.shelf-plant::after {
+  content: ''; position: absolute; right: 24px; bottom: -54px;
+  width: 5px; height: 58px; border-radius: 3px;
+  background: linear-gradient(180deg, #4f6b3b, rgba(56, 74, 43, 0));
+}
+
+/* ── Things in the room you can actually touch ─────────────────────────
+   The room is pointer-events: none so a click aimed at the monitor is never
+   eaten by scenery. These two switches opt back in, and only over their own
+   prop -- the lamp shade and the window pane -- so nothing else in the room
+   becomes a target by accident. */
+.prop-switch {
+  position: absolute; inset: -6px;
+  appearance: none; border: 0; padding: 0; margin: 0;
+  background: none; cursor: pointer;
+  pointer-events: auto;
+  border-radius: 10px;
+  transition: box-shadow .18s ease;
+}
+.prop-switch:hover { box-shadow: inset 0 0 0 2px rgba(255, 214, 160, .35); }
+.prop-switch:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent), 0 0 22px -4px var(--accent);
+}
+/* The shade, not the whole lamp: the pole is not a switch. */
+.lamp-switch { inset: auto; left: 50%; top: 0; width: 250px; height: 132px;
+               transform: translateX(-50%); }
+
+/* ── The lamp, off ─────────────────────────────────────────────────────
+   One class on #room-scene relights the entire room, because every warm
+   light in here is one of these five things. Doing it per-prop would be
+   twenty style writes and twenty chances to miss one; this is a single
+   recalculation and cannot go out of step with itself.
+
+   What is left is the monitor. So the room does not go black -- it goes
+   blue, which is what a room lit only by a screen actually looks like. */
+.room.is-lamp-off .lamp-cone,
+.room.is-lamp-off .lamp-halo,
+.room.is-lamp-off .floor-light-lamp,
+.room.is-lamp-off .desk-pool-lamp { opacity: 0; }
+.room.is-lamp-off .lamp-bulb { opacity: .12; box-shadow: none; }
+.room.is-lamp-off .lamp-shade {
+  background: linear-gradient(178deg, #4a4038 0%, #322b25 55%, #221d19 100%);
+  box-shadow: none;
+}
+.room.is-lamp-off .wall-wash { opacity: .12; }
+/* Everything the lamp was warming goes cool and dim.
+   
+   NOT with a filter on the stage, which is the obvious way and a trap: a
+   filter forces its element to render as one flat group, so `preserve-3d`
+   below it stops working and the entire room collapses out of perspective.
+   Every prop lands at its raw untransformed position -- the window ends up
+   off the side of the screen -- and it happens silently, because the room
+   still draws, just wrongly.
+   
+   So the dimming is a plain overlay sitting OUTSIDE the 3D stage instead.
+   One composited layer fading its opacity, which costs less than a filter
+   would have anyway. */
+.room-nightwash {
+  position: absolute; inset: 0; z-index: 3;
+  pointer-events: none; opacity: 0;
+  background:
+    radial-gradient(90% 70% at 50% 34%, rgba(38, 54, 74, .30), transparent 72%),
+    linear-gradient(180deg, rgba(6, 10, 16, .60), rgba(3, 5, 9, .78));
+  transition: opacity .55s ease;
+}
+.room.is-lamp-off .room-nightwash { opacity: 1; }
+.lamp-cone, .lamp-halo, .floor-light-lamp, .desk-pool-lamp,
+.lamp-bulb, .lamp-shade, .wall-wash {
+  transition: opacity .5s ease, background .5s ease, box-shadow .5s ease;
+}
+/* The monitor is the other light source, and with the lamp out it is the
+   only one -- so it reads stronger, not dimmer. */
+.room.is-lamp-off .floor-light-screen,
+.room.is-lamp-off .desk-pool-screen { opacity: .9; }
+
+/* ── The window, open ──────────────────────────────────────────────────
+   The lower sash slides up behind the upper one, which is what a sash
+   window does. The gap it leaves is the dark of outside, and the curtain
+   moves in the air coming through it. */
+.window-sash {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 50%;
+  background: linear-gradient(180deg, rgba(58, 47, 38, 0) 0 4px, #3a2f26 4px 12px, transparent 12px);
+  transition: transform .55s cubic-bezier(.32, .72, .3, 1);
+  z-index: 1;
+}
+.window-gap {
+  position: absolute; left: 8px; right: 8px; bottom: 0; height: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, .85), rgba(0, 0, 0, .55));
+  box-shadow: inset 0 6px 12px rgba(0, 0, 0, .8);
+  transition: height .55s cubic-bezier(.32, .72, .3, 1);
+}
+.room.is-window-open .window-sash { transform: translateY(-46%); }
+.room.is-window-open .window-gap { height: 44%; }
+/* Air coming in -- and then settling.
+   
+   This ran `infinite` first, and measuring it was the whole argument: the
+   curtain is a stack of repeating gradients with a big shadow, and it lives
+   inside the room's preserve-3d subtree, so the browser cannot composite a
+   transform on it. It has to re-rasterise the 3D layer every frame, which
+   took the median frame from 33ms to 83ms for a detail nobody asked to
+   have running forever.
+   
+   Three passes and it stops. The gust when you open the window is the part
+   worth animating anyway; a curtain that never stops moving is a flag on a
+   pole, not a room. At rest this costs nothing at all. */
+.room.is-window-open .window::before {
+  animation: curtain-breathe 4.5s ease-in-out 3;
+  transform-origin: 100% 0;
+}
+@keyframes curtain-breathe {
+  0%, 100% { transform: skewX(0deg) scaleX(1); }
+  40%      { transform: skewX(-2.2deg) scaleX(1.05); }
+  70%      { transform: skewX(.9deg) scaleX(.98); }
+}
+
+/* ── Where the room meets itself ────────────────────────────────────────
+   A wall and a floor that simply butt together is the clearest tell that a
+   room is two planes rather than a place. Skirting gives the join a
+   thickness and catches the lamp along its top edge. */
+.skirting {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 46px;
+  background: linear-gradient(180deg, #4a3b2e 0%, #35291f 38%, #1d160f 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 216, 165, .16), 0 -10px 26px rgba(0, 0, 0, .34);
+}
+.skirting-right { height: 40px; }
+
+/* A socket is four small marks and costs nothing, but it fixes the scale of
+   the whole wall the moment you notice it. */
+.socket {
+  position: absolute; left: 24%; bottom: 54px;
+  width: 46px; height: 62px; border-radius: 5px;
+  background: linear-gradient(180deg, #3b3129, #241d17);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 175, .16), 0 4px 10px rgba(0, 0, 0, .4);
+}
+.socket::before, .socket::after {
+  content: ''; position: absolute; left: 50%; width: 6px; height: 12px;
+  border-radius: 2px; background: #0e0b08; transform: translateX(-50%);
+}
+.socket::before { top: 14px; }
+.socket::after  { bottom: 14px; }
+
+/* ── The clock ──────────────────────────────────────────────────────────
+   Set once at load to the real time (js/room.js) and then left alone. It is
+   the one prop with a right answer, so the eye checks it -- and a clock
+   stopped at a decorative 10:10 is worse than no clock. */
+.wall-clock {
+  /* Left of the monitor. The middle of this wall is behind a 1200px
+     screen, so a prop placed there is one nobody will ever see. */
+  left: 25.5%; top: 8%; width: 112px; height: 112px; border-radius: 50%;
+  background: linear-gradient(160deg, #4c3d31, #2a211a);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .45), inset 0 2px 0 rgba(255, 220, 175, .2);
+}
+.clock-face {
+  position: absolute; inset: 9px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, #2b2620, #16120d);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, .6);
+}
+.clock-hand {
+  position: absolute; left: 50%; bottom: 50%;
+  transform-origin: 50% 100%; border-radius: 2px;
+  background: rgba(255, 224, 180, .72);
+}
+.clock-hour   { width: 4px; height: 26px; margin-left: -2px; transform: rotate(var(--hour, 0deg)); }
+.clock-minute { width: 3px; height: 38px; margin-left: -1.5px; transform: rotate(var(--minute, 0deg)); opacity: .85; }
+.clock-pin {
+  position: absolute; left: 50%; top: 50%; width: 8px; height: 8px;
+  margin: -4px 0 0 -4px; border-radius: 50%; background: var(--accent);
+}
+
+/* ── The pinboard ───────────────────────────────────────────────────────
+   The right wall had the fuse box and nothing else, which made it read as
+   the edge of the render rather than a wall. */
+.pinboard {
+  left: 4%; top: 26%; width: 430px; height: 320px; border-radius: 4px;
+  background:
+    repeating-linear-gradient(46deg, rgba(0,0,0,.05) 0 3px, transparent 3px 7px),
+    linear-gradient(165deg, #6b543a, #4a3a28);
+  border: 14px solid #33291f;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, .45), inset 0 0 40px rgba(0, 0, 0, .35);
+}
+.pin-note {
+  position: absolute; width: 118px; height: 112px;
+  box-shadow: 0 7px 14px rgba(0, 0, 0, .4);
+}
+.pin-note::after {
+  content: ''; position: absolute; left: 50%; top: 7px; width: 9px; height: 9px;
+  margin-left: -4.5px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #d8d2c6, #6d6459);
+}
+.pin-note-a { left: 8%;  top: 12%; background: #b99a55; transform: rotate(-3deg); }
+.pin-note-b { left: 38%; top: 22%; background: #8fa06a; transform: rotate(2.5deg); }
+.pin-note-c { left: 66%; top: 9%;  background: #b07f5f; transform: rotate(-1.5deg); }
+.pin-photo {
+  position: absolute; left: 20%; bottom: 12%; width: 190px; height: 130px;
+  background: linear-gradient(160deg, #2f4457, #1b2a36);
+  border: 9px solid #d9d2c4; border-bottom-width: 26px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, .45);
+  transform: rotate(1.5deg);
 }
 
 .frame {
@@ -459,6 +728,46 @@ html, body {
   background: linear-gradient(180deg, #4a443c, #322d28);
   box-shadow: inset 0 1px 0 rgba(255, 225, 180, .12);
 }
+
+/* A mousepad. The mouse was sitting on bare wood, which is the sort of
+   thing nobody notices until it is fixed. Laid flat on the desk plane like
+   the rest of the deskware. */
+.mousepad {
+  left: 50%; top: 50%;
+  width: 320px; height: 240px;
+  transform: translate(-50%, -50%) translateY(398px) translateZ(-700px) rotateX(90deg) translateX(470px);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255, 214, 160, .07), transparent 70%),
+    linear-gradient(180deg, #2a231c, #191411);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 220, 175, .05);
+}
+
+/* Pens in a cup. Standing objects, not laid flat -- they get their own
+   rotateX back to vertical after being placed on the desk plane. */
+.pen-cup {
+  left: 50%; top: 50%;
+  width: 92px; height: 150px;
+  /* 396 is the desk surface; this element is 150 tall and positioned by
+     its centre, so 396 - 75 puts its base exactly on the wood instead of
+     71px through it. */
+  transform: translate(-50%, -50%) translateY(321px) translateZ(-830px) translateX(-560px);
+  transform-style: preserve-3d;
+}
+.cup-body {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 104px;
+  border-radius: 8px 8px 14px 14px;
+  background: linear-gradient(96deg, #3a3129 0%, #59493a 34%, #2b241d 100%);
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, .5), 0 10px 18px rgba(0, 0, 0, .5);
+}
+.pen {
+  position: absolute; bottom: 74px; width: 9px; height: 74px;
+  border-radius: 3px 3px 0 0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .4);
+}
+.pen-1 { left: 24px; background: linear-gradient(180deg, #c9713f, #7a4325); transform: rotate(-7deg); }
+.pen-2 { left: 42px; background: linear-gradient(180deg, #6f8f56, #3d5230); height: 84px; transform: rotate(2deg); }
+.pen-3 { left: 58px; background: linear-gradient(180deg, #b8a05c, #6d5c33); height: 66px; transform: rotate(9deg); }
 
 .mouse-prop {
   left: 50%; top: 50%;
@@ -777,15 +1086,48 @@ html, body {
 .chair-post {
   position: absolute; left: 50%; top: 122px; transform: translateX(-50%);
   width: 300px; height: 56px;
-  background: linear-gradient(90deg,
-    transparent 0 7%, #33281f 7% 21%, transparent 21% 79%, #33281f 79% 93%, transparent 93%);
+  /* Two posts, drawn as the pseudo-elements rather than as gaps in one
+     gradient -- they are metal, and metal needs its own light across each
+     cylinder, which a single flat fill cannot give you. */
+  background: none;
 }
+.chair-post::before, .chair-post::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 42px;
+  border-radius: 3px;
+  background: linear-gradient(90deg,
+    #14100c 0%, #4a3f34 22%, #8b7a63 46%, #5b4e40 64%, #191410 100%);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .5);
+}
+.chair-post::before { left: 21px; }
+.chair-post::after  { right: 21px; }
 .chair-headrest {
   position: absolute; left: 50%; top: 34px; transform: translateX(-50%);
   width: 330px; height: 92px;
   border-radius: 54px 54px 22px 22px;
-  background: linear-gradient(188deg, #574538 0%, #33291f 60%, #1c1712 100%);
-  box-shadow: inset 0 6px 9px -6px rgba(255, 205, 150, .5), 0 9px 18px rgba(0, 0, 0, .45);
+  /* Same padded-panel treatment as the backrest, or this reads as a smooth
+     plastic pill sitting on the desk rather than the top of a chair. The
+     centre seam and the two stitch lines are what make it upholstery; the
+     cool wash along the bottom is the monitor, which is the only thing
+     lighting this side of it. */
+  background:
+    linear-gradient(180deg, transparent 62%, rgba(150, 190, 220, .07) 100%),
+    radial-gradient(60% 90% at 50% 46%, rgba(0, 0, 0, .34), transparent 72%),
+    repeating-linear-gradient(90deg,
+      transparent 0 162px,
+      rgba(0, 0, 0, .30) 162px 167px,
+      rgba(255, 210, 160, .05) 167px 171px,
+      transparent 171px 330px),
+    linear-gradient(188deg, #4a3b30 0%, #2e251c 60%, #191410 100%);
+  box-shadow:
+    inset 0 6px 9px -6px rgba(255, 205, 150, .42),
+    inset 0 -3px 8px -4px rgba(160, 200, 230, .18),
+    0 9px 18px rgba(0, 0, 0, .5);
+}
+/* The stitched seam along the top roll. */
+.chair-headrest::after {
+  content: ''; position: absolute; left: 28px; right: 28px; top: 21px; height: 1px;
+  background: repeating-linear-gradient(90deg,
+    rgba(255, 214, 170, .22) 0 5px, transparent 5px 11px);
 }
 .chair-arm {
   position: absolute; bottom: 0; width: 60px; height: 150px;

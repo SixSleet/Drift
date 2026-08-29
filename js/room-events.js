@@ -17,6 +17,7 @@
 import { $ } from './ui.js';
 import { sfx } from './sfx.js';
 import { music } from './music.js';
+import { roomState } from './room.js';
 
 /** How long after the round goes live before the room can first interrupt. */
 const FIRST_GAP_MS = [9000, 26000];
@@ -766,10 +767,10 @@ function fallingLeaf(done) {
 // desktop rather than fired invisibly.
 const KINDS = [
   { run: cat,          weight: 24, flat: true },
-  { run: moth,         weight: 15 },
+  { run: moth,         weight: 15, needsLamp: true },
   { run: phone,        weight: 13 },
   { run: paperPlane,   weight: 12 },
-  { run: lampFlicker,  weight: 14, flat: true },
+  { run: lampFlicker,  weight: 14, flat: true, needsLamp: true },
   { run: neighbour,    weight: 11, flat: true },
   { run: spider,       weight: 11 },
   { run: bird,         weight: 10 },
@@ -790,7 +791,12 @@ const KINDS = [
  */
 function pool() {
   const flatOnly = getComputedStyle(document.getElementById('room-scene')).perspective === 'none';
-  return flatOnly ? KINDS.filter((k) => k.flat) : KINDS;
+  let kinds = flatOnly ? KINDS.filter((k) => k.flat) : KINDS;
+  // A lamp the player has switched off has nothing to flicker, and a moth
+  // has nothing to circle. Firing either would either do nothing visible or
+  // -- worse -- flick the lamp back on behind the player's own decision.
+  if (!roomState.lampOn) kinds = kinds.filter((k) => !k.needsLamp);
+  return kinds;
 }
 
 function pick() {

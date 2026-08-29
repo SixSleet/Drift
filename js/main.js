@@ -2,6 +2,7 @@
 
 import { Game } from './game.js';
 import { startScreenFit } from './screen-fit.js';
+import { startRoom } from './room.js';
 import { DEFAULT_ROUNDS, DEFAULT_WORD_LENGTH, WORD_LENGTH_CHOICES } from './config.js';
 import { sfx } from './sfx.js';
 import {
@@ -558,6 +559,7 @@ for (const evt of ['pointerdown', 'keydown']) {
 }
 
 startScreenFit();
+startRoom();
 
 (async () => {
   try {

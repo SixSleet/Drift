@@ -374,27 +374,58 @@
       <i class="floor-light floor-light-screen"></i>
     </div>
     <div class="surface ceiling" aria-hidden="true"></div>
-    <div class="surface wall wall-back" aria-hidden="true">
-      <i class="wall-wash"></i>
+    <div class="surface wall wall-back">
+      <i class="wall-wash" aria-hidden="true"></i>
 
       <div class="prop window">
-        <i class="window-sky"></i>
-        <i class="window-bar window-bar-v"></i>
-        <i class="window-bar window-bar-h"></i>
-        <i class="window-sill"></i>
+        <i class="window-sky" aria-hidden="true"></i>
+        <i class="window-bar window-bar-v" aria-hidden="true"></i>
+        <i class="window-bar window-bar-h" aria-hidden="true"></i>
+        <i class="window-sash" aria-hidden="true"></i>
+        <i class="window-gap" aria-hidden="true"></i>
+        <i class="window-sill" aria-hidden="true"></i>
+        <!-- A real button, not a click handler on the frame: this is a
+             control, so it should be tabbable and announce its state. -->
+        <button class="prop-switch" id="window-switch" type="button"
+                aria-pressed="false" aria-label="Open or close the window"></button>
       </div>
 
-      <div class="prop shelf">
+      <div class="prop shelf" aria-hidden="true">
         <i class="shelf-plank"></i>
         <i class="shelf-books"></i>
         <i class="shelf-plant"></i>
       </div>
 
-      <div class="prop frame frame-a"></div>
-      <div class="prop frame frame-b"></div>
+      <div class="prop frame frame-a" aria-hidden="true"></div>
+      <div class="prop frame frame-b" aria-hidden="true"></div>
+
+      <!-- A clock reads as a room the way a poster does not: it is the one
+           prop with a correct answer, so the eye checks it. -->
+      <div class="prop wall-clock" aria-hidden="true">
+        <i class="clock-face"></i>
+        <i class="clock-hand clock-hour"></i>
+        <i class="clock-hand clock-minute"></i>
+        <i class="clock-pin"></i>
+      </div>
+
+      <!-- Where the wall meets the floor. Two flat planes butting together
+           is the single biggest tell that a room is a backdrop. -->
+      <i class="skirting" aria-hidden="true"></i>
+      <i class="socket" aria-hidden="true"></i>
     </div>
     <div class="surface wall wall-left" aria-hidden="true"></div>
-    <div class="surface wall wall-right" aria-hidden="true"></div>
+    <div class="surface wall wall-right" aria-hidden="true">
+      <!-- The right wall carried nothing but the fuse box, so it read as a
+           dark void rather than a wall. A pinboard gives it a surface, and
+           the notes on it give the light something to catch. -->
+      <div class="prop pinboard">
+        <i class="pin-note pin-note-a"></i>
+        <i class="pin-note pin-note-b"></i>
+        <i class="pin-note pin-note-c"></i>
+        <i class="pin-photo"></i>
+      </div>
+      <i class="skirting skirting-right"></i>
+    </div>
 
     <!-- ── Desk ─────────────────────────────────────────────────────── -->
     <div class="surface desk-top" aria-hidden="true">
@@ -415,20 +446,29 @@
       <i class="kb-keys"></i>
       <i class="kb-space"></i>
     </div>
+    <i class="prop deskware mousepad" aria-hidden="true"></i>
     <div class="prop deskware mouse-prop" aria-hidden="true"><i class="mouse-body"></i></div>
+    <div class="prop deskware pen-cup" aria-hidden="true">
+      <i class="cup-body"></i>
+      <i class="pen pen-1"></i>
+      <i class="pen pen-2"></i>
+      <i class="pen pen-3"></i>
+    </div>
     <div class="prop deskware notebook-prop" aria-hidden="true">
       <i class="notebook-page"></i>
       <i class="notebook-line"></i>
       <i class="notebook-line"></i>
     </div>
 
-    <div class="prop lamp" aria-hidden="true">
-      <i class="lamp-base"></i>
-      <i class="lamp-arm"></i>
-      <i class="lamp-shade"></i>
-      <i class="lamp-bulb"></i>
-      <i class="lamp-cone"></i>
-      <i class="lamp-halo"></i>
+    <div class="prop lamp">
+      <i class="lamp-base" aria-hidden="true"></i>
+      <i class="lamp-arm" aria-hidden="true"></i>
+      <i class="lamp-shade" aria-hidden="true"></i>
+      <i class="lamp-bulb" aria-hidden="true"></i>
+      <i class="lamp-cone" aria-hidden="true"></i>
+      <i class="lamp-halo" aria-hidden="true"></i>
+      <button class="prop-switch lamp-switch" id="lamp-switch" type="button"
+              aria-pressed="true" aria-label="Turn the lamp off or on"></button>
     </div>
 
     <!-- Drawn rather than stacked. A mug is a tapered cylinder with an
@@ -533,6 +573,8 @@
   </div>
 
 
+  <!-- Outside the 3D stage on purpose -- see .room-nightwash in app.css. -->
+  <i class="room-nightwash" aria-hidden="true"></i>
   <div class="room-vignette" aria-hidden="true"></div>
   <i class="storm-flash" aria-hidden="true"></i>
 </div>
