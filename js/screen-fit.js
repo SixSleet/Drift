@@ -17,6 +17,54 @@
 /** Panel height under which the title screen tightens up. */
 const SHORT_PANEL_PX = 545;
 
+/**
+ * The viewport the room is drawn for. Zoom is the smaller of how the real
+ * viewport compares to this on each axis, so the scene always fits both.
+ *
+ * This replaced a ladder of media queries, which could not express that
+ * idea: it grew the room on WIDTH alone (min-width: 1800px -> 1.18) and
+ * shrank it on HEIGHT alone (max-height: 860px -> .86), with nothing tying
+ * the two together. A 1080p monitor with the browser NOT full screen is
+ * about 1920x990 -- wide enough to trigger the 1.18, tall enough to miss
+ * every shrink rule -- so the room was drawn 18% too big for the height it
+ * had and the top of the monitor went off the top of the window. It only
+ * looked right full screen, which is exactly the report.
+ */
+const REF_W = 1600;
+const REF_H = 900;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3.2;
+
+/**
+ * Cover the width as well, so a very wide window never shows past the edge
+ * of the room into flat background. On a 16:9 or 16:10 window the fit is
+ * always the binding constraint and this does nothing; it only bites on
+ * super-ultrawides, where being able to see the room's seams is the worse
+ * of the two problems.
+ */
+const ROOM_W = 3150;
+
+let lastZoom = null;
+
+function fitRoom(flat) {
+  const rooms = document.querySelectorAll('.room');
+  if (flat) {
+    // The flat layout sets its own zoom in the stylesheet (the front room
+    // drops to .34 on a phone). An inline value would beat it, so clear it.
+    if (lastZoom !== 'flat') {
+      lastZoom = 'flat';
+      rooms.forEach((r) => r.style.removeProperty('--zoom'));
+    }
+    return;
+  }
+  const fit = Math.min(window.innerWidth / REF_W, window.innerHeight / REF_H);
+  const cover = window.innerWidth / ROOM_W;
+  const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, fit, cover)).toFixed(3);
+  if (zoom === lastZoom) return;
+  lastZoom = zoom;
+  rooms.forEach((r) => r.style.setProperty('--zoom', zoom));
+}
+
 const screenEl = () => document.getElementById('monitor-screen');
 const overlayEl = () => document.getElementById('app-overlay');
 
@@ -29,7 +77,9 @@ function fit() {
 
   // In the flat fallback the room is gone and the overlay just fills the
   // viewport, which the stylesheet already handles -- don't fight it.
-  if (getComputedStyle(document.getElementById('room-scene')).perspective === 'none') {
+  const flat = getComputedStyle(document.getElementById('room-scene')).perspective === 'none';
+  fitRoom(flat);
+  if (flat) {
     if (last !== 'flat') {
       last = 'flat';
       app.style.cssText = '';

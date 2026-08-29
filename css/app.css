@@ -2534,15 +2534,18 @@ html, body {
    step below is sized to the widest monitor it has to cover, with a few
    percent of margin against subpixel rounding, not to the threshold's own
    lower edge. */
-@media (min-width: 1800px) { .room { --zoom: 1.18; } }  /* up to ~2560 (21:9 UW-FHD) */
-@media (min-width: 2600px) { .room { --zoom: 1.58; } }  /* up to ~3440 (21:9 UWQHD) */
-@media (min-width: 3500px) { .room { --zoom: 1.80; } }  /* up to ~3840 (4K 16:9) */
-@media (min-width: 4000px) { .room { --zoom: 2.40; } }  /* up to ~5120 (32:9 super-ultrawide) */
-@media (min-width: 5300px) { .room { --zoom: 3.15; } }  /* a safety margin past that */
-@media (max-width: 1500px) { .room { --zoom: .92; } }
-@media (max-width: 1320px) { .room { --zoom: .82; } }
-@media (max-height: 860px) { .room { --zoom: .86; } }
-@media (max-height: 760px) { .room { --zoom: .76; } }
+/* The zoom is computed in js/screen-fit.js, from BOTH viewport axes.
+   
+   It used to be this ladder, which could not express that: it grew the room
+   on width alone and shrank it on height alone, with nothing tying the two
+   together, so a 1920x990 window -- a 1080p screen with the browser not full
+   screen -- took the widest step and none of the shrink steps, and the top
+   of the monitor went off the top of the window.
+   
+   Left here as the fallback for the seconds before the script runs, and for
+   the case where it never does. */
+.room { --zoom: .86; }
+@media (min-width: 1500px) and (min-height: 900px) { .room { --zoom: 1; } }
 
 /* Below this the room stops being worth rendering: the monitor would be
    smaller than the text on it. Drop the geometry, keep the game — same
