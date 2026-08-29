@@ -2336,7 +2336,12 @@ html, body {
   .screen-game[data-active] { min-height: 0; height: 100%; }
 
   .play-area {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* Not two equal halves: the left rail carries two chips and the right
+       one a name or a number, so splitting the width down the middle
+       starves the left until its labels ellipsise to a single letter. The
+       right is sized to its content and the left takes the remainder --
+       the other way round and the left, being greedy, takes everything. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
       'railL railR'
@@ -2353,24 +2358,64 @@ html, body {
   .rail-right { grid-area: railR; }
   .play-main  { grid-area: board; min-height: 0; }
   .letter-legend { grid-area: keys; }
-  /* One line each, side by side, so the row is as tall as the tallest single
-     block rather than the sum of two wrapped lines -- worth about 80px of
-     board, which is two tile rows on a small phone. `min-width: 0` is what
-     makes that work: without it the in-play block refuses to shrink below
-     its modifier name and shoves the others onto a second line. */
-  .rail { flex-direction: row; flex-wrap: nowrap; gap: 6px; max-width: none; }
-  .rail-block { flex: 1 1 0; min-width: 0; padding: 5px 7px; }
-  .rail-label { font-size: 9px; margin-bottom: 3px; white-space: nowrap; }
-  .rail-big { font-size: 19px; line-height: 1.1; }
-  .rail-name, .rail-mod, .team-name {
-    font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* The rails, on a strip the width of a phone.
+     
+     Four bordered boxes across 374px gives each one about 57px, which is
+     narrower than the word "Tentativi" -- the labels then overflow their
+     boxes and print on top of each other, and the round dots wrap into a
+     vertical column. So the boxes stop being boxes: each block becomes one
+     inline chip reading LABEL value along the line, and the row is as tall
+     as one line of text.
+     
+     The round block goes altogether, and that loses nothing: the HUD pill
+     right above it already says "Round 1/6", which is the same fact in the
+     same glance. What is NOT anywhere else is the guesses-left count and
+     the score/rival/team readout, so those stay. */
+  .rail { flex-direction: row; flex-wrap: nowrap; gap: 6px; max-width: none; align-items: stretch; }
+  .rail-block {
+    /* `width: auto` matters: the desktop rule sets width:100%, and a
+       flex-basis of `auto` defers to it -- so every chip claims the whole
+       strip and they trample each other. */
+    width: auto; flex: 0 1 auto; min-width: 0; padding: 5px 9px;
+    display: flex; align-items: baseline; gap: 7px;
   }
+  /* The round dots go -- the HUD pill right above already says "Round 1/6",
+     which is the same fact in the same glance. The block itself stays,
+     stripped to the room's language flag, because THAT is not written
+     anywhere else on the playing screen and it is the only thing telling a
+     joiner the words are Italian. (After .rail-block, not before: both are
+     one class deep, so whichever comes last wins.) */
+  .rail-rounds { flex: 0 0 auto; padding: 5px 8px; }
+  .rail-rounds .rail-label { font-size: 0; margin: 0; }
+  .rail-rounds .round-dots, .rail-rounds .rail-sub { display: none; }
+  .rail-lang { float: none; font-size: 15px; opacity: 1; }
+  .rail-guesses, .rail-right .rail-block { flex: 1 1 auto; }
+  .rail-mods { flex: 0 0 auto; }
+  .rail-label {
+    font-size: 9px; margin-bottom: 0; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0;
+  }
+  .rail-big { font-size: 17px; line-height: 1; }
+  .rail-name, .team-name {
+    font-size: 13px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; min-width: 0;
+  }
+  /* Just the emoji: "⚡ Blitz" is already a HUD pill, and what this block is
+     for on a phone is showing that a SECOND, mid-round modifier has landed. */
+  .rail-mods .rail-label { display: none; }
+  .rail-mod { padding: 2px 5px; gap: 0; }
+  .rail-mod > span:not(.rail-mod-emoji) { display: none; }
+  .rail-mods { flex-direction: row; }
+  /* A dozen rounds' worth of dots must never stack into a column. */
+  .round-dots { flex-wrap: nowrap; }
+  .ghost-bar { flex: 1 1 auto; min-width: 0; }
+  .team-list { flex: 1 1 auto; min-width: 0; }
 
   .tile-grid {
     /* Whatever the keyboard and rails leave. Measured rather than guessed:
        three 46px rows plus their gaps is 150px, the rails about 64, and the
        status line and HUD the rest. */
-    --tile: min(52px, calc((100dvh - 330px - (var(--rows) - 1) * 6px) / var(--rows)));
+    --tile: min(64px, calc((100dvh - 300px - (var(--rows) - 1) * 6px) / var(--rows)));
   }
   .status-line { font-size: 13px; min-height: 0; }
   .status-line .big { font-size: 34px; }
@@ -3316,10 +3361,22 @@ html, body {
      you look at mid-guess. It still wraps when every one of them is live,
      which is the right way round -- nothing disappears, the board gives up
      a row for the few seconds that state lasts. */
-  .hud { padding: 6px 8px; gap: 6px; }
-  .hud-left, .hud-right { gap: 6px; }
-  .pill { font-size: 11.5px; padding: 4px 9px; }
-  #hud-you { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The HUD does not fit on one line of a phone once every pill is live --
+     round, phase, chain, a standing rule, the event and the clock on one
+     side, your name and three controls on the other. It wraps, which is
+     the right answer: nothing is hidden, and the second line costs less
+     than losing the clock would. What it should not do is spend 87px on
+     two lines of 28px content, so the padding comes off instead. */
+  .hud { padding: 5px 8px; gap: 5px 6px; flex-wrap: wrap; }
+  /* MUST wrap. The pill row is nowrap on a desktop, where it always fits;
+     on a phone with the round, phase, chain, event and clock all live it
+     overflows and the clock -- last in the row and the one pill you look at
+     most -- is simply cut off the right edge. */
+  .hud-left { flex-wrap: wrap; }
+  .hud-left, .hud-right { gap: 5px 6px; }
+  .pill { font-size: 11.5px; padding: 3px 9px; }
+  #hud-you { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-icon { width: 40px; height: 40px; font-size: 16px; }
   #app button, #app .chip, #app .legend-key, #app .rack-tile, #app .tile {
     user-select: none; -webkit-user-select: none; touch-action: manipulation;
   }

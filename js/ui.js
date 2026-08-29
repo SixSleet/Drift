@@ -562,7 +562,7 @@ export function renderRailLeft(opts) {
 
   rail.innerHTML = '';
 
-  const rounds = el('div', 'rail-block');
+  const rounds = el('div', 'rail-block rail-rounds');
   const head = el('p', 'rail-label', t('rail.match'));
   // Which language this ROOM is in -- not the one the menus are in. A
   // joiner keeps their own interface, so without this there is nothing on
@@ -586,7 +586,7 @@ export function renderRailLeft(opts) {
   rail.appendChild(rounds);
 
   const left = Math.max(0, opts.maxGuesses - opts.guessesUsed);
-  const guesses = el('div', 'rail-block');
+  const guesses = el('div', 'rail-block rail-guesses');
   guesses.append(el('p', 'rail-label', t('rail.guessesLeft')));
   const big = el('div', 'rail-big', String(left));
   if (left <= 1) big.classList.add('is-low');
@@ -601,7 +601,7 @@ export function renderRailLeft(opts) {
   rail.appendChild(guesses);
 
   if (opts.eventLabel || opts.midLabel) {
-    const mods = el('div', 'rail-block');
+    const mods = el('div', 'rail-block rail-mods');
     mods.append(el('p', 'rail-label', t('rail.inPlay')));
     for (const [emoji, label, isMid] of [
       [opts.eventEmoji, opts.eventLabel, false],
