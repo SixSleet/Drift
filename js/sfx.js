@@ -758,6 +758,75 @@ export const sfx = {
     src.start(t0); src.stop(t0 + seconds + 0.05);
   },
 
+  /**
+   * A fly. Not the moth's soft flutter -- a hard, buzzing, unpleasant sound,
+   * because the whole point of this one is that you want it to stop. Two
+   * detuned saws through a bandpass beating against each other is what gives
+   * it the rasp; a single oscillator just hums.
+   */
+  flyBuzz(dur = 0.45) {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1500, t0);
+    bp.Q.setValueAtTime(3.2, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.032, t0 + 0.05);
+    env.gain.setValueAtTime(0.032, t0 + dur - 0.08);
+    env.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    for (const f of [158, 167]) {
+      const o = c.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f, t0);
+      // A fly does not hold a note. The wobble is most of the character.
+      o.frequency.linearRampToValueAtTime(f * (0.9 + Math.random() * 0.25), t0 + dur);
+      o.connect(bp);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    }
+    bp.connect(env).connect(buses.sfx);
+  },
+
+  /** A swat that missed: air, and the buzz jumping up in panic. */
+  flyDodge() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(900, t0);
+    bp.frequency.exponentialRampToValueAtTime(2600, t0 + 0.18);
+    bp.Q.setValueAtTime(1.1, t0);
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.linearRampToValueAtTime(0.05, t0 + 0.02);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + 0.24);
+    blip({ freq: 300, to: 640, dur: 0.16, type: 'sawtooth', gain: 0.035, delay: 0.02 });
+  },
+
+  /** Got it. A short, dry, final clap -- the only reward this event pays. */
+  flySwat() {
+    const c = ensure();
+    if (!c) return;
+    const t0 = c.currentTime;
+    const src = noise(c);
+    const bp = c.createBiquadFilter();
+    const env = c.createGain();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1700, t0);
+    bp.Q.setValueAtTime(0.8, t0);
+    env.gain.setValueAtTime(0.09, t0);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.11);
+    src.connect(bp).connect(env).connect(buses.sfx);
+    src.start(t0); src.stop(t0 + 0.14);
+    blip({ freq: 190, to: 80, dur: 0.09, type: 'sine', gain: 0.06 });
+  },
+
   /** A gust finding the gap under the sash: softer and lower than a leaf. */
   gust() {
     const c = ensure();

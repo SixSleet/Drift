@@ -187,10 +187,19 @@ Meanwhile the room you are sitting in carries on without you.
 | 🔧 **Pipes** | The heating knocks behind the wall. Nothing to see, which is the point |
 | 🌬 **Gust** | Air finds the open sash and moves the curtain. Only if you have the window up |
 | 📌 **Note** | One of the pinboard notes gives up on its pin and drops behind the desk |
+| 🪰 **Fly** | Lands on your board and will not take the hint. Swat it and it dodges and lands somewhere else — three connected swats to be rid of it |
 
 **These are yours alone.** Nobody else sees them, they change nothing about
 the game, and the only cost is that they are in your way. Most can be cleared
 with a click.
+
+**The fly is the one that is meant to annoy you.** Everything else here costs
+a glance, or one click. The fly does not go away the first time: it dodges,
+buzzes, and lands somewhere else on your board. What it never does is cost you
+the round — it does not cover a letter, it does not eat a click meant for
+anything underneath it, and it gives up on its own after fifteen seconds
+whether or not you ever hit it. Ignoring it entirely is always a valid answer.
+What it takes is attention, which is what this game is actually made of.
 
 **Two clocks, not one.** The events that cost you something — a cat on the
 board, a phone to silence — arrive every 6 to 17 seconds. The ones that cost
@@ -233,6 +242,29 @@ Everything you hear is generated as you play — there are no audio files.
 over it, on purpose — anything with a tune in it pulls your eye off the word.
 Versus is fast and driving, because somebody is racing you. Co-op is the calm one
 and swings, which is what stops it being Solo in a different key.
+
+**Every theme is arranged, not looped.** Each one is a running order rather
+than a repeating bar: sections say how many bars they last and which parts you
+can hear during them, so a theme opens on a pad, fills out, drops to just the
+hats, and comes back. Seventeen of the twenty-one themes have one, and the
+five you spend real time inside run between one and two minutes before
+anything repeats.
+
+**And each has a bridge.** A section can change the chords under the same
+tune, or lift the whole thing up a fourth, or step up a semitone for the last
+four bars — which is the only way a piece of music actually goes somewhere.
+Muting parts gets you dynamics; changing the harmony gets you a destination.
+
+**Five written lines, not two.** Bass, lead, a counter-line that answers it
+rather than doubling it, a harmony that shadows the tune at a fixed interval
+in the key, and a solo that most sections keep muted so that the one section
+which does not stands out. Add vibrato that leans in rather than starting at
+full width, plucked voices with a real transient on the front, and a kit that
+now includes a crash and a stick, and the parts are there to arrange.
+
+Where lines are deliberately different lengths — a 24-step comp against a
+32-step lead — they only agree every three bars, which is most of why a long
+round keeps sounding like it is going somewhere.
 
 **And each minigame has its own**, as does everything that happens to you: the
 blitz clock, a blackout, a jackpot, a letter swap, the storm, the power going

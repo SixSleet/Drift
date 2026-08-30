@@ -3297,10 +3297,12 @@ html, body {
    about it and nothing to miss. */
 .firefly-rig {
   position: absolute; left: 50%; top: 50%;
-  width: 10px; height: 10px; border-radius: 50%;
+  /* Was 10px, which projected to six on screen -- a glow with nothing in
+     the middle of it. */
+  width: 18px; height: 18px; border-radius: 50%;
   pointer-events: none;
-  background: radial-gradient(circle, rgba(255, 244, 190, .95), rgba(255, 210, 120, .5) 55%, transparent 75%);
-  box-shadow: 0 0 14px 4px rgba(255, 214, 130, .55);
+  background: radial-gradient(circle, rgba(255, 248, 210, 1), rgba(255, 210, 120, .55) 52%, transparent 74%);
+  box-shadow: 0 0 22px 7px rgba(255, 214, 130, .6);
   animation: firefly-drift 10s ease-in-out forwards;
 }
 @keyframes firefly-drift {
@@ -3325,9 +3327,25 @@ html, body {
   transform-style: preserve-3d;
   animation: mouse-dash 2.6s linear forwards;
 }
+/* On the desk, not the floor, and on one side of it rather than across.
+   
+   It ran at y = 640, z = -380 -- along the floor in front of the desk. That
+   floor is not on screen: measured, the rig landed at y = 856 in an 800px
+   window and y = 1166 in a 1080px one. The event fired, made its squeak, and
+   nobody ever saw a mouse. y = 377 at z = -820 puts its feet on the desk
+   plane -- y = 400, the same plane the cat's paws, the mug's base and the
+   plant's pot all sit on.
+   
+   It no longer crosses the whole room either. The chair and the back of the
+   player's head take the middle of the desk at exactly this height, and the
+   fx layer draws over them rather than behind, so a full crossing was a
+   mouse running across someone's head. Now it comes in from one side, runs
+   as far as the clear third of the desk, and goes back the way it came --
+   which is what a mouse does anyway. Mice move between cover; they do not
+   cross open ground for the length of a room. */
 @keyframes mouse-dash {
-  0%   { transform: translate(-50%, -50%) translateY(640px) translateZ(-380px) translateX(calc(-900px * var(--dir))) scaleX(var(--dir)); }
-  100% { transform: translate(-50%, -50%) translateY(640px) translateZ(-380px) translateX(calc(900px * var(--dir))) scaleX(var(--dir)); }
+  0%   { transform: translate(-50%, -50%) translateY(377px) translateZ(-820px) translateX(calc(var(--dir) * 1250px)) scaleX(calc(var(--dir) * -1)); }
+  100% { transform: translate(-50%, -50%) translateY(377px) translateZ(-820px) translateX(calc(var(--dir) * 420px)) scaleX(calc(var(--dir) * -1)); }
 }
 .mouse-rig.is-gone { animation: mouse-off .3s ease-in forwards; }
 @keyframes mouse-off { to { opacity: 0; transform: scale(.7); } }
@@ -3406,38 +3424,96 @@ html, body {
   100% { transform: translate3d(calc(var(--dx) + var(--drift)), calc(var(--dy) - var(--rise)), 0); opacity: 0; }
 }
 
+/* ── The fly ───────────────────────────────────────────────────────────
+   In the flat layer at viewport coordinates, moved by two custom
+   properties rather than by a keyframe -- the JS decides where it goes,
+   because where it goes is the whole event. The transition on `left/top`
+   is what makes a dodge read as a dart rather than a teleport.
+
+   The rig is exactly the fly and nothing more: 26px, no padding, no
+   invisible hit area. It is allowed to be in your way; it is not allowed
+   to eat a click meant for something underneath it. */
+.fly-rig {
+  position: absolute;
+  left: var(--x); top: var(--y);
+  width: 36px; height: 28px;
+  margin: -14px 0 0 -18px;
+  appearance: none; border: 0; background: none; padding: 0;
+  cursor: pointer;
+  transition: left .16s cubic-bezier(.2, .9, .3, 1), top .16s cubic-bezier(.2, .9, .3, 1);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .55));
+  animation: fly-land .3s ease-out;
+}
+@keyframes fly-land {
+  0% { transform: scale(1.5); opacity: .5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* A missed swat: it flinches on the way out, so the miss has a feel. */
+.fly-rig.is-dodging { animation: fly-dodge .34s ease-out; }
+@keyframes fly-dodge {
+  0%   { transform: scale(1.35) rotate(-16deg); }
+  55%  { transform: scale(.92) rotate(11deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.fly-rig.is-gone { animation: fly-off .45s ease-in forwards; }
+@keyframes fly-off { to { transform: translate(34px, -60px) scale(.4); opacity: 0; } }
+.fly-rig.is-swatted { animation: fly-squash .4s ease-out forwards; }
+@keyframes fly-squash {
+  0%   { transform: scale(1); opacity: 1; }
+  35%  { transform: scale(1.5, .35); opacity: 1; }
+  100% { transform: scale(1.7, .2) translateY(20px); opacity: 0; }
+}
+.fly-rig svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* Lighter than a fly really is. It sits on a near-black board, and a
+   correctly-coloured fly there is a dust speck on the monitor rather than
+   an animal -- the rim is what separates it from the panel. */
+.fly-body { fill: #4a4238; stroke: #6f6455; stroke-width: 1; }
+.fly-head { fill: #565044; }
+.fly-eye  { fill: #9c4038; }
+.fly-leg  { stroke: #2a251f; stroke-width: 1.8; fill: none; stroke-linecap: round; }
+.fly-wing {
+  fill: rgba(222, 234, 244, .5);
+  transform-origin: 26px 14px;
+  animation: fly-wingbeat .09s linear infinite;
+}
+.fly-wing-r { animation-delay: .045s; }
+@keyframes fly-wingbeat {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(.35); }
+}
+
 /* ── A plane going over ────────────────────────────────────────────────
    Lives inside the window, so the frame clips it: a light that crosses the
    wall as well as the sky is a light in the room. The blink is a second
    animation on the ::before so it is independent of the crossing -- a
    navigation light does not blink in step with how fast the plane is
    travelling. */
-.plane-rig {
+.skyplane-rig {
   position: absolute; left: 0; top: var(--alt);
   width: 5px; height: 5px; border-radius: 50%;
   pointer-events: none;
   background: #ffe9c4;
   box-shadow: 0 0 7px 2px rgba(255, 210, 150, .7);
-  animation: plane-cross 9s linear forwards;
+  animation: skyplane-cross 9s linear forwards;
 }
-.plane-rig::before {
+.skyplane-rig::before {
   content: '';
   position: absolute; inset: -1px;
   border-radius: 50%;
   background: #ff8f7a;
   box-shadow: 0 0 9px 3px rgba(255, 110, 90, .75);
-  animation: plane-blink 1.6s steps(1, end) infinite;
+  animation: skyplane-blink 1.6s steps(1, end) infinite;
 }
 /* Centre of the window's content box, plus or minus a bit more than half
    its width -- so --dir: -1 starts at the right edge and flies left rather
    than starting at the left edge and flying straight out of frame. */
-@keyframes plane-cross {
+@keyframes skyplane-cross {
   0%   { transform: translateX(calc(223px - var(--dir) * 263px)); opacity: 0; }
   10%  { opacity: 1; }
   90%  { opacity: 1; }
   100% { transform: translateX(calc(223px + var(--dir) * 263px)); opacity: 0; }
 }
-@keyframes plane-blink { 0%, 12% { opacity: .9; } 13%, 100% { opacity: 0; } }
+@keyframes skyplane-blink { 0%, 12% { opacity: .9; } 13%, 100% { opacity: 0; } }
 
 /* ── The heating ───────────────────────────────────────────────────────
    Nothing to draw. The clock is the one thing on the back wall light

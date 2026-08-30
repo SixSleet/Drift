@@ -832,6 +832,117 @@ function dustMotes(done) {
   };
 }
 
+/* ── The fly ──────────────────────────────────────────────────────────────
+   The one event in here that is meant to be genuinely irritating.
+
+   Everything else costs you a glance, or one click, and then it is over.
+   This one will not go away the first time you swipe at it: swat and it
+   dodges, buzzes, and lands somewhere else on the board. Three connected
+   swats to actually be rid of it.
+
+   The line it must not cross is costing you the round, so:
+     - it never covers a letter (that is the moth's job) and never touches
+       the tiles at all;
+     - it never blocks a click going to anything underneath -- the rig is
+       exactly the fly, 26px, not a hit box over your board;
+     - it gives up on its own after fifteen seconds whether or not you ever
+       hit it. Ignoring it entirely is always a valid answer, and costs you
+       nothing but having had a fly on your screen.
+
+   What it takes is attention, which is the thing this game is actually made
+   of. Nothing here is a rule change, so it stays a room event: no server, no
+   opponent sees it, no points move. */
+function fly(done) {
+  const fx = $('#screen-fx');
+  const board = $('#board')?.getBoundingClientRect();
+  if (!fx) return done();
+  // Over the board if there is one, otherwise over the middle of the
+  // screen -- a fly that lands outside the window is not a distraction.
+  // Clamped to the viewport either way: the board's box can be taller than
+  // what is on screen, and a fly buzzing 700px below the fold is an event
+  // that fires and does nothing.
+  const raw = board && board.width > 60 ? board : {
+    left: window.innerWidth * 0.3, top: window.innerHeight * 0.3,
+    width: window.innerWidth * 0.4, height: window.innerHeight * 0.4,
+  };
+  const L = Math.max(8, raw.left);
+  const T = Math.max(8, raw.top);
+  const zone = {
+    left: L, top: T,
+    width: Math.max(60, Math.min(raw.left + raw.width, window.innerWidth - 8) - L),
+    height: Math.max(60, Math.min(raw.top + raw.height, window.innerHeight - 8) - T),
+  };
+  const spot = () => ({
+    x: Math.round(zone.left + 18 + Math.random() * Math.max(1, zone.width - 36)),
+    y: Math.round(zone.top + 18 + Math.random() * Math.max(1, zone.height - 36)),
+  });
+
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'fly-rig';
+  el.setAttribute('aria-label', 'Swat the fly');
+  el.innerHTML = `
+    <svg viewBox="0 0 52 40" aria-hidden="true">
+      <ellipse class="fly-wing fly-wing-l" cx="17" cy="14" rx="13" ry="6"/>
+      <ellipse class="fly-wing fly-wing-r" cx="35" cy="14" rx="13" ry="6"/>
+      <ellipse class="fly-body" cx="26" cy="24" rx="8" ry="12"/>
+      <ellipse class="fly-head" cx="26" cy="12" rx="6.5" ry="5.5"/>
+      <ellipse class="fly-eye" cx="22" cy="11" rx="3" ry="3.4"/>
+      <ellipse class="fly-eye" cx="30" cy="11" rx="3" ry="3.4"/>
+      <path class="fly-leg" d="M19 27 L11 34 M20 31 L14 38 M33 27 L41 34 M32 31 L38 38"/>
+    </svg>`;
+
+  let at = spot();
+  const place = (p) => {
+    el.style.setProperty('--x', `${p.x}px`);
+    el.style.setProperty('--y', `${p.y}px`);
+  };
+  place(at);
+  fx.appendChild(el);
+  sfx.flyBuzz(0.5);
+
+  let hits = 0;
+  let over = false;
+
+  // Small idle shuffles, so it is never quite where your cursor went. This
+  // is the annoying part and it is deliberate; it is also why the timeout
+  // below is not negotiable.
+  const shuffle = setInterval(() => {
+    at = { x: at.x + (Math.random() * 60 - 30), y: at.y + (Math.random() * 44 - 22) };
+    at.x = Math.min(zone.left + zone.width - 18, Math.max(zone.left + 18, at.x));
+    at.y = Math.min(zone.top + zone.height - 18, Math.max(zone.top + 18, at.y));
+    place(at);
+  }, 1100);
+
+  const finish = (swatted) => {
+    if (over) return;
+    over = true;
+    clearInterval(shuffle);
+    clearTimeout(timer);
+    if (swatted) sfx.flySwat(); else sfx.flyBuzz(0.35);
+    el.classList.add(swatted ? 'is-swatted' : 'is-gone');
+    el.addEventListener('animationend', () => { el.remove(); done(); }, { once: true });
+    setTimeout(() => { if (el.isConnected) { el.remove(); done(); } }, 700);
+  };
+
+  el.addEventListener('click', () => {
+    if (over) return;
+    hits += 1;
+    if (hits >= 3) return finish(true);
+    // Dodged. Straight across the board, not a step -- a fly that shuffles
+    // away is a fly you can corner, and cornering it is not the game.
+    sfx.flyDodge();
+    el.classList.remove('is-dodging');
+    void el.offsetWidth;
+    el.classList.add('is-dodging');
+    at = spot();
+    place(at);
+  });
+
+  const timer = setTimeout(() => finish(false), 15000);
+  return () => { over = true; clearInterval(shuffle); clearTimeout(timer); el.remove(); };
+}
+
 /* ── A plane going over ───────────────────────────────────────────────────
    A light crossing the sky in the window, blinking, taking its time, with a
    drone so far under the music you register it as weather. It lives inside
@@ -843,7 +954,9 @@ function planeLight(done) {
   const sky = document.querySelector('.window .window-sky');
   if (!sky) return done();
   const el = document.createElement('i');
-  el.className = 'plane-rig';
+  // NOT 'plane-rig' -- that is the paper plane, and naming this one the same
+  // thing silently turned every paper plane into a 5px blinking dot.
+  el.className = 'skyplane-rig';
   el.style.setProperty('--dir', Math.random() < 0.5 ? 1 : -1);
   el.style.setProperty('--alt', `${12 + Math.random() * 34}%`);
   sky.parentElement.insertBefore(el, sky.nextSibling);
@@ -973,6 +1086,7 @@ const KINDS = [
   { key: 'paperPlane', run: paperPlane,   weight: 11 },
   { key: 'lampFlicker',run: lampFlicker,  weight: 13, flat: true, needsLamp: true },
   { key: 'pawSwipe',   run: pawSwipe,     weight: 13, flat: true },
+  { key: 'fly',        run: fly,          weight: 12, flat: true },
   { key: 'neighbour',  run: neighbour,    weight: 10, flat: true, heavy: true },
   { key: 'spider',     run: spider,       weight: 10 },
   { key: 'bird',       run: bird,         weight: 10, ambient: true },
@@ -1033,7 +1147,7 @@ export const __events = {
   cat, moth, phone, paperPlane, spider, bird,
   lampFlicker, neighbour, storm, powerCut,
   fieldMouse, fallingLeaf, frameTilt, firefly, headlights,
-  dustMotes, pipes, planeLight, pinNote, curtainBreeze, pawSwipe,
+  dustMotes, pipes, planeLight, pinNote, curtainBreeze, pawSwipe, fly,
 };
 /** The weight table, so a test can check the pools without re-declaring it. */
 export const __kinds = KINDS;
@@ -1125,7 +1239,7 @@ export function startRoomEvents() {
     // within one.
     document.querySelectorAll('.pin-note.is-fallen').forEach((n) => n.classList.remove('is-fallen'));
     document.querySelector('.window')?.classList.remove('is-gusting');
-    document.querySelectorAll('.plane-rig').forEach((n) => n.remove());
+    document.querySelectorAll('.skyplane-rig').forEach((n) => n.remove());
     // A round that ends mid-blackout must not leave the next one in the
     // dark, and must certainly not leave a bat on screen.
     restorePower();
