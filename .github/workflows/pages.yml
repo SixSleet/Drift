@@ -45,12 +45,25 @@ jobs:
         run: |
           mkdir -p _site
           cp -r index.html css js vendor _site/
+          # The instrument samples, and only those: assets/ also holds the
+          # README's screenshots, which the game never asks for.
+          mkdir -p _site/assets
+          cp -r assets/instruments _site/assets/
           for lang in en it de es fr; do
             mkdir -p "_site/data/$lang"
             cp "data/$lang"/valid-*.json "_site/data/$lang/"
           done
           if find _site -name 'answers-*.json' | grep -q .; then
             echo "::error::answer lists were staged for deployment"; exit 1
+          fi
+          # A missing instrument is silent at runtime -- js/instruments.js
+          # falls back to the oscillator on purpose -- so a staging slip
+          # would ship a game that quietly sounds worse and nobody would
+          # know. Fail the build here instead.
+          notes=$(find _site/assets/instruments -name '*.mp3' | wc -l)
+          echo "staged $notes instrument samples"
+          if [ "$notes" -lt 80 ]; then
+            echo "::error::only $notes instrument samples staged"; exit 1
           fi
 
       - uses: actions/upload-pages-artifact@v3

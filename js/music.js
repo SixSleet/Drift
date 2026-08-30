@@ -1,5 +1,8 @@
-// The soundtrack. Generative, synthesised, and no audio files -- same rule
-// as the rest of the sound here.
+// The soundtrack. Generative -- written by the engine as you play, never a
+// recording of a piece of music -- but PLAYED on real instruments: see
+// instruments.js and assets/instruments/, which is the one place in this
+// project that ships recorded audio. The drums, and the parts that are meant
+// to sound electronic, are still oscillators.
 //
 // It is not a loop that plays back. There is a scheduler ticking on a timer,
 // and a THEME describing what to build: a tempo, a scale, a chord
@@ -67,6 +70,7 @@
 // cannot make the music stutter.
 
 import { audioContext, buses } from './audio.js';
+import * as instruments from './instruments.js';
 
 const LOOKAHEAD_MS = 25;    // how often the scheduler wakes
 const HORIZON_S = 0.14;     // how far ahead it queues
@@ -119,28 +123,32 @@ const THEMES = {
   title: {
     name: 'Title',
     bpm: 66, root: -21, scale: 'penta', chords: [0, 3, 4, 2],
-    pad: { gain: 0.042, cutoff: 1100, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.05, wave: 'sine', cutoff: 300, octave: -1, legato: 1.8,
+    pad: { inst: 'strings', gain: 0.042, cutoff: 1100, wave: 'triangle', voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.05, wave: 'sine', cutoff: 300, octave: -1, legato: 1.8,
       pattern: [0, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] },
-    lead: { gain: 0.034, wave: 'sine', bell: true, cutoff: 3400, octave: 1,
+    lead: { inst: 'vibes', gain: 0.034, wave: 'sine', bell: true, cutoff: 3400, octave: 1,
+      // Four bars, not two: a phrase and its answer. Two bars is a cell,
+      // and a cell repeated is what "looped" actually sounds like.
       pattern: [4, H, H, H, _, _, 2, H, H, _, _, _, 0, H, H, H,
-                _, _, _, _, 7, H, H, H, _, _, 4, H, H, _, _, _] },
+                _, _, _, _, 7, H, H, H, _, _, 4, H, H, _, _, _,
+                7, H, H, H, _, _, 9, H, H, _, _, _, 7, H, H, H,
+                _, _, _, _, 4, H, H, H, H, _, 2, H, H, H, _, _] },
     // Under the bell, in thirds. One number -- `interval: 2` -- and the
     // theme has two voices in it instead of one.
-    harmony: { gain: 0.019, wave: 'triangle', cutoff: 2000, octave: 0, legato: 2.4,
+    harmony: { inst: 'strings', gain: 0.019, wave: 'triangle', cutoff: 2000, octave: 0, legato: 2.4,
       interval: 2, intervalGain: 0.75,
       vibrato: { rate: 4.4, depth: 9, delay: 0.5 },
       pattern: [_, _, _, _, _, _, _, _, _, _, _, _, 0, H, H, H,
                 H, H, _, _, 4, H, H, H, H, _, _, _, _, _, _, _] },
-    arp: { gain: 0.022, every: 4, span: 5, jitter: 0.4, cutoff: 2200,
+    arp: { inst: 'nylon', gain: 0.022, every: 4, span: 5, jitter: 0.4, cutoff: 2200,
            wave: 'triangle', pluck: 0.5, dur: 0.9 },
-    counter: { gain: 0.02, wave: 'triangle', cutoff: 1600, octave: 0, legato: 2.2,
+    counter: { inst: 'vibes', gain: 0.02, wave: 'triangle', cutoff: 1600, octave: 0, legato: 2.2,
       pattern: [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
                 7, H, H, H, H, H, H, H, _, _, _, _, _, _, _, _] },
     // A plucked line, only in the bridge. It is the one place in the whole
     // theme where something is picked rather than struck or blown, which is
     // the point of having it.
-    solo: { gain: 0.03, wave: 'triangle', cutoff: 2600, octave: 1, legato: 0.8,
+    solo: { inst: 'nylon', gain: 0.03, wave: 'triangle', cutoff: 2600, octave: 0, legato: 0.8,
       pluck: 0.7,
       pattern: [_, _, 7, _, 9, _, 7, _, 4, _, _, 2, _, _, _, _,
                 _, _, 4, _, 7, _, 9, _, 11, H, _, _, 9, _, 7, _,
@@ -167,13 +175,18 @@ const THEMES = {
   lobby: {
     name: 'Lobby',
     bpm: 82, root: -21, scale: 'penta', chords: [0, 4, 3, 4],
-    pad: { gain: 0.036, cutoff: 1250, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.056, wave: 'sine', cutoff: 340, octave: -1,
+    pad: { inst: 'strings', gain: 0.036, cutoff: 1250, wave: 'triangle', voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.056, wave: 'sine', cutoff: 340, octave: -1,
       pattern: [0, _, _, _, 4, _, _, _, 2, _, _, _, 4, _, 5, _] },
-    lead: { gain: 0.03, wave: 'triangle', cutoff: 2600, octave: 1,
+    lead: { inst: 'rhodes', gain: 0.03, wave: 'triangle', cutoff: 2600, octave: 1,
       vibrato: { rate: 5.0, depth: 11, delay: 0.18 },
       pattern: [_, _, 0, _, 2, _, _, 4, H, _, _, 2, _, _, _, _,
-                _, _, 4, _, 5, _, _, 7, H, H, _, _, 4, _, 2, _] },
+                _, _, 4, _, 5, _, _, 7, H, H, _, _, 4, _, 2, _,
+                _, _, 7, _, 5, _, _, 4, H, _, _, 5, _, _, _, _,
+                _, _, 2, _, 4, _, _, 5, H, _, 4, _, 2, _, 0, _] },
+    // Octave 2 is above the top of every sample set in the game, so this
+    // one stays the synthesised bell it always was rather than being half
+    // vibraphone and half oscillator depending on which note it is on.
     counter: { gain: 0.02, wave: 'sine', bell: true, cutoff: 3600, octave: 2,
       pattern: [_, _, _, _, _, _, _, _, 7, H, H, _, _, _, _, _,
                 _, _, _, _, _, _, _, _, _, _, _, _, 4, H, H, _,
@@ -181,11 +194,11 @@ const THEMES = {
     // A guitar-ish figure between the bass and the tune, filling the half
     // of every bar the melody leaves empty. 24 steps against the lead's 32,
     // so the two only agree every three bars.
-    harmony: { gain: 0.022, wave: 'triangle', cutoff: 2100, octave: 0, legato: 0.7,
+    harmony: { inst: 'nylon', gain: 0.022, wave: 'triangle', cutoff: 2100, octave: 0, legato: 0.7,
       pluck: 0.65, interval: 2, intervalGain: 0.5,
       pattern: [0, _, _, 4, _, _, 2, _, _, 4, _, _, 5, _, _, _,
                 2, _, _, 0, _, _, 4, _] },
-    solo: { gain: 0.03, wave: 'triangle', cutoff: 3000, octave: 1, legato: 0.85,
+    solo: { inst: 'nylon', gain: 0.03, wave: 'triangle', cutoff: 3000, octave: 0, legato: 0.85,
       pluck: 0.55, vibrato: { rate: 5.6, depth: 16, delay: 0.1 },
       pattern: [_, 7, _, 9, _, 7, _, 4, 5, _, 4, _, 2, _, _, _,
                 _, 4, _, 7, _, 9, _, 11, 9, _, 7, _, 4, _, 2, _,
@@ -223,22 +236,27 @@ const THEMES = {
   live: {
     name: 'Solo',
     bpm: 84, root: -21, scale: 'penta', chords: [0, 2, 3, 4],
-    pad: { gain: 0.05, cutoff: 900, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.05, wave: 'sine', cutoff: 420, octave: -1, legato: 1.4,
+    pad: { inst: 'strings', gain: 0.05, cutoff: 900, wave: 'triangle', voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.05, wave: 'sine', cutoff: 420, octave: -1, legato: 1.4,
       pattern: [0, _, _, _, _, _, _, _, 0, _, _, _, _, _, 4, _,
                 0, _, _, _, _, _, _, _, 2, _, _, _, _, _, _, _] },
     // Sparse on purpose: this plays while somebody is trying to think.
-    lead: { gain: 0.026, wave: 'sine', bell: true, cutoff: 3000, octave: 1,
+    lead: { inst: 'vibes', gain: 0.026, wave: 'sine', bell: true, cutoff: 3000, octave: 1,
+      // Still four notes a bar at most -- somebody is trying to think --
+      // but four bars of them, so the same note never lands in the same
+      // place two bars running.
       pattern: [_, _, _, _, 4, H, H, _, _, _, _, _, _, _, _, _,
-                _, _, 2, H, H, _, _, _, _, _, _, _, 0, H, H, _] },
-    counter: { gain: 0.018, wave: 'triangle', cutoff: 1800, octave: 1, legato: 1.6,
+                _, _, 2, H, H, _, _, _, _, _, _, _, 0, H, H, _,
+                _, _, _, _, _, _, _, _, 5, H, H, H, _, _, _, _,
+                _, _, _, _, 4, H, H, H, _, _, _, _, 2, H, H, _] },
+    counter: { inst: 'rhodes', gain: 0.018, wave: 'triangle', cutoff: 1800, octave: 1, legato: 1.6,
       pattern: [_, _, _, _, _, _, _, _, _, _, 7, H, H, H, _, _,
                 _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
                 _, _, _, _, _, _, 5, H, H, _, _, _, _, _, _, _] },
     // Thirds under the bell, and nothing else. Depth here has to come from
     // more voices rather than more notes -- Solo is the one theme whose job
     // is to be un-hummable, so a second line that MOVES would undo it.
-    harmony: { gain: 0.014, wave: 'triangle', cutoff: 1500, octave: 0, legato: 2.6,
+    harmony: { inst: 'strings', gain: 0.014, wave: 'triangle', cutoff: 1500, octave: 0, legato: 2.6,
       interval: 2, intervalGain: 0.7,
       vibrato: { rate: 4.2, depth: 8, delay: 0.6 },
       pattern: [_, _, _, _, 0, H, H, H, H, H, _, _, _, _, _, _,
@@ -246,7 +264,7 @@ const THEMES = {
                 _, _, _, _, _, _, 4, H, H, H, H, _, _, _, _, _] },
     // Almost inaudible, and only in the two calm sections: single plucked
     // notes a long way apart, like something ticking over in the room.
-    solo: { gain: 0.016, wave: 'triangle', cutoff: 2400, octave: 1, legato: 0.6,
+    solo: { inst: 'nylon', gain: 0.016, wave: 'triangle', cutoff: 2400, octave: 1, legato: 0.6,
       pluck: 0.5,
       pattern: [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
                 7, _, _, _, _, _, _, _, _, _, 4, _, _, _, _, _,
@@ -289,14 +307,16 @@ const THEMES = {
     name: 'Duel',
     bpm: 146, root: -21, scale: 'minor', chords: [0, 0, 5, 6],
     pad: { gain: 0.026, cutoff: 640, wave: 'sawtooth', detune: 9, voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.07, wave: 'sawtooth', cutoff: 300, q: 4, sweep: 3, octave: -1,
+    bass: { inst: 'ebass', gain: 0.07, wave: 'sawtooth', cutoff: 300, q: 4, sweep: 3, octave: -1,
       pattern: [0, _, 0, 0, _, 0, _, 0, 0, _, 0, _, 0, 0, _, 7] },
     lead: { gain: 0.032, wave: 'sawtooth', cutoff: 2100, q: 7, sweep: 4, spread: 11, octave: 1,
       vibrato: { rate: 6.2, depth: 12, delay: 0.1 },
       pattern: [7, H, _, 4, _, 7, _, 9, 11, H, H, _, 9, _, 7, _,
-                4, H, _, 7, _, 4, _, 2, 0, H, H, _, 2, 4, _, _] },
+                4, H, _, 7, _, 4, _, 2, 0, H, H, _, 2, 4, _, _,
+                9, H, _, 7, _, 9, _, 11, 12, H, H, _, 11, _, 9, _,
+                7, H, _, 4, _, 7, _, 9, 11, H, _, 9, 7, 4, _, _] },
     // A stab answering the lead across the bar line.
-    counter: { gain: 0.024, wave: 'square', cutoff: 1400, q: 5, sweep: 2, octave: 0,
+    counter: { inst: 'brass', gain: 0.024, wave: 'square', cutoff: 1400, q: 5, sweep: 2, octave: 0,
       pattern: [_, _, _, _, _, _, _, _, _, _, _, _, 0, 0, _, _,
                 _, _, _, _, _, _, _, _, _, _, _, _, 5, _, 5, _] },
     // Fifths under the hook. Not thirds: at this tempo and on a saw, a
@@ -348,29 +368,31 @@ const THEMES = {
   live_coop: {
     name: 'Together',
     bpm: 80, root: -21, scale: 'dorian', chords: [0, 3, 5, 4], swing: 0.2,
-    pad: { gain: 0.044, cutoff: 1150, wave: 'triangle', detune: 6, voicing: [0, 2, 4, 6] },
+    pad: { inst: 'strings', gain: 0.044, cutoff: 1150, wave: 'triangle', detune: 6, voicing: [0, 2, 4, 6] },
     // Walking, rather than one note every other bar. The old bass had four
     // notes in sixteen steps and the lead had five in thirty-two, which is
     // not "chill", it is "not much happening" -- there is a difference, and
     // the first version was the second thing.
-    bass: { gain: 0.058, wave: 'sine', cutoff: 260, octave: -1, legato: 1.2,
+    bass: { inst: 'upright', gain: 0.058, wave: 'sine', cutoff: 260, octave: -1, legato: 1.2,
       pattern: [0, _, _, 4, _, _, 2, _, 0, _, _, 4, _, 7, _, 5] },
     // A shimmer under the tune. Slow enough not to pull at you, and the one
     // layer that makes the gaps in the melody feel like space rather than
     // like silence. Plucked now, so the shimmer has an edge on it.
-    arp: { gain: 0.02, every: 4, span: 6, jitter: 0.25, cutoff: 2600,
+    arp: { inst: 'nylon', gain: 0.02, every: 4, span: 6, jitter: 0.25, cutoff: 2600,
            pluck: 0.45, dur: 0.7 },
-    lead: { gain: 0.03, wave: 'sine', bell: true, cutoff: 3200, octave: 1,
+    lead: { inst: 'vibes', gain: 0.03, wave: 'sine', bell: true, cutoff: 3200, octave: 1,
       pattern: [_, _, 4, _, 5, _, 7, H, _, 4, _, 2, _, _, _, _,
-                _, _, 7, _, 9, _, 7, H, _, 5, _, 4, 2, _, _, _] },
-    counter: { gain: 0.02, wave: 'triangle', cutoff: 1500, octave: 0, legato: 1.5,
+                _, _, 7, _, 9, _, 7, H, _, 5, _, 4, 2, _, _, _,
+                _, _, 2, _, 4, _, 5, H, _, 7, _, 5, _, _, _, _,
+                _, _, 4, _, 2, _, 0, H, H, _, _, 2, 4, _, _, _] },
+    counter: { inst: 'rhodes', gain: 0.02, wave: 'triangle', cutoff: 1500, octave: 0, legato: 1.5,
       pattern: [_, _, _, _, _, _, _, _, 5, H, H, _, _, _, _, _,
                 _, _, _, _, 2, H, H, _, _, _, _, _, _, _, _, _,
                 _, _, 7, H, H, H, _, _, _, _, _, _, _, _, _, _,
                 _, _, _, _, _, _, _, _, _, _, 4, H, H, _, _, _] },
     // Sixths under the bell -- the interval that makes a dorian tune sound
     // like two people playing rather than one playing louder.
-    harmony: { gain: 0.017, wave: 'triangle', cutoff: 1900, octave: 0, legato: 1.4,
+    harmony: { inst: 'nylon', gain: 0.017, wave: 'triangle', cutoff: 1900, octave: 0, legato: 1.4,
       interval: 5, intervalGain: 0.65,
       vibrato: { rate: 4.6, depth: 10, delay: 0.35 },
       pattern: [_, _, _, _, 0, H, H, H, _, _, _, _, 4, H, H, H,
@@ -379,7 +401,7 @@ const THEMES = {
     // The only line in the game written for the swing rather than despite
     // it: every note lands on an off-16th, which is where the fifth-of-a-
     // step delay lives. Plucked and quiet -- a thumb on a nylon string.
-    solo: { gain: 0.026, wave: 'triangle', cutoff: 2800, octave: 1, legato: 0.75,
+    solo: { inst: 'nylon', gain: 0.026, wave: 'triangle', cutoff: 2800, octave: 1, legato: 0.75,
       pluck: 0.7,
       pattern: [_, _, _, 4, _, _, 5, _, _, 7, _, _, 9, _, 7, _,
                 _, _, _, 5, _, _, 4, _, _, 2, _, _, 0, _, 2, _,
@@ -416,7 +438,7 @@ const THEMES = {
     name: 'Blitz',
     bpm: 138, root: -21, scale: 'minor', chords: [0, 5, 3, 4],
     pad: { gain: 0.026, cutoff: 780, wave: 'sawtooth', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.066, wave: 'square', cutoff: 340, q: 3, sweep: 2.5, octave: -1,
+    bass: { inst: 'ebass', gain: 0.066, wave: 'square', cutoff: 340, q: 3, sweep: 2.5, octave: -1,
       pattern: [0, _, 0, _, 0, _, 0, _, 0, _, 0, _, 0, _, 0, _] },
     lead: { gain: 0.03, wave: 'square', cutoff: 2800, q: 4, sweep: 2, octave: 1,
       pattern: [0, _, 2, _, 4, _, 2, _, 5, _, 4, _, 2, _, 0, _,
@@ -452,18 +474,18 @@ const THEMES = {
   double_points: {
     name: 'Double Points',
     bpm: 96, root: -21, scale: 'major', chords: [0, 3, 5, 4],
-    pad: { gain: 0.05, cutoff: 1700, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.055, wave: 'sine', cutoff: 380, octave: -1,
+    pad: { inst: 'strings', gain: 0.05, cutoff: 1700, wave: 'triangle', voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.055, wave: 'sine', cutoff: 380, octave: -1,
       pattern: [0, _, _, _, _, _, 4, _, 2, _, _, _, _, _, 4, _] },
-    lead: { gain: 0.042, wave: 'sine', bell: true, cutoff: 4200, octave: 1,
+    lead: { inst: 'vibes', gain: 0.042, wave: 'sine', bell: true, cutoff: 4200, octave: 1,
       pattern: [4, _, 6, _, 7, H, _, _, 6, _, 4, _, 2, H, _, _,
                 7, _, 6, _, 4, H, _, _, 2, _, 4, _, 6, H, H, _] },
     // Thirds under a major bell hook, which is the most straightforwardly
     // pleasant sound in this whole file, and this is the theme for good news.
-    harmony: { gain: 0.022, wave: 'triangle', cutoff: 2400, octave: 0, legato: 1.3,
+    harmony: { inst: 'nylon', gain: 0.022, wave: 'triangle', cutoff: 2400, octave: 0, legato: 1.3,
       interval: 2, intervalGain: 0.7, pluck: 0.5,
       pattern: [0, _, _, 4, _, _, 2, _, _, 4, _, _, 5, _, 4, _] },
-    counter: { gain: 0.018, wave: 'triangle', cutoff: 2000, octave: 1, legato: 1.4,
+    counter: { inst: 'flute', gain: 0.018, wave: 'triangle', cutoff: 2000, octave: 1, legato: 1.4,
       vibrato: { rate: 5, depth: 12, delay: 0.2 },
       pattern: [_, _, _, _, _, _, _, _, 9, H, H, H, _, _, _, _,
                 _, _, _, _, 7, H, H, _, _, _, _, _, _, _, _, _,
@@ -486,8 +508,8 @@ const THEMES = {
   blackout: {
     name: 'Blackout',
     bpm: 68, root: -24, scale: 'minor', chords: [0, 1, 0, 4],
-    pad: { gain: 0.06, cutoff: 340, wave: 'triangle', detune: 12 },
-    bass: { gain: 0.062, wave: 'sine', cutoff: 160, octave: -1, legato: 2,
+    pad: { inst: 'strings', gain: 0.06, cutoff: 340, wave: 'triangle', detune: 12 },
+    bass: { inst: 'upright', gain: 0.062, wave: 'sine', cutoff: 160, octave: -1, legato: 2,
       pattern: [0, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] },
     lead: null,
     drums: { gain: 0.02, kick: 'x.......x.......' },
@@ -508,14 +530,14 @@ const THEMES = {
     name: 'Jackpot',
     bpm: 118, root: -21, scale: 'major', chords: [0, 4, 5, 4],
     pad: { gain: 0.042, cutoff: 2600, wave: 'sawtooth', detune: 7, voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.07, wave: 'square', cutoff: 420, q: 3, sweep: 2.5, octave: -1,
+    bass: { inst: 'ebass', gain: 0.07, wave: 'square', cutoff: 420, q: 3, sweep: 2.5, octave: -1,
       pattern: [0, _, _, 0, _, 4, _, _, 0, _, _, 0, _, 7, _, 4] },
-    lead: { gain: 0.05, wave: 'sine', bell: true, cutoff: 5000, octave: 1,
+    lead: { inst: 'vibes', gain: 0.05, wave: 'sine', bell: true, cutoff: 5000, octave: 1,
       pattern: [7, _, 9, _, 11, _, 9, _, 7, H, _, 4, _, 7, _, _,
                 11, _, 9, _, 7, _, 9, _, 11, H, H, _, _, 9, 7, _] },
     // Sixths on a saw, panning-bright: the sound of a machine that is very
     // pleased with itself.
-    harmony: { gain: 0.026, wave: 'sawtooth', cutoff: 2600, q: 2, sweep: 2.5, octave: 0,
+    harmony: { inst: 'brass', gain: 0.026, wave: 'sawtooth', cutoff: 2600, q: 2, sweep: 2.5, octave: 0,
       interval: 5, intervalGain: 0.6,
       pattern: [4, H, H, H, _, _, _, _, 7, H, H, H, _, _, _, _,
                 9, H, H, H, _, _, _, _, 7, H, H, H, _, _, _, _] },
@@ -548,16 +570,16 @@ const THEMES = {
   letter_swap: {
     name: 'Letter Swap',
     bpm: 106, root: -21, scale: 'minor', chords: [0, 5, 3, 4],
-    pad: { gain: 0.038, cutoff: 1400, wave: 'triangle', detune: 6, voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.062, wave: 'sine', cutoff: 340, octave: -1,
+    pad: { inst: 'strings', gain: 0.038, cutoff: 1400, wave: 'triangle', detune: 6, voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.062, wave: 'sine', cutoff: 340, octave: -1,
       pattern: [0, _, _, 0, _, 4, _, _, 0, _, _, 2, _, 4, _, _] },
-    lead: { gain: 0.038, wave: 'triangle', cutoff: 3000, octave: 1,
+    lead: { inst: 'rhodes', gain: 0.038, wave: 'triangle', cutoff: 3000, octave: 1,
       vibrato: { rate: 5.4, depth: 13, delay: 0.14 },
       pattern: [0, _, 2, _, 4, H, _, 2, 0, _, _, _, 4, _, 2, _,
                 2, _, 4, _, 6, H, _, 4, 2, _, _, _, 6, _, 4, _] },
     // The harmony gets the joke too: it is the same shape a third up, so
     // when the tune moves the whole stack moves with it.
-    harmony: { gain: 0.02, wave: 'triangle', cutoff: 2000, octave: 0, legato: 1.1,
+    harmony: { inst: 'nylon', gain: 0.02, wave: 'triangle', cutoff: 2000, octave: 0, legato: 1.1,
       interval: 2, intervalGain: 0.65, pluck: 0.55,
       pattern: [_, _, 0, _, _, _, 4, _, _, _, 2, _, _, _, _, _,
                 _, _, 2, _, _, _, 6, _, _, _, 4, _, _, _, _, _] },
@@ -582,7 +604,7 @@ const THEMES = {
   storm: {
     name: 'Storm',
     bpm: 128, root: -24, scale: 'locrian', chords: [0, 1, 4, 6, 0, 3],
-    pad: { gain: 0.05, cutoff: 600, wave: 'sawtooth', detune: 24 },
+    pad: { inst: 'strings', gain: 0.05, cutoff: 600, wave: 'sawtooth', detune: 24 },
     bass: { gain: 0.072, wave: 'sawtooth', cutoff: 260, q: 5, sweep: 3, octave: -1,
       pattern: [0, _, 0, _, 1, _, 0, _, 0, _, 4, _, 0, 0, _, 1] },
     lead: { gain: 0.03, wave: 'sawtooth', cutoff: 1700, q: 8, sweep: 3.5, spread: 18, octave: 1,
@@ -616,8 +638,8 @@ const THEMES = {
   outage: {
     name: 'Power Cut',
     bpm: 54, root: -27, scale: 'locrian', chords: [0, 0, 1, 0],
-    pad: { gain: 0.07, cutoff: 200, wave: 'triangle', detune: 32 },
-    bass: { gain: 0.05, wave: 'sine', cutoff: 140, octave: -1, legato: 2,
+    pad: { inst: 'strings', gain: 0.07, cutoff: 200, wave: 'triangle', detune: 32 },
+    bass: { inst: 'upright', gain: 0.05, wave: 'sine', cutoff: 140, octave: -1, legato: 2,
       pattern: [0, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] },
     lead: null,
     drums: { gain: 0.03, kick: 'x..x............' },
@@ -639,7 +661,7 @@ const THEMES = {
     name: 'Next Door',
     bpm: 126, root: -24, scale: 'minor', chords: [0, 0, 5, 3],
     pad: { gain: 0.045, cutoff: 190, wave: 'sawtooth' },
-    bass: { gain: 0.075, wave: 'square', cutoff: 200, octave: -1,
+    bass: { inst: 'ebass', gain: 0.075, wave: 'square', cutoff: 200, octave: -1,
       pattern: [0, _, _, 0, _, _, 0, _, 0, _, _, 0, _, 7, _, _] },
     lead: { gain: 0.014, wave: 'sawtooth', cutoff: 320, octave: 0,
       pattern: [0, _, _, _, 4, _, _, _, 3, _, _, _, 0, _, _, _] },
@@ -664,8 +686,8 @@ const THEMES = {
   reveal: {
     name: 'The Word',
     bpm: 60, root: -21, scale: 'major', chords: [0, 4],
-    pad: { gain: 0.05, cutoff: 1500, wave: 'triangle' },
-    bass: { gain: 0.045, wave: 'sine', cutoff: 300, octave: -1, legato: 2,
+    pad: { inst: 'strings', gain: 0.05, cutoff: 1500, wave: 'triangle' },
+    bass: { inst: 'upright', gain: 0.045, wave: 'sine', cutoff: 300, octave: -1, legato: 2,
       pattern: [0, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] },
     lead: null,
     drums: null,
@@ -677,22 +699,22 @@ const THEMES = {
   standings: {
     name: 'Standings',
     bpm: 90, root: -21, scale: 'penta', chords: [0, 4, 2, 3],
-    pad: { gain: 0.038, cutoff: 1500, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.058, wave: 'sine', cutoff: 360, octave: -1,
+    pad: { inst: 'strings', gain: 0.038, cutoff: 1500, wave: 'triangle', voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.058, wave: 'sine', cutoff: 360, octave: -1,
       pattern: [0, _, _, 0, _, _, 4, _, _, 0, _, _, 5, _, 4, _] },
-    lead: { gain: 0.036, wave: 'triangle', cutoff: 3000, octave: 1,
+    lead: { inst: 'rhodes', gain: 0.036, wave: 'triangle', cutoff: 3000, octave: 1,
       vibrato: { rate: 5.1, depth: 12, delay: 0.16 },
       pattern: [_, _, 4, _, 5, H, _, 4, _, 2, _, _, 0, H, _, _,
                 _, _, 7, _, 5, H, _, 4, _, 5, _, _, 4, H, 2, _] },
     // A plucked comp between the bass and the tune -- 24 steps against the
     // lead's 32, so the two never land in the same place twice running.
-    harmony: { gain: 0.024, wave: 'triangle', cutoff: 2200, octave: 0, legato: 0.65,
+    harmony: { inst: 'nylon', gain: 0.024, wave: 'triangle', cutoff: 2200, octave: 0, legato: 0.65,
       pluck: 0.7, interval: 2, intervalGain: 0.5,
       pattern: [_, _, 0, _, _, 4, _, _, 2, _, _, 5, _, _, 4, _,
                 _, _, 2, _, _, 0, _, _] },
     // You are reading a table, not playing. This is one of two places in
     // the game where a line is allowed to have your attention outright.
-    solo: { gain: 0.03, wave: 'triangle', cutoff: 3200, octave: 1, legato: 0.8,
+    solo: { inst: 'flute', gain: 0.03, wave: 'triangle', cutoff: 3200, octave: 1, legato: 0.8,
       pluck: 0.5, vibrato: { rate: 5.8, depth: 18, delay: 0.1 },
       pattern: [_, 7, _, 9, _, 7, _, 5, 4, _, _, 2, _, _, _, _,
                 _, 5, _, 7, _, 9, _, 11, 9, _, 7, _, 5, _, 4, _,
@@ -715,20 +737,20 @@ const THEMES = {
   victory: {
     name: 'Victory',
     bpm: 100, root: -21, scale: 'major', chords: [0, 4, 5, 3],
-    pad: { gain: 0.055, cutoff: 2600, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.062, wave: 'sine', cutoff: 400, octave: -1,
+    pad: { inst: 'strings', gain: 0.055, cutoff: 2600, wave: 'triangle', voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.062, wave: 'sine', cutoff: 400, octave: -1,
       pattern: [0, _, _, _, 4, _, _, _, 2, _, _, _, 4, _, 5, _] },
-    lead: { gain: 0.05, wave: 'sine', bell: true, cutoff: 4600, octave: 1,
+    lead: { inst: 'brass', gain: 0.05, wave: 'sine', bell: true, cutoff: 4600, octave: 1,
       pattern: [0, _, 2, _, 4, _, 5, _, 7, H, H, _, 4, _, 7, _,
                 9, _, 7, _, 5, _, 4, _, 7, H, H, H, H, _, _, _] },
     // The fanfare, harmonised in thirds. A rising figure in one voice is a
     // scale; the same figure in two is a fanfare.
-    harmony: { gain: 0.028, wave: 'triangle', cutoff: 2600, octave: 0, legato: 1.1,
+    harmony: { inst: 'brass', gain: 0.028, wave: 'triangle', cutoff: 2600, octave: 0, legato: 1.1,
       interval: 2, intervalGain: 0.75,
       vibrato: { rate: 5.2, depth: 12, delay: 0.25 },
       pattern: [0, _, _, _, 4, _, _, _, 7, H, H, H, _, _, _, _,
                 5, _, _, _, 4, _, _, _, 7, H, H, H, H, H, _, _] },
-    counter: { gain: 0.022, wave: 'triangle', cutoff: 2200, octave: 0, legato: 0.7,
+    counter: { inst: 'nylon', gain: 0.022, wave: 'triangle', cutoff: 2200, octave: 0, legato: 0.7,
       pluck: 0.65,
       pattern: [_, _, 4, _, _, 7, _, _, 9, _, _, 7, _, _, 5, _,
                 _, _, 7, _, _, 9, _, _, 11, _, _, 9, _, _, 7, _] },
@@ -753,20 +775,20 @@ const THEMES = {
   defeat: {
     name: 'Defeat',
     bpm: 74, root: -24, scale: 'minor', chords: [0, 5, 3, 4],
-    pad: { gain: 0.052, cutoff: 900, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.05, wave: 'sine', cutoff: 280, octave: -1, legato: 1.6,
+    pad: { inst: 'strings', gain: 0.052, cutoff: 900, wave: 'triangle', voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.05, wave: 'sine', cutoff: 280, octave: -1, legato: 1.6,
       pattern: [0, _, _, _, _, _, _, _, 4, _, _, _, _, _, _, _] },
-    lead: { gain: 0.03, wave: 'triangle', cutoff: 1900, octave: 1,
+    lead: { inst: 'rhodes', gain: 0.03, wave: 'triangle', cutoff: 1900, octave: 1,
       vibrato: { rate: 4.4, depth: 15, delay: 0.3 },
       pattern: [7, H, _, 5, _, 4, H, _, 2, H, H, _, _, _, _, _,
                 4, H, _, 2, _, 0, H, _, 2, H, H, H, _, _, _, _] },
     // Sixths, which is the interval that stops a minor line being a dirge.
     // There is another match in a minute.
-    harmony: { gain: 0.018, wave: 'triangle', cutoff: 1500, octave: 0, legato: 2,
+    harmony: { inst: 'strings', gain: 0.018, wave: 'triangle', cutoff: 1500, octave: 0, legato: 2,
       interval: 5, intervalGain: 0.7,
       pattern: [0, H, H, H, H, H, H, H, _, _, _, _, _, _, _, _,
                 4, H, H, H, H, H, H, H, _, _, _, _, _, _, _, _] },
-    counter: { gain: 0.02, wave: 'triangle', cutoff: 2000, octave: 1, legato: 0.7,
+    counter: { inst: 'nylon', gain: 0.02, wave: 'triangle', cutoff: 2000, octave: 1, legato: 0.7,
       pluck: 0.6,
       pattern: [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
                 _, _, _, _, _, _, _, _, _, _, 7, _, 5, _, 4, _,
@@ -801,7 +823,7 @@ const THEMES = {
     // same waveform, only the tempo apart.
     bpm: 108, root: -21, scale: 'major', chords: [0, 4, 5, 3],
     pad: { gain: 0.032, cutoff: 1700, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.06, wave: 'square', cutoff: 380, q: 3, sweep: 2, octave: -1,
+    bass: { inst: 'ebass', gain: 0.06, wave: 'square', cutoff: 380, q: 3, sweep: 2, octave: -1,
       pattern: [0, _, 0, _, _, 4, _, _, 0, _, 0, _, _, 5, _, _] },
     lead: { gain: 0.034, wave: 'square', cutoff: 3400, q: 3, sweep: 2, octave: 1,
       vibrato: { rate: 6, depth: 14, delay: 0.1 },
@@ -829,16 +851,16 @@ const THEMES = {
   arcade_hunt: {
     name: 'Word Hunt',
     bpm: 114, root: -21, scale: 'penta', chords: [0, 2, 4, 2],
-    pad: { gain: 0.028, cutoff: 1900, wave: 'triangle', voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.062, wave: 'sine', cutoff: 400, octave: -1,
+    pad: { inst: 'strings', gain: 0.028, cutoff: 1900, wave: 'triangle', voicing: [0, 2, 4, 6] },
+    bass: { inst: 'upright', gain: 0.062, wave: 'sine', cutoff: 400, octave: -1,
       pattern: [0, _, _, 0, _, 4, _, _, 0, _, _, 2, _, 5, _, _] },
-    lead: { gain: 0.042, wave: 'sine', bell: true, cutoff: 4000, octave: 1,
+    lead: { inst: 'vibes', gain: 0.042, wave: 'sine', bell: true, cutoff: 4000, octave: 1,
       pattern: [0, _, 4, _, 2, _, 7, _, 5, _, 2, _, 4, _, _, _,
                 7, _, 4, _, 9, _, 5, _, 7, _, 4, _, 2, _, 0, _] },
     // A plucked line rummaging along underneath the bell, 24 steps against
     // its 32 -- the two turn things over and put them back in a different
     // order every three bars, which is the game.
-    harmony: { gain: 0.024, wave: 'triangle', cutoff: 2400, octave: 0, legato: 0.6,
+    harmony: { inst: 'nylon', gain: 0.024, wave: 'triangle', cutoff: 2400, octave: 0, legato: 0.6,
       pluck: 0.7, interval: 2, intervalGain: 0.5,
       pattern: [0, _, _, 2, _, _, 4, _, _, 2, _, _, 5, _, _, 4,
                 _, _, 2, _, _, 0, _, _] },
@@ -861,7 +883,7 @@ const THEMES = {
     name: 'Chain',
     bpm: 124, root: -21, scale: 'dorian', chords: [0, 3, 5, 3],
     pad: { gain: 0.028, cutoff: 1200, wave: 'sawtooth', detune: 6, voicing: [0, 2, 4, 6] },
-    bass: { gain: 0.068, wave: 'sawtooth', cutoff: 320, q: 4, sweep: 2.5, octave: -1,
+    bass: { inst: 'ebass', gain: 0.068, wave: 'sawtooth', cutoff: 320, q: 4, sweep: 2.5, octave: -1,
       pattern: [0, _, 0, 3, _, 0, _, 5, 0, _, 0, 3, _, 7, _, 5] },
     lead: { gain: 0.036, wave: 'square', cutoff: 2600, q: 3, sweep: 2, octave: 1,
       vibrato: { rate: 6.4, depth: 15, delay: 0.08 },
@@ -869,7 +891,7 @@ const THEMES = {
                 0, _, -2, _, 0, _, 2, H, _, _, 3, _, 5, _, 7, _] },
     // Fourths. The interval that hands you on to the next thing rather
     // than settling, which is the whole rule of this game.
-    harmony: { gain: 0.02, wave: 'sawtooth', cutoff: 1700, q: 3, sweep: 2, octave: 0,
+    harmony: { inst: 'brass', gain: 0.02, wave: 'sawtooth', cutoff: 1700, q: 3, sweep: 2, octave: 0,
       interval: 3, intervalGain: 0.55,
       pattern: [0, H, H, H, H, H, H, H, 3, H, H, H, H, H, H, H] },
     drums: { gain: 0.026, kick: 'x...x...x...x...', snare: '....x.......x.x.',
@@ -891,7 +913,7 @@ const THEMES = {
     name: 'Moth Swat',
     bpm: 152, root: -21, scale: 'phryg', chords: [0, 0, 1, 0],
     pad: { gain: 0.024, cutoff: 700, wave: 'sawtooth', detune: 11 },
-    bass: { gain: 0.072, wave: 'sawtooth', cutoff: 280, q: 5, sweep: 3, octave: -1,
+    bass: { inst: 'ebass', gain: 0.072, wave: 'sawtooth', cutoff: 280, q: 5, sweep: 3, octave: -1,
       pattern: [0, 0, _, 0, _, 0, 1, _, 0, 0, _, 0, _, 1, _, 0] },
     lead: { gain: 0.03, wave: 'square', cutoff: 2400, q: 6, sweep: 3, spread: 9, octave: 1,
       vibrato: { rate: 7.8, depth: 18, delay: 0.05 },
@@ -947,6 +969,28 @@ let nextStepTime = 0;
 let noiseBuf = null;
 
 const stepDuration = () => 60 / theme.bpm / 4;
+
+// ── Humanising ───────────────────────────────────────────────────────────
+//
+// A sequencer plays every note exactly on the grid at exactly the same
+// volume, and that is most of what "sounds looped" actually is. It is not
+// the repetition -- a four-bar loop played by a person does not sound
+// looped -- it is that the second time round is bit-identical to the first.
+//
+// Two numbers fix most of it. `feel` pushes a note a few milliseconds off
+// the grid, and the velocity varies per note, with the notes that land on a
+// beat played harder than the ones between them. Both are small: 8ms and
+// 15% are below the threshold where you would call it sloppy and well above
+// the one where a bar stops being a photocopy of the last bar.
+const HUMAN_MS = 8;
+const drift = (amount = 1) => (Math.random() * 2 - 1) * (HUMAN_MS / 1000) * amount;
+
+/** Beat 1 hardest, the other beats next, the notes between them lightest. */
+function accent(step) {
+  const inBar = ((step % STEPS_PER_BAR) + STEPS_PER_BAR) % STEPS_PER_BAR;
+  const base = inBar === 0 ? 1.12 : inBar % 4 === 0 ? 1.0 : inBar % 2 === 0 ? 0.88 : 0.8;
+  return base * (0.92 + Math.random() * 0.16);
+}
 
 function noiseSource() {
   if (!noiseBuf || noiseBuf.sampleRate !== ctx.sampleRate) {
@@ -1202,17 +1246,31 @@ function playPattern(layer, { at, n, scale, chordRoot, stepSec, root }) {
 
   const dur = heldSteps(pat, i) * stepSec * (layer.legato ?? 0.92);
   const voices = layer.interval ? [d, d + layer.interval] : [d];
+  // One offset for the whole chord: a harmony note that drifts away from
+  // the note it is harmonising is a mistake, not a feel.
+  const when = at + drift(layer.feel ?? 1);
+  const push = accent(n);
 
   voices.forEach((deg, k) => {
     const semis = root + 12 * (layer.octave ?? 0) + degree(scale, chordRoot + deg);
     // The harmony note sits under the melody note, never level with it.
-    const gain = layer.gain * (k === 0 ? 1 : (layer.intervalGain ?? 0.6));
+    const gain = layer.gain * push * (k === 0 ? 1 : (layer.intervalGain ?? 0.6));
+
+    // A real recording of the instrument if we have one in range, and the
+    // oscillator underneath if we do not. Same call site, same pattern, so
+    // a theme reads the same whether its samples have arrived yet or not.
+    if (layer.inst && instruments.play(layer.inst, {
+      freq: hz(semis), at: when, dur, gain: gain * (layer.instGain ?? 1),
+      cutoff: layer.instCutoff ?? 0, wet: layer.wet ?? 0.18,
+      attack: layer.instAttack ?? 0.004,
+    })) return;
+
     if (layer.bell) {
-      bell({ freq: hz(semis), at, dur: Math.max(dur, 0.5), gain, cutoff: layer.cutoff });
+      bell({ freq: hz(semis), at: when, dur: Math.max(dur, 0.5), gain, cutoff: layer.cutoff });
       return;
     }
     voice({
-      freq: hz(semis), at, dur,
+      freq: hz(semis), at: when, dur,
       type: layer.wave ?? 'triangle',
       gain,
       cutoff: layer.cutoff ?? 2000,
@@ -1325,8 +1383,16 @@ function scheduleStep(n, at) {
   if (pad && inBar === 0) {
     for (const offset of (pad.voicing ?? [0, 2, 4])) {
       const semis = root + degree(scale, chordRoot + offset);
+      // Each note of the chord placed slightly separately, because a string
+      // section does not start four notes on the same millisecond.
+      const when = at + drift(pad.feel ?? 2.5);
+      if (pad.inst && instruments.play(pad.inst, {
+        freq: hz(semis), at: when, dur: barSeconds * 0.98,
+        gain: pad.gain * (pad.instGain ?? 1), cutoff: pad.instCutoff ?? 0,
+        wet: pad.wet ?? 0.42, attack: pad.instAttack ?? barSeconds * 0.22,
+      })) continue;
       voice({
-        freq: hz(semis), at, dur: barSeconds * 1.05,
+        freq: hz(semis), at: when, dur: barSeconds * 1.05,
         type: pad.wave ?? 'triangle',
         gain: pad.gain, cutoff: pad.cutoff,
         attack: barSeconds * 0.3,
@@ -1366,8 +1432,14 @@ function scheduleStep(n, at) {
       const pat = drums[part];
       if (!pat) continue;
       const c = pat[n % pat.length];
-      if (c === 'x') DRUM_VOICES[part](at, g);
-      else if (c === 'X') DRUM_VOICES[part](at, g * 1.45);
+      if (c !== 'x' && c !== 'X') continue;
+      // Every limb slightly out with every other one. A kit where the kick
+      // and the hat are on the same sample is a drum machine -- which is
+      // fine for the Duel and is not what Together wants.
+      const lean = part === 'kick' ? 0.4 : part === 'snare' ? 0.9 : 1.4;
+      const at2 = at + drift(lean);
+      const vel = g * (c === 'X' ? 1.45 : 1) * (0.9 + Math.random() * 0.2);
+      DRUM_VOICES[part](at2, vel);
     }
   }
 }
@@ -1401,12 +1473,30 @@ function tick() {
 }
 
 /** Queue whatever `wanted()` now says, ducking across the seam. */
+/**
+ * Every instrument a theme could ask for, including the ones that only
+ * appear in a section override. Walked once per theme change, not per step
+ * -- `preload` is idempotent but this still has no business in the
+ * scheduler's hot loop.
+ */
+function instrumentsIn(t) {
+  const names = new Set();
+  const take = (layer) => { if (layer?.inst) names.add(layer.inst); };
+  for (const key of [...VOICES, 'pad', 'arp']) take(t[key]);
+  for (const sec of t.sections ?? []) for (const key of [...VOICES, 'pad', 'arp']) take(sec[key]);
+  return names;
+}
+
 function apply() {
   const name = wanted();
   if (!running) return;
   if (name === themeName && !pending) return;
   if (pending === name) return;
   pending = name;
+  // Start fetching now, while the current theme plays out its bar. If they
+  // are not decoded by the time the first note lands, that note comes out
+  // of an oscillator and the second one does not.
+  for (const inst of instrumentsIn(THEMES[name] ?? {})) instruments.preload(inst);
   if (out && ctx) {
     const now = ctx.currentTime;
     out.gain.cancelScheduledValues(now);

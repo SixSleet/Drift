@@ -236,19 +236,40 @@ no effect on any match — beyond a personal best kept in your own browser.
 
 ## Sound
 
-Everything you hear is generated as you play — there are no audio files.
+Everything you hear is played by the game as you play it — there is no
+recorded music anywhere in this repository, and no two rounds are the same.
+
+**It is played on real instruments.** `assets/instruments/` holds about two
+megabytes of recorded notes — a nylon-string guitar, an electric piano, an
+upright bass, a fingered electric bass, a vibraphone, a string section, a
+flute and a brass section, ten to sixteen notes each — and the engine picks
+the nearest recorded note and shifts it into place. An oscillator through a
+filter can imitate the *envelope* of a plucked string; it cannot imitate the
+body resonating, the other strings ringing in sympathy, or a spectrum that
+changes shape as the note decays. Those are recordings or they are nothing.
+
+Sound effects are still synthesised — a cat, a doorbell and a breaker are
+things a couple of oscillators are genuinely good at — and so are the drums
+and the parts that are *supposed* to sound electronic: the Duel's hook,
+Blitz, Moth Swat, and the neighbour's track coming through the wall.
+
+Nothing about this blocks. The samples are fetched only once the sound is
+actually on, each instrument loads once, and until one arrives its part is
+played by the oscillator that used to play it. Offline, or on a connection
+that gives up, the game sounds exactly like it did before rather than
+falling silent.
 
 **Each mode has its own soundtrack.** Solo is a quiet bed with nothing moving
 over it, on purpose — anything with a tune in it pulls your eye off the word.
-Versus is fast and driving, because somebody is racing you. Co-op is the calm one
-and swings, which is what stops it being Solo in a different key.
+Versus is fast and driving, because somebody is racing you. Co-op is the calm
+one and swings, which is what stops it being Solo in a different key.
 
 **Every theme is arranged, not looped.** Each one is a running order rather
 than a repeating bar: sections say how many bars they last and which parts you
 can hear during them, so a theme opens on a pad, fills out, drops to just the
 hats, and comes back. Seventeen of the twenty-one themes have one, and the
-five you spend real time inside run between one and two minutes before
-anything repeats.
+five you spend real time inside run one to two minutes before anything
+repeats.
 
 **And each has a bridge.** A section can change the chords under the same
 tune, or lift the whole thing up a fourth, or step up a semitone for the last
@@ -258,9 +279,17 @@ Muting parts gets you dynamics; changing the harmony gets you a destination.
 **Five written lines, not two.** Bass, lead, a counter-line that answers it
 rather than doubling it, a harmony that shadows the tune at a fixed interval
 in the key, and a solo that most sections keep muted so that the one section
-which does not stands out. Add vibrato that leans in rather than starting at
-full width, plucked voices with a real transient on the front, and a kit that
-now includes a crash and a stick, and the parts are there to arrange.
+which does not stands out. The leads are four bars — a phrase and its answer
+— because two bars is a cell, and a cell repeated is what "looped" sounds
+like.
+
+**Nothing lands exactly on the grid.** Every note is nudged a few
+milliseconds either way, every note is played at a slightly different
+strength, and the beats are accented over the notes between them. The kick,
+the snare and the hats each drift by a different amount, so the kit is not
+one sample played three times. None of it is large enough to hear as
+sloppiness and all of it is large enough that the second time round a bar is
+not a photocopy of the first.
 
 Where lines are deliberately different lengths — a 24-step comp against a
 32-step lead — they only agree every three bars, which is most of why a long
